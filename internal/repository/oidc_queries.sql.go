@@ -124,20 +124,48 @@ INSERT INTO "oidc_userinfo" (
     "preferred_username",
     "email",
     "groups",
-    "updated_at"
+    "updated_at",
+    "given_name",
+    "family_name",
+    "middle_name",
+    "nickname",
+    "profile",
+    "picture",
+    "website",
+    "gender",
+    "birthdate",
+    "zoneinfo",
+    "locale",
+    "phone_number",
+    "phone_number_verified",
+    "address"
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING sub, name, preferred_username, email, "groups", updated_at
+RETURNING sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, phone_number_verified, address
 `
 
 type CreateOidcUserInfoParams struct {
-	Sub               string
-	Name              string
-	PreferredUsername string
-	Email             string
-	Groups            string
-	UpdatedAt         int64
+	Sub                 string
+	Name                string
+	PreferredUsername   string
+	Email               string
+	Groups              string
+	UpdatedAt           int64
+	GivenName           string
+	FamilyName          string
+	MiddleName          string
+	Nickname            string
+	Profile             string
+	Picture             string
+	Website             string
+	Gender              string
+	Birthdate           string
+	Zoneinfo            string
+	Locale              string
+	PhoneNumber         string
+	PhoneNumberVerified int64
+	Address             string
 }
 
 func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfoParams) (OidcUserinfo, error) {
@@ -148,6 +176,20 @@ func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfo
 		arg.Email,
 		arg.Groups,
 		arg.UpdatedAt,
+		arg.GivenName,
+		arg.FamilyName,
+		arg.MiddleName,
+		arg.Nickname,
+		arg.Profile,
+		arg.Picture,
+		arg.Website,
+		arg.Gender,
+		arg.Birthdate,
+		arg.Zoneinfo,
+		arg.Locale,
+		arg.PhoneNumber,
+		arg.PhoneNumberVerified,
+		arg.Address,
 	)
 	var i OidcUserinfo
 	err := row.Scan(
@@ -157,6 +199,20 @@ func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfo
 		&i.Email,
 		&i.Groups,
 		&i.UpdatedAt,
+		&i.GivenName,
+		&i.FamilyName,
+		&i.MiddleName,
+		&i.Nickname,
+		&i.Profile,
+		&i.Picture,
+		&i.Website,
+		&i.Gender,
+		&i.Birthdate,
+		&i.Zoneinfo,
+		&i.Locale,
+		&i.PhoneNumber,
+		&i.PhoneNumberVerified,
+		&i.Address,
 	)
 	return i, err
 }
@@ -456,7 +512,7 @@ func (q *Queries) GetOidcTokenBySub(ctx context.Context, sub string) (OidcToken,
 }
 
 const getOidcUserInfo = `-- name: GetOidcUserInfo :one
-SELECT sub, name, preferred_username, email, "groups", updated_at FROM "oidc_userinfo"
+SELECT sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, phone_number_verified, address FROM "oidc_userinfo"
 WHERE "sub" = ?
 `
 
@@ -470,6 +526,20 @@ func (q *Queries) GetOidcUserInfo(ctx context.Context, sub string) (OidcUserinfo
 		&i.Email,
 		&i.Groups,
 		&i.UpdatedAt,
+		&i.GivenName,
+		&i.FamilyName,
+		&i.MiddleName,
+		&i.Nickname,
+		&i.Profile,
+		&i.Picture,
+		&i.Website,
+		&i.Gender,
+		&i.Birthdate,
+		&i.Zoneinfo,
+		&i.Locale,
+		&i.PhoneNumber,
+		&i.PhoneNumberVerified,
+		&i.Address,
 	)
 	return i, err
 }

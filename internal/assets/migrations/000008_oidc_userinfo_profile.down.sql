@@ -1,0 +1,14 @@
+ALTER TABLE "oidc_userinfo" DROP COLUMN "given_name";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "family_name";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "middle_name";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "nickname";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "profile";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "picture";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "website";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "gender";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "birthdate";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "zoneinfo";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "locale";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "phone_number";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "phone_number_verified";
+ALTER TABLE "oidc_userinfo" DROP COLUMN "address";

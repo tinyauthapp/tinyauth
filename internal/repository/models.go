@@ -28,12 +28,26 @@ type OidcToken struct {
 }
 
 type OidcUserinfo struct {
-	Sub               string
-	Name              string
-	PreferredUsername string
-	Email             string
-	Groups            string
-	UpdatedAt         int64
+	Sub                 string
+	Name                string
+	PreferredUsername   string
+	Email               string
+	Groups              string
+	UpdatedAt           int64
+	GivenName           string
+	FamilyName          string
+	MiddleName          string
+	Nickname            string
+	Profile             string
+	Picture             string
+	Website             string
+	Gender              string
+	Birthdate           string
+	Zoneinfo            string
+	Locale              string
+	PhoneNumber         string
+	PhoneNumberVerified int64
+	Address             string
 }
 
 type Session struct {

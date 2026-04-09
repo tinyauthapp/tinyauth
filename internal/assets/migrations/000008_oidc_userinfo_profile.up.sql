@@ -1,0 +1,14 @@
+ALTER TABLE "oidc_userinfo" ADD COLUMN "given_name"             TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "family_name"            TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "middle_name"            TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "nickname"               TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "profile"                TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "picture"                TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "website"                TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "gender"                 TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "birthdate"              TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "zoneinfo"               TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "locale"                 TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "phone_number"           TEXT    NOT NULL DEFAULT "";
+ALTER TABLE "oidc_userinfo" ADD COLUMN "phone_number_verified"  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "oidc_userinfo" ADD COLUMN "address"                TEXT    NOT NULL DEFAULT "{}";

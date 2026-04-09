@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { useOIDCParams } from "@/lib/hooks/oidc";
 import { useTranslation } from "react-i18next";
 import { TFunction } from "i18next";
-import { Mail, Shield, User, Users } from "lucide-react";
+import { Mail, MapPin, Phone, Shield, User, Users } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -60,6 +60,18 @@ const createScopeMap = (t: TFunction<"translation", undefined>): Scope[] => {
       name: t("groupsScopeName"),
       description: t("groupsScopeDescription"),
       icon: <Users {...scopeMapIconProps} />,
+    },
+    {
+      id: "phone",
+      name: t("phoneScopeName"),
+      description: t("phoneScopeDescription"),
+      icon: <Phone {...scopeMapIconProps} />,
+    },
+    {
+      id: "address",
+      name: t("addressScopeName"),
+      description: t("addressScopeDescription"),
+      icon: <MapPin {...scopeMapIconProps} />,
     },
   ];
 };

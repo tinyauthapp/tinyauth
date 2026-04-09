@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	SupportedScopes        = []string{"openid", "profile", "email", "groups"}
+	SupportedScopes        = []string{"openid", "profile", "email", "phone", "address", "groups"}
 	SupportedResponseTypes = []string{"code"}
 	SupportedGrantTypes    = []string{"authorization_code", "refresh_token"}
 )
@@ -48,6 +48,17 @@ type ClaimSet struct {
 	Iat               int64    `json:"iat"`
 	Exp               int64    `json:"exp"`
 	Name              string   `json:"name,omitempty"`
+	GivenName         string   `json:"given_name,omitempty"`
+	FamilyName        string   `json:"family_name,omitempty"`
+	MiddleName        string   `json:"middle_name,omitempty"`
+	Nickname          string   `json:"nickname,omitempty"`
+	Profile           string   `json:"profile,omitempty"`
+	Picture           string   `json:"picture,omitempty"`
+	Website           string   `json:"website,omitempty"`
+	Gender            string   `json:"gender,omitempty"`
+	Birthdate         string   `json:"birthdate,omitempty"`
+	Zoneinfo          string   `json:"zoneinfo,omitempty"`
+	Locale            string   `json:"locale,omitempty"`
 	Email             string   `json:"email,omitempty"`
 	EmailVerified     bool     `json:"email_verified,omitempty"`
 	PreferredUsername string   `json:"preferred_username,omitempty"`
@@ -56,13 +67,27 @@ type ClaimSet struct {
 }
 
 type UserinfoResponse struct {
-	Sub               string   `json:"sub"`
-	Name              string   `json:"name,omitempty"`
-	Email             string   `json:"email,omitempty"`
-	PreferredUsername string   `json:"preferred_username,omitempty"`
-	Groups            []string `json:"groups,omitempty"`
-	EmailVerified     bool     `json:"email_verified,omitempty"`
-	UpdatedAt         int64    `json:"updated_at"`
+	Sub                 string               `json:"sub"`
+	Name                string               `json:"name,omitempty"`
+	GivenName           string               `json:"given_name,omitempty"`
+	FamilyName          string               `json:"family_name,omitempty"`
+	MiddleName          string               `json:"middle_name,omitempty"`
+	Nickname            string               `json:"nickname,omitempty"`
+	Profile             string               `json:"profile,omitempty"`
+	Picture             string               `json:"picture,omitempty"`
+	Website             string               `json:"website,omitempty"`
+	Gender              string               `json:"gender,omitempty"`
+	Birthdate           string               `json:"birthdate,omitempty"`
+	Zoneinfo            string               `json:"zoneinfo,omitempty"`
+	Locale              string               `json:"locale,omitempty"`
+	Email               string               `json:"email,omitempty"`
+	PreferredUsername   string               `json:"preferred_username,omitempty"`
+	Groups              []string             `json:"groups,omitempty"`
+	EmailVerified       bool                 `json:"email_verified,omitempty"`
+	PhoneNumber         string               `json:"phone_number,omitempty"`
+	PhoneNumberVerified *bool                `json:"phone_number_verified,omitempty"`
+	Address             *config.AddressClaim `json:"address,omitempty"`
+	UpdatedAt           int64                `json:"updated_at"`
 }
 
 type TokenResponse struct {
@@ -342,12 +367,36 @@ func (service *OIDCService) StoreCode(c *gin.Context, sub string, code string, r
 }
 
 func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContext config.UserContext, req AuthorizeRequest) error {
+	addressJSON, err := json.Marshal(userContext.Attributes.Address)
+	if err != nil {
+		return err
+	}
+
 	userInfoParams := repository.CreateOidcUserInfoParams{
 		Sub:               sub,
 		Name:              userContext.Name,
 		Email:             userContext.Email,
 		PreferredUsername: userContext.Username,
 		UpdatedAt:         time.Now().Unix(),
+		GivenName:         userContext.Attributes.GivenName,
+		FamilyName:        userContext.Attributes.FamilyName,
+		MiddleName:        userContext.Attributes.MiddleName,
+		Nickname:          userContext.Attributes.Nickname,
+		Profile:           userContext.Attributes.Profile,
+		Picture:           userContext.Attributes.Picture,
+		Website:           userContext.Attributes.Website,
+		Gender:            userContext.Attributes.Gender,
+		Birthdate:         userContext.Attributes.Birthdate,
+		Zoneinfo:          userContext.Attributes.Zoneinfo,
+		Locale:            userContext.Attributes.Locale,
+		PhoneNumber:       userContext.Attributes.PhoneNumber,
+		PhoneNumberVerified: func() int64 {
+			if userContext.Attributes.PhoneNumberVerified {
+				return 1
+			}
+			return 0
+		}(),
+		Address: string(addressJSON),
 	}
 
 	// Tinyauth will pass through the groups it got from an LDAP or an OIDC server
@@ -359,7 +408,7 @@ func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContex
 		userInfoParams.Groups = userContext.OAuthGroups
 	}
 
-	_, err := service.queries.CreateOidcUserInfo(c, userInfoParams)
+	_, err = service.queries.CreateOidcUserInfo(c, userInfoParams)
 
 	return err
 }
@@ -401,7 +450,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 	return oidcCode, nil
 }
 
-func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
+func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user repository.OidcUserinfo, nonce string) (string, error) {
 	createdAt := time.Now().Unix()
 	expiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
 
@@ -430,20 +479,16 @@ func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user
 		return "", err
 	}
 
-	userInfo := service.CompileUserinfo(user, scope)
-
+	// Per OIDC Core §5.4: for code flow, scope-requested claims (profile, email)
+	// belong in the userinfo response only. The id_token carries only the required
+	// JWT claims (iss, aud, sub, iat, exp) plus nonce.
 	claims := ClaimSet{
-		Iss:               service.issuer,
-		Aud:               client.ClientID,
-		Sub:               user.Sub,
-		Iat:               createdAt,
-		Exp:               expiresAt,
-		Name:              userInfo.Name,
-		Email:             userInfo.Email,
-		EmailVerified:     userInfo.EmailVerified,
-		PreferredUsername: userInfo.PreferredUsername,
-		Groups:            userInfo.Groups,
-		Nonce:             nonce,
+		Iss:   service.issuer,
+		Aud:   client.ClientID,
+		Sub:   user.Sub,
+		Iat:   createdAt,
+		Exp:   expiresAt,
+		Nonce: nonce,
 	}
 
 	payload, err := json.Marshal(claims)
@@ -474,7 +519,7 @@ func (service *OIDCService) GenerateAccessToken(c *gin.Context, client config.OI
 		return TokenResponse{}, err
 	}
 
-	idToken, err := service.generateIDToken(client, user, codeEntry.Scope, codeEntry.Nonce)
+	idToken, err := service.generateIDToken(client, user, codeEntry.Nonce)
 
 	if err != nil {
 		return TokenResponse{}, err
@@ -543,7 +588,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 
 	idToken, err := service.generateIDToken(config.OIDCClientConfig{
 		ClientID: entry.ClientID,
-	}, user, entry.Scope, entry.Nonce)
+	}, user, entry.Nonce)
 
 	if err != nil {
 		return TokenResponse{}, err
@@ -637,6 +682,17 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 	if slices.Contains(scopes, "profile") {
 		userInfo.Name = user.Name
 		userInfo.PreferredUsername = user.PreferredUsername
+		userInfo.GivenName = user.GivenName
+		userInfo.FamilyName = user.FamilyName
+		userInfo.MiddleName = user.MiddleName
+		userInfo.Nickname = user.Nickname
+		userInfo.Profile = user.Profile
+		userInfo.Picture = user.Picture
+		userInfo.Website = user.Website
+		userInfo.Gender = user.Gender
+		userInfo.Birthdate = user.Birthdate
+		userInfo.Zoneinfo = user.Zoneinfo
+		userInfo.Locale = user.Locale
 	}
 
 	if slices.Contains(scopes, "email") {
@@ -650,6 +706,19 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 			userInfo.Groups = strings.Split(user.Groups, ",")
 		} else {
 			userInfo.Groups = []string{}
+		}
+	}
+
+	if slices.Contains(scopes, "phone") {
+		userInfo.PhoneNumber = user.PhoneNumber
+		verified := user.PhoneNumberVerified != 0
+		userInfo.PhoneNumberVerified = &verified
+	}
+
+	if slices.Contains(scopes, "address") {
+		var addr config.AddressClaim
+		if err := json.Unmarshal([]byte(user.Address), &addr); err == nil {
+			userInfo.Address = &addr
 		}
 	}
 

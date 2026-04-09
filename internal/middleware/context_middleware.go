@@ -99,6 +99,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			}
 
 			var ldapGroups []string
+			var localAttributes config.UserAttributes
 
 			if cookie.Provider == "ldap" {
 				ldapUser, err := m.auth.GetLdapUser(userSearch.Username)
@@ -112,6 +113,11 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				ldapGroups = ldapUser.Groups
 			}
 
+			if cookie.Provider == "local" {
+				localUser := m.auth.GetLocalUser(cookie.Username)
+				localAttributes = localUser.Attributes
+			}
+
 			m.auth.RefreshSessionCookie(c)
 			c.Set("context", &config.UserContext{
 				Username:   cookie.Username,
@@ -120,6 +126,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				Provider:   cookie.Provider,
 				IsLoggedIn: true,
 				LdapGroups: strings.Join(ldapGroups, ","),
+				Attributes: localAttributes,
 			})
 			c.Next()
 			return
@@ -202,13 +209,23 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				return
 			}
 
+			name := utils.Capitalize(user.Username)
+			if user.Attributes.Name != "" {
+				name = user.Attributes.Name
+			}
+			email := utils.CompileUserEmail(user.Username, m.config.CookieDomain)
+			if user.Attributes.Email != "" {
+				email = user.Attributes.Email
+			}
+
 			c.Set("context", &config.UserContext{
 				Username:    user.Username,
-				Name:        utils.Capitalize(user.Username),
-				Email:       utils.CompileUserEmail(user.Username, m.config.CookieDomain),
+				Name:        name,
+				Email:       email,
 				Provider:    "local",
 				IsLoggedIn:  true,
 				IsBasicAuth: true,
+				Attributes:  user.Attributes,
 			})
 			c.Next()
 			return

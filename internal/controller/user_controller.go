@@ -105,16 +105,32 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.auth.RecordLoginAttempt(req.Username, true)
 
+	var localUser *config.User
 	if userSearch.Type == "local" {
 		user := controller.auth.GetLocalUser(userSearch.Username)
+		localUser = &user
+	}
+
+	if userSearch.Type == "local" && localUser != nil {
+		user := *localUser
 
 		if user.TotpSecret != "" {
 			tlog.App.Debug().Str("username", req.Username).Msg("User has TOTP enabled, requiring TOTP verification")
 
+			name := user.Attributes.Name
+			if name == "" {
+				name = utils.Capitalize(user.Username)
+			}
+
+			email := user.Attributes.Email
+			if email == "" {
+				email = utils.CompileUserEmail(user.Username, controller.config.CookieDomain)
+			}
+
 			err := controller.auth.CreateSessionCookie(c, &repository.Session{
 				Username:    user.Username,
-				Name:        utils.Capitalize(user.Username),
-				Email:       utils.CompileUserEmail(user.Username, controller.config.CookieDomain),
+				Name:        name,
+				Email:       email,
 				Provider:    "local",
 				TotpPending: true,
 			})
@@ -142,6 +158,15 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		Name:     utils.Capitalize(req.Username),
 		Email:    utils.CompileUserEmail(req.Username, controller.config.CookieDomain),
 		Provider: "local",
+	}
+
+	if userSearch.Type == "local" && localUser != nil {
+		if localUser.Attributes.Name != "" {
+			sessionCookie.Name = localUser.Attributes.Name
+		}
+		if localUser.Attributes.Email != "" {
+			sessionCookie.Email = localUser.Attributes.Email
+		}
 	}
 
 	if userSearch.Type == "ldap" {
@@ -256,6 +281,13 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		Name:     utils.Capitalize(user.Username),
 		Email:    utils.CompileUserEmail(user.Username, controller.config.CookieDomain),
 		Provider: "local",
+	}
+
+	if user.Attributes.Name != "" {
+		sessionCookie.Name = user.Attributes.Name
+	}
+	if user.Attributes.Email != "" {
+		sessionCookie.Email = user.Attributes.Email
 	}
 
 	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")

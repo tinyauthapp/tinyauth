@@ -63,7 +63,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// Parse users
-	users, err := utils.GetUsers(app.config.Auth.Users, app.config.Auth.UsersFile)
+	users, err := utils.GetUsers(app.config.Auth.Users, app.config.Auth.UsersFile, app.config.Auth.UserAttributes)
 
 	if err != nil {
 		return err

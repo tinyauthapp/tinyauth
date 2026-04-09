@@ -9,7 +9,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/config"
 )
 
-func ParseUsers(usersStr []string) ([]config.User, error) {
+func ParseUsers(usersStr []string, userAttributes map[string]config.UserAttributes) ([]config.User, error) {
 	var users []config.User
 
 	if len(usersStr) == 0 {
@@ -24,13 +24,16 @@ func ParseUsers(usersStr []string) ([]config.User, error) {
 		if err != nil {
 			return []config.User{}, err
 		}
+		if attrs, ok := userAttributes[parsed.Username]; ok {
+			parsed.Attributes = attrs
+		}
 		users = append(users, parsed)
 	}
 
 	return users, nil
 }
 
-func GetUsers(usersCfg []string, usersPath string) ([]config.User, error) {
+func GetUsers(usersCfg []string, usersPath string, userAttributes map[string]config.UserAttributes) ([]config.User, error) {
 	var usersStr []string
 
 	if len(usersCfg) == 0 && usersPath == "" {
@@ -59,7 +62,7 @@ func GetUsers(usersCfg []string, usersPath string) ([]config.User, error) {
 		}
 	}
 
-	return ParseUsers(usersStr)
+	return ParseUsers(usersStr, userAttributes)
 }
 
 func ParseUser(userStr string) (config.User, error) {
