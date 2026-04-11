@@ -10,5 +10,4 @@ ALTER TABLE "oidc_userinfo" ADD COLUMN "birthdate"              TEXT    NOT NULL
 ALTER TABLE "oidc_userinfo" ADD COLUMN "zoneinfo"               TEXT    NOT NULL DEFAULT "";
 ALTER TABLE "oidc_userinfo" ADD COLUMN "locale"                 TEXT    NOT NULL DEFAULT "";
 ALTER TABLE "oidc_userinfo" ADD COLUMN "phone_number"           TEXT    NOT NULL DEFAULT "";
-ALTER TABLE "oidc_userinfo" ADD COLUMN "phone_number_verified"  INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "oidc_userinfo" ADD COLUMN "address"                TEXT    NOT NULL DEFAULT "{}";

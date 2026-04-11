@@ -40,6 +40,5 @@ CREATE TABLE IF NOT EXISTS "oidc_userinfo" (
     "zoneinfo"              TEXT    NOT NULL,
     "locale"                TEXT    NOT NULL,
     "phone_number"          TEXT    NOT NULL,
-    "phone_number_verified" INTEGER NOT NULL,
     "address"               TEXT    NOT NULL
 );

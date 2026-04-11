@@ -137,35 +137,33 @@ INSERT INTO "oidc_userinfo" (
     "zoneinfo",
     "locale",
     "phone_number",
-    "phone_number_verified",
     "address"
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, phone_number_verified, address
+RETURNING sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, address
 `
 
 type CreateOidcUserInfoParams struct {
-	Sub                 string
-	Name                string
-	PreferredUsername   string
-	Email               string
-	Groups              string
-	UpdatedAt           int64
-	GivenName           string
-	FamilyName          string
-	MiddleName          string
-	Nickname            string
-	Profile             string
-	Picture             string
-	Website             string
-	Gender              string
-	Birthdate           string
-	Zoneinfo            string
-	Locale              string
-	PhoneNumber         string
-	PhoneNumberVerified int64
-	Address             string
+	Sub               string
+	Name              string
+	PreferredUsername string
+	Email             string
+	Groups            string
+	UpdatedAt         int64
+	GivenName         string
+	FamilyName        string
+	MiddleName        string
+	Nickname          string
+	Profile           string
+	Picture           string
+	Website           string
+	Gender            string
+	Birthdate         string
+	Zoneinfo          string
+	Locale            string
+	PhoneNumber       string
+	Address           string
 }
 
 func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfoParams) (OidcUserinfo, error) {
@@ -188,7 +186,6 @@ func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfo
 		arg.Zoneinfo,
 		arg.Locale,
 		arg.PhoneNumber,
-		arg.PhoneNumberVerified,
 		arg.Address,
 	)
 	var i OidcUserinfo
@@ -211,7 +208,6 @@ func (q *Queries) CreateOidcUserInfo(ctx context.Context, arg CreateOidcUserInfo
 		&i.Zoneinfo,
 		&i.Locale,
 		&i.PhoneNumber,
-		&i.PhoneNumberVerified,
 		&i.Address,
 	)
 	return i, err
@@ -512,7 +508,7 @@ func (q *Queries) GetOidcTokenBySub(ctx context.Context, sub string) (OidcToken,
 }
 
 const getOidcUserInfo = `-- name: GetOidcUserInfo :one
-SELECT sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, phone_number_verified, address FROM "oidc_userinfo"
+SELECT sub, name, preferred_username, email, "groups", updated_at, given_name, family_name, middle_name, nickname, profile, picture, website, gender, birthdate, zoneinfo, locale, phone_number, address FROM "oidc_userinfo"
 WHERE "sub" = ?
 `
 
@@ -538,7 +534,6 @@ func (q *Queries) GetOidcUserInfo(ctx context.Context, sub string) (OidcUserinfo
 		&i.Zoneinfo,
 		&i.Locale,
 		&i.PhoneNumber,
-		&i.PhoneNumberVerified,
 		&i.Address,
 	)
 	return i, err

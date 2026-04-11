@@ -24,26 +24,25 @@ func newTestUser() repository.OidcUserinfo {
 	addrJSON, _ := json.Marshal(addr)
 
 	return repository.OidcUserinfo{
-		Sub:                 "test-sub",
-		Name:                "Test User",
-		PreferredUsername:   "testuser",
-		Email:               "test@example.com",
-		Groups:              "admins,users",
-		UpdatedAt:           1234567890,
-		GivenName:           "Test",
-		FamilyName:          "User",
-		MiddleName:          "M",
-		Nickname:            "testy",
-		Profile:             "https://example.com/testuser",
-		Picture:             "https://example.com/testuser.jpg",
-		Website:             "https://testuser.example.com",
-		Gender:              "male",
-		Birthdate:           "1990-01-01",
-		Zoneinfo:            "America/Chicago",
-		Locale:              "en-US",
-		PhoneNumber:         "+15555550100",
-		PhoneNumberVerified: 1,
-		Address:             string(addrJSON),
+		Sub:               "test-sub",
+		Name:              "Test User",
+		PreferredUsername: "testuser",
+		Email:             "test@example.com",
+		Groups:            "admins,users",
+		UpdatedAt:         1234567890,
+		GivenName:         "Test",
+		FamilyName:        "User",
+		MiddleName:        "M",
+		Nickname:          "testy",
+		Profile:           "https://example.com/testuser",
+		Picture:           "https://example.com/testuser.jpg",
+		Website:           "https://testuser.example.com",
+		Gender:            "male",
+		Birthdate:         "1990-01-01",
+		Zoneinfo:          "America/Chicago",
+		Locale:            "en-US",
+		PhoneNumber:       "+15555550100",
+		Address:           string(addrJSON),
 	}
 }
 
@@ -110,6 +109,17 @@ func TestCompileUserinfo_EmailScope(t *testing.T) {
 	assert.Empty(t, info.Name) // profile not requested
 }
 
+func TestCompileUserinfo_EmailScope_Unverified(t *testing.T) {
+	svc := newOIDCService(t)
+	user := newTestUser()
+	user.Email = ""
+
+	info := svc.CompileUserinfo(user, "openid,email")
+
+	assert.Empty(t, info.Email)
+	assert.False(t, info.EmailVerified)
+}
+
 func TestCompileUserinfo_PhoneScope(t *testing.T) {
 	svc := newOIDCService(t)
 	user := newTestUser()
@@ -124,7 +134,7 @@ func TestCompileUserinfo_PhoneScope(t *testing.T) {
 func TestCompileUserinfo_PhoneScope_Unverified(t *testing.T) {
 	svc := newOIDCService(t)
 	user := newTestUser()
-	user.PhoneNumberVerified = 0
+	user.PhoneNumber = ""
 
 	info := svc.CompileUserinfo(user, "openid,phone")
 

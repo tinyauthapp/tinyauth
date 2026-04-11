@@ -126,22 +126,21 @@ type AuthConfig struct {
 }
 
 type UserAttributes struct {
-	Name                string       `description:"Full name of the user." yaml:"name"`
-	GivenName           string       `description:"Given (first) name of the user." yaml:"givenName"`
-	FamilyName          string       `description:"Family (last) name of the user." yaml:"familyName"`
-	MiddleName          string       `description:"Middle name of the user." yaml:"middleName"`
-	Nickname            string       `description:"Nickname of the user." yaml:"nickname"`
-	Profile             string       `description:"URL of the user's profile page." yaml:"profile"`
-	Picture             string       `description:"URL of the user's profile picture." yaml:"picture"`
-	Website             string       `description:"URL of the user's website." yaml:"website"`
-	Email               string       `description:"Email address of the user." yaml:"email"`
-	Gender              string       `description:"Gender of the user." yaml:"gender"`
-	Birthdate           string       `description:"Birthdate of the user (YYYY-MM-DD)." yaml:"birthdate"`
-	Zoneinfo            string       `description:"Time zone of the user (e.g. Europe/Athens)." yaml:"zoneinfo"`
-	Locale              string       `description:"Locale of the user (e.g. en-US)." yaml:"locale"`
-	PhoneNumber         string       `description:"Phone number of the user." yaml:"phoneNumber"`
-	PhoneNumberVerified bool         `description:"Whether the phone number has been verified." yaml:"phoneNumberVerified"`
-	Address             AddressClaim `description:"Address of the user." yaml:"address"`
+	Name        string       `description:"Full name of the user." yaml:"name"`
+	GivenName   string       `description:"Given (first) name of the user." yaml:"givenName"`
+	FamilyName  string       `description:"Family (last) name of the user." yaml:"familyName"`
+	MiddleName  string       `description:"Middle name of the user." yaml:"middleName"`
+	Nickname    string       `description:"Nickname of the user." yaml:"nickname"`
+	Profile     string       `description:"URL of the user's profile page." yaml:"profile"`
+	Picture     string       `description:"URL of the user's profile picture." yaml:"picture"`
+	Website     string       `description:"URL of the user's website." yaml:"website"`
+	Email       string       `description:"Email address of the user." yaml:"email"`
+	Gender      string       `description:"Gender of the user." yaml:"gender"`
+	Birthdate   string       `description:"Birthdate of the user (YYYY-MM-DD)." yaml:"birthdate"`
+	Zoneinfo    string       `description:"Time zone of the user (e.g. Europe/Athens)." yaml:"zoneinfo"`
+	Locale      string       `description:"Locale of the user (e.g. en-US)." yaml:"locale"`
+	PhoneNumber string       `description:"Phone number of the user." yaml:"phoneNumber"`
+	Address     AddressClaim `description:"Address of the user." yaml:"address"`
 }
 
 type AddressClaim struct {

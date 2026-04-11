@@ -390,13 +390,7 @@ func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContex
 		Zoneinfo:          userContext.Attributes.Zoneinfo,
 		Locale:            userContext.Attributes.Locale,
 		PhoneNumber:       userContext.Attributes.PhoneNumber,
-		PhoneNumberVerified: func() int64 {
-			if userContext.Attributes.PhoneNumberVerified {
-				return 1
-			}
-			return 0
-		}(),
-		Address: string(addressJSON),
+		Address:           string(addressJSON),
 	}
 
 	// Tinyauth will pass through the groups it got from an LDAP or an OIDC server
@@ -697,8 +691,7 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 
 	if slices.Contains(scopes, "email") {
 		userInfo.Email = user.Email
-		// We can set this as a configuration option in the future but for now it's a good idea to assume it's true
-		userInfo.EmailVerified = true
+		userInfo.EmailVerified = user.Email != ""
 	}
 
 	if slices.Contains(scopes, "groups") {
@@ -711,7 +704,7 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 
 	if slices.Contains(scopes, "phone") {
 		userInfo.PhoneNumber = user.PhoneNumber
-		verified := user.PhoneNumberVerified != 0
+		verified := user.PhoneNumber != ""
 		userInfo.PhoneNumberVerified = &verified
 	}
 
