@@ -353,3 +353,150 @@ func TestUserController(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestUserControllerAttributes(t *testing.T) {
+	tlog.NewTestLogger().Init()
+	tempDir := t.TempDir()
+
+	authServiceCfg := service.AuthServiceConfig{
+		Users: []config.User{
+			{
+				Username: "attruser",
+				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
+				Attributes: config.UserAttributes{
+					Name:  "Alice Smith",
+					Email: "alice@example.com",
+				},
+			},
+			{
+				Username:   "attrtotpuser",
+				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
+				TotpSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
+				Attributes: config.UserAttributes{
+					Name:  "Bob Jones",
+					Email: "bob@example.com",
+				},
+			},
+		},
+		SessionExpiry:     10,
+		CookieDomain:      "example.com",
+		LoginTimeout:      10,
+		LoginMaxRetries:   3,
+		SessionCookieName: "tinyauth-session",
+	}
+
+	userControllerCfg := controller.UserControllerConfig{
+		CookieDomain: "example.com",
+	}
+
+	app := bootstrap.NewBootstrapApp(config.Config{})
+	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth_attrs.db"))
+	require.NoError(t, err)
+
+	queries := repository.New(db)
+
+	docker := service.NewDockerService()
+	err = docker.Init()
+	require.NoError(t, err)
+
+	ldap := service.NewLdapService(service.LdapServiceConfig{})
+	err = ldap.Init()
+	require.NoError(t, err)
+
+	broker := service.NewOAuthBrokerService(make(map[string]config.OAuthServiceConfig))
+	err = broker.Init()
+	require.NoError(t, err)
+
+	authService := service.NewAuthService(authServiceCfg, docker, ldap, queries, broker)
+	err = authService.Init()
+	require.NoError(t, err)
+
+	makeRouter := func(extraMiddlewares ...gin.HandlerFunc) *gin.Engine {
+		router := gin.Default()
+		for _, m := range extraMiddlewares {
+			router.Use(m)
+		}
+		gin.SetMode(gin.TestMode)
+		group := router.Group("/api")
+		ctrl := controller.NewUserController(userControllerCfg, group, authService)
+		ctrl.SetupRoutes()
+		return router
+	}
+
+	t.Run("Login uses name and email from user attributes", func(t *testing.T) {
+		authService.ClearRateLimitsTestingOnly()
+		router := makeRouter()
+
+		loginReq := controller.LoginRequest{Username: "attruser", Password: "password"}
+		body, err := json.Marshal(loginReq)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, 200, rec.Code)
+		cookies := rec.Result().Cookies()
+		require.Len(t, cookies, 1)
+		assert.Equal(t, "tinyauth-session", cookies[0].Name)
+	})
+
+	t.Run("Login with TOTP uses name and email from user attributes in pending session", func(t *testing.T) {
+		authService.ClearRateLimitsTestingOnly()
+		router := makeRouter()
+
+		loginReq := controller.LoginRequest{Username: "attrtotpuser", Password: "password"}
+		body, err := json.Marshal(loginReq)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, 200, rec.Code)
+		var res map[string]any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		assert.Equal(t, true, res["totpPending"])
+		require.Len(t, rec.Result().Cookies(), 1)
+	})
+
+	t.Run("TOTP completion uses name and email from user attributes", func(t *testing.T) {
+		authService.ClearRateLimitsTestingOnly()
+
+		// First: login to get TOTP-pending session
+		router := makeRouter(func(c *gin.Context) {
+			c.Set("context", &config.UserContext{
+				Username:    "attrtotpuser",
+				Name:        "Bob Jones",
+				Email:       "bob@example.com",
+				Provider:    "local",
+				TotpPending: true,
+				TotpEnabled: true,
+			})
+		})
+
+		code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
+		require.NoError(t, err)
+
+		totpReq := controller.TotpRequest{Code: code}
+		body, err := json.Marshal(totpReq)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, 200, rec.Code)
+		cookies := rec.Result().Cookies()
+		require.Len(t, cookies, 1)
+		assert.Equal(t, "tinyauth-session", cookies[0].Name)
+	})
+
+	t.Cleanup(func() {
+		err = db.Close()
+		require.NoError(t, err)
+	})
+}
