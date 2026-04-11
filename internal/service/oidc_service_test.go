@@ -46,8 +46,7 @@ func newTestUser() repository.OidcUserinfo {
 	}
 }
 
-func newOIDCService(t *testing.T) *service.OIDCService {
-	t.Helper()
+func TestCompileUserinfo(t *testing.T) {
 	dir := t.TempDir()
 	svc := service.NewOIDCService(service.OIDCServiceConfig{
 		PrivateKeyPath: dir + "/key.pem",
@@ -56,149 +55,144 @@ func newOIDCService(t *testing.T) *service.OIDCService {
 		SessionExpiry:  3600,
 	}, nil)
 	require.NoError(t, svc.Init())
-	return svc
-}
 
-func TestCompileUserinfo_OpenidOnly(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
+	type testCase struct {
+		description string
+		mutate      func(u *repository.OidcUserinfo)
+		scope       string
+		run         func(t *testing.T, info service.UserinfoResponse)
+	}
 
-	info := svc.CompileUserinfo(user, "openid")
+	tests := []testCase{
+		{
+			description: "openid scope only returns sub and updated_at",
+			scope:       "openid",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, "test-sub", info.Sub)
+				assert.Equal(t, int64(1234567890), info.UpdatedAt)
+				assert.Empty(t, info.Name)
+				assert.Empty(t, info.Email)
+				assert.Nil(t, info.Groups)
+				assert.Nil(t, info.PhoneNumberVerified)
+				assert.Nil(t, info.Address)
+			},
+		},
+		{
+			description: "profile scope returns all profile fields",
+			scope:       "openid,profile",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, "Test User", info.Name)
+				assert.Equal(t, "testuser", info.PreferredUsername)
+				assert.Equal(t, "Test", info.GivenName)
+				assert.Equal(t, "User", info.FamilyName)
+				assert.Equal(t, "M", info.MiddleName)
+				assert.Equal(t, "testy", info.Nickname)
+				assert.Equal(t, "https://example.com/testuser", info.Profile)
+				assert.Equal(t, "https://example.com/testuser.jpg", info.Picture)
+				assert.Equal(t, "https://testuser.example.com", info.Website)
+				assert.Equal(t, "male", info.Gender)
+				assert.Equal(t, "1990-01-01", info.Birthdate)
+				assert.Equal(t, "America/Chicago", info.Zoneinfo)
+				assert.Equal(t, "en-US", info.Locale)
+				assert.Empty(t, info.Email)
+			},
+		},
+		{
+			description: "email scope sets email and email_verified true when email present",
+			scope:       "openid,email",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, "test@example.com", info.Email)
+				assert.True(t, info.EmailVerified)
+				assert.Empty(t, info.Name)
+			},
+		},
+		{
+			description: "email scope sets email_verified false when email absent",
+			scope:       "openid,email",
+			mutate:      func(u *repository.OidcUserinfo) { u.Email = "" },
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Empty(t, info.Email)
+				assert.False(t, info.EmailVerified)
+			},
+		},
+		{
+			description: "phone scope sets phone_number_verified true when phone present",
+			scope:       "openid,phone",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, "+15555550100", info.PhoneNumber)
+				require.NotNil(t, info.PhoneNumberVerified)
+				assert.True(t, *info.PhoneNumberVerified)
+			},
+		},
+		{
+			description: "phone scope sets phone_number_verified false when phone absent",
+			scope:       "openid,phone",
+			mutate:      func(u *repository.OidcUserinfo) { u.PhoneNumber = "" },
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				require.NotNil(t, info.PhoneNumberVerified)
+				assert.False(t, *info.PhoneNumberVerified)
+			},
+		},
+		{
+			description: "address scope returns parsed address",
+			scope:       "openid,address",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				require.NotNil(t, info.Address)
+				assert.Equal(t, "123 Main St", info.Address.Formatted)
+				assert.Equal(t, "123 Main St", info.Address.StreetAddress)
+				assert.Equal(t, "Springfield", info.Address.Locality)
+				assert.Equal(t, "IL", info.Address.Region)
+				assert.Equal(t, "62701", info.Address.PostalCode)
+				assert.Equal(t, "US", info.Address.Country)
+			},
+		},
+		{
+			description: "address scope with invalid JSON omits address",
+			scope:       "openid,address",
+			mutate:      func(u *repository.OidcUserinfo) { u.Address = "not-valid-json" },
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Nil(t, info.Address)
+			},
+		},
+		{
+			description: "groups scope returns split groups",
+			scope:       "openid,groups",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, []string{"admins", "users"}, info.Groups)
+			},
+		},
+		{
+			description: "groups scope returns empty slice when no groups",
+			scope:       "openid,groups",
+			mutate:      func(u *repository.OidcUserinfo) { u.Groups = "" },
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, []string{}, info.Groups)
+			},
+		},
+		{
+			description: "all scopes return all fields",
+			scope:       "openid,profile,email,phone,address,groups",
+			run: func(t *testing.T, info service.UserinfoResponse) {
+				assert.Equal(t, "Test User", info.Name)
+				assert.Equal(t, "test@example.com", info.Email)
+				assert.Equal(t, "+15555550100", info.PhoneNumber)
+				require.NotNil(t, info.PhoneNumberVerified)
+				assert.True(t, *info.PhoneNumberVerified)
+				require.NotNil(t, info.Address)
+				assert.Equal(t, "Springfield", info.Address.Locality)
+				assert.Equal(t, []string{"admins", "users"}, info.Groups)
+			},
+		},
+	}
 
-	assert.Equal(t, "test-sub", info.Sub)
-	assert.Equal(t, int64(1234567890), info.UpdatedAt)
-	// profile fields not requested
-	assert.Empty(t, info.Name)
-	assert.Empty(t, info.Email)
-	assert.Nil(t, info.Groups)
-	assert.Nil(t, info.PhoneNumberVerified)
-	assert.Nil(t, info.Address)
-}
-
-func TestCompileUserinfo_ProfileScope(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,profile")
-
-	assert.Equal(t, "Test User", info.Name)
-	assert.Equal(t, "testuser", info.PreferredUsername)
-	assert.Equal(t, "Test", info.GivenName)
-	assert.Equal(t, "User", info.FamilyName)
-	assert.Equal(t, "M", info.MiddleName)
-	assert.Equal(t, "testy", info.Nickname)
-	assert.Equal(t, "https://example.com/testuser", info.Profile)
-	assert.Equal(t, "https://example.com/testuser.jpg", info.Picture)
-	assert.Equal(t, "https://testuser.example.com", info.Website)
-	assert.Equal(t, "male", info.Gender)
-	assert.Equal(t, "1990-01-01", info.Birthdate)
-	assert.Equal(t, "America/Chicago", info.Zoneinfo)
-	assert.Equal(t, "en-US", info.Locale)
-	// non-profile fields still absent
-	assert.Empty(t, info.Email)
-}
-
-func TestCompileUserinfo_EmailScope(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,email")
-
-	assert.Equal(t, "test@example.com", info.Email)
-	assert.True(t, info.EmailVerified)
-	assert.Empty(t, info.Name) // profile not requested
-}
-
-func TestCompileUserinfo_EmailScope_Unverified(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-	user.Email = ""
-
-	info := svc.CompileUserinfo(user, "openid,email")
-
-	assert.Empty(t, info.Email)
-	assert.False(t, info.EmailVerified)
-}
-
-func TestCompileUserinfo_PhoneScope(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,phone")
-
-	assert.Equal(t, "+15555550100", info.PhoneNumber)
-	require.NotNil(t, info.PhoneNumberVerified)
-	assert.True(t, *info.PhoneNumberVerified)
-}
-
-func TestCompileUserinfo_PhoneScope_Unverified(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-	user.PhoneNumber = ""
-
-	info := svc.CompileUserinfo(user, "openid,phone")
-
-	require.NotNil(t, info.PhoneNumberVerified)
-	assert.False(t, *info.PhoneNumberVerified)
-}
-
-func TestCompileUserinfo_AddressScope(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,address")
-
-	require.NotNil(t, info.Address)
-	assert.Equal(t, "123 Main St", info.Address.Formatted)
-	assert.Equal(t, "123 Main St", info.Address.StreetAddress)
-	assert.Equal(t, "Springfield", info.Address.Locality)
-	assert.Equal(t, "IL", info.Address.Region)
-	assert.Equal(t, "62701", info.Address.PostalCode)
-	assert.Equal(t, "US", info.Address.Country)
-}
-
-func TestCompileUserinfo_AddressScope_InvalidJSON(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-	user.Address = "not-valid-json"
-
-	info := svc.CompileUserinfo(user, "openid,address")
-
-	// invalid JSON silently skipped, address omitted
-	assert.Nil(t, info.Address)
-}
-
-func TestCompileUserinfo_GroupsScope(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,groups")
-
-	assert.Equal(t, []string{"admins", "users"}, info.Groups)
-}
-
-func TestCompileUserinfo_GroupsScope_Empty(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-	user.Groups = ""
-
-	info := svc.CompileUserinfo(user, "openid,groups")
-
-	assert.Equal(t, []string{}, info.Groups)
-}
-
-func TestCompileUserinfo_AllScopes(t *testing.T) {
-	svc := newOIDCService(t)
-	user := newTestUser()
-
-	info := svc.CompileUserinfo(user, "openid,profile,email,phone,address,groups")
-
-	assert.Equal(t, "Test User", info.Name)
-	assert.Equal(t, "test@example.com", info.Email)
-	assert.Equal(t, "+15555550100", info.PhoneNumber)
-	require.NotNil(t, info.PhoneNumberVerified)
-	assert.True(t, *info.PhoneNumberVerified)
-	require.NotNil(t, info.Address)
-	assert.Equal(t, "Springfield", info.Address.Locality)
-	assert.Equal(t, []string{"admins", "users"}, info.Groups)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			user := newTestUser()
+			if test.mutate != nil {
+				test.mutate(&user)
+			}
+			info := svc.CompileUserinfo(user, test.scope)
+			test.run(t, info)
+		})
+	}
 }
