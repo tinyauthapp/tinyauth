@@ -444,7 +444,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 	return oidcCode, nil
 }
 
-func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user repository.OidcUserinfo, nonce string) (string, error) {
+func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
 	createdAt := time.Now().Unix()
 	expiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
 
@@ -473,16 +473,20 @@ func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user
 		return "", err
 	}
 
-	// Per OIDC Core §5.4: for code flow, scope-requested claims (profile, email)
-	// belong in the userinfo response only. The id_token carries only the required
-	// JWT claims (iss, aud, sub, iat, exp) plus nonce.
+	userInfo := service.CompileUserinfo(user, scope)
+
 	claims := ClaimSet{
-		Iss:   service.issuer,
-		Aud:   client.ClientID,
-		Sub:   user.Sub,
-		Iat:   createdAt,
-		Exp:   expiresAt,
-		Nonce: nonce,
+		Iss:               service.issuer,
+		Aud:               client.ClientID,
+		Sub:               user.Sub,
+		Iat:               createdAt,
+		Exp:               expiresAt,
+		Name:              userInfo.Name,
+		Email:             userInfo.Email,
+		EmailVerified:     userInfo.EmailVerified,
+		PreferredUsername: userInfo.PreferredUsername,
+		Groups:            userInfo.Groups,
+		Nonce:             nonce,
 	}
 
 	payload, err := json.Marshal(claims)
@@ -513,7 +517,7 @@ func (service *OIDCService) GenerateAccessToken(c *gin.Context, client config.OI
 		return TokenResponse{}, err
 	}
 
-	idToken, err := service.generateIDToken(client, user, codeEntry.Nonce)
+	idToken, err := service.generateIDToken(client, user, codeEntry.Scope, codeEntry.Nonce)
 
 	if err != nil {
 		return TokenResponse{}, err
@@ -582,7 +586,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 
 	idToken, err := service.generateIDToken(config.OIDCClientConfig{
 		ClientID: entry.ClientID,
-	}, user, entry.Nonce)
+	}, user, entry.Scope, entry.Nonce)
 
 	if err != nil {
 		return TokenResponse{}, err
