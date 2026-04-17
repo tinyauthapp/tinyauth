@@ -10,5 +10,4 @@ ALTER TABLE "oidc_userinfo" DROP COLUMN "birthdate";
 ALTER TABLE "oidc_userinfo" DROP COLUMN "zoneinfo";
 ALTER TABLE "oidc_userinfo" DROP COLUMN "locale";
 ALTER TABLE "oidc_userinfo" DROP COLUMN "phone_number";
-ALTER TABLE "oidc_userinfo" DROP COLUMN "phone_number_verified";
 ALTER TABLE "oidc_userinfo" DROP COLUMN "address";
