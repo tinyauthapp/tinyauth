@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"os"
+
 	"github.com/steveiliop56/tinyauth/internal/repository"
 	"github.com/steveiliop56/tinyauth/internal/service"
 	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
@@ -43,8 +45,11 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	var dockerService *service.DockerService
 	var kubernetesService *service.KubernetesService
 
-	switch app.config.LabelProvider {
-	case "kubernetes":
+	useKubernetes := app.config.LabelProvider == "kubernetes" ||
+		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
+
+	if useKubernetes {
+		tlog.App.Debug().Msg("Using Kubernetes label provider")
 		kubernetesService = service.NewKubernetesService()
 		err = kubernetesService.Init()
 		if err != nil {
@@ -52,7 +57,8 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 		}
 		services.kubernetesService = kubernetesService
 		labelProvider = kubernetesService
-	default:
+	} else {
+		tlog.App.Debug().Msg("Using Docker label provider")
 		dockerService = service.NewDockerService()
 		err = dockerService.Init()
 		if err != nil {

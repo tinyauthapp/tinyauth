@@ -59,7 +59,7 @@ func NewDefaultConfiguration() *Config {
 		Experimental: ExperimentalConfig{
 			ConfigFile: "",
 		},
-		LabelProvider: "docker",
+		LabelProvider: "auto",
 	}
 }
 
@@ -90,7 +90,7 @@ type Config struct {
 	UI            UIConfig           `description:"UI customization." yaml:"ui"`
 	Ldap          LdapConfig         `description:"LDAP configuration." yaml:"ldap"`
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
-	LabelProvider string             `description:"Label provider to use for ACLs (docker or kubernetes)." yaml:"labelProvider"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, or kubernetes). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 }
 
