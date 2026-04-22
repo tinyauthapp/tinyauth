@@ -136,7 +136,7 @@ func TestKubernetesService_GetLabels_NotStarted(t *testing.T) {
 	assert.Equal(t, config.App{}, got)
 }
 
-func TestKubernetesService_UpdateFromList(t *testing.T) {
+func TestKubernetesService_UpdateFromItem(t *testing.T) {
 	svc := newTestKubernetesService()
 
 	item := unstructured.Unstructured{}
@@ -147,7 +147,7 @@ func TestKubernetesService_UpdateFromList(t *testing.T) {
 		"tinyauth.apps.myapp.users.allow":   "alice",
 	})
 
-	svc.updateFromList([]unstructured.Unstructured{item})
+	svc.updateFromItem(&item)
 
 	got, ok := svc.getByDomain("myapp.example.com")
 	require.True(t, ok)
@@ -155,7 +155,7 @@ func TestKubernetesService_UpdateFromList(t *testing.T) {
 	assert.Equal(t, "alice", got.Users.Allow)
 }
 
-func TestKubernetesService_UpdateFromList_NoAnnotations(t *testing.T) {
+func TestKubernetesService_UpdateFromItem_NoAnnotations(t *testing.T) {
 	svc := newTestKubernetesService()
 
 	// First add something to the cache
@@ -169,7 +169,7 @@ func TestKubernetesService_UpdateFromList_NoAnnotations(t *testing.T) {
 	item.SetNamespace("default")
 	item.SetName("test-ingress")
 
-	svc.updateFromList([]unstructured.Unstructured{item})
+	svc.updateFromItem(&item)
 
 	_, ok := svc.getByDomain("todelete.example.com")
 	assert.False(t, ok)

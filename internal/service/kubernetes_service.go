@@ -123,37 +123,35 @@ func (k *KubernetesService) getByAppName(appName string) (config.App, bool) {
 	return config.App{}, false
 }
 
-func (k *KubernetesService) updateFromList(items []unstructured.Unstructured) {
-	for _, item := range items {
-		namespace := item.GetNamespace()
-		name := item.GetName()
-		annotations := item.GetAnnotations()
-		if annotations == nil {
-			k.removeIngress(namespace, name)
+func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
+	namespace := item.GetNamespace()
+	name := item.GetName()
+	annotations := item.GetAnnotations()
+	if annotations == nil {
+		k.removeIngress(namespace, name)
+		return
+	}
+	labels, err := decoders.DecodeLabels[config.Apps](annotations, "apps")
+	if err != nil {
+		tlog.App.Debug().Err(err).Msg("Failed to decode labels from annotations")
+		k.removeIngress(namespace, name)
+		return
+	}
+	var apps []ingressApp
+	for appName, appLabels := range labels.Apps {
+		if appLabels.Config.Domain == "" {
 			continue
 		}
-		labels, err := decoders.DecodeLabels[config.Apps](annotations, "apps")
-		if err != nil {
-			tlog.App.Debug().Err(err).Msg("Failed to decode labels from annotations")
-			k.removeIngress(namespace, name)
-			continue
-		}
-		var apps []ingressApp
-		for appName, appLabels := range labels.Apps {
-			if appLabels.Config.Domain == "" {
-				continue
-			}
-			apps = append(apps, ingressApp{
-				domain:  appLabels.Config.Domain,
-				appName: appName,
-				app:     appLabels,
-			})
-		}
-		if len(apps) == 0 {
-			k.removeIngress(namespace, name)
-		} else {
-			k.addIngressApps(namespace, name, apps)
-		}
+		apps = append(apps, ingressApp{
+			domain:  appLabels.Config.Domain,
+			appName: appName,
+			app:     appLabels,
+		})
+	}
+	if len(apps) == 0 {
+		k.removeIngress(namespace, name)
+	} else {
+		k.addIngressApps(namespace, name, apps)
 	}
 }
 
@@ -166,7 +164,9 @@ func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
 		tlog.App.Debug().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to list ingresses during resync")
 		return err
 	}
-	k.updateFromList(list.Items)
+	for i := range list.Items {
+		k.updateFromItem(&list.Items[i])
+	}
 	tlog.App.Debug().Str("api", gvr.GroupVersion().String()).Int("count", len(list.Items)).Msg("Resynced ingress cache")
 	return nil
 }
@@ -222,35 +222,7 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 							tlog.App.Warn().Str("api", gvr.GroupVersion().String()).Msg("Failed to cast watched object")
 							continue
 						}
-						namespace := item.GetNamespace()
-						name := item.GetName()
-						annotations := item.GetAnnotations()
-						if annotations == nil {
-							k.removeIngress(namespace, name)
-							continue
-						}
-						labels, err := decoders.DecodeLabels[config.Apps](annotations, "apps")
-						if err != nil {
-							tlog.App.Debug().Err(err).Msg("Failed to decode labels from annotations")
-							k.removeIngress(namespace, name)
-							continue
-						}
-						var apps []ingressApp
-						for appName, appLabels := range labels.Apps {
-							if appLabels.Config.Domain == "" {
-								continue
-							}
-							apps = append(apps, ingressApp{
-								domain:  appLabels.Config.Domain,
-								appName: appName,
-								app:     appLabels,
-							})
-						}
-						if len(apps) == 0 {
-							k.removeIngress(namespace, name)
-						} else {
-							k.addIngressApps(namespace, name, apps)
-						}
+						k.updateFromItem(item)
 					case watch.Deleted:
 						item, ok := event.Object.(*unstructured.Unstructured)
 						if !ok {
