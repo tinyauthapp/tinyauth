@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 )
@@ -41,7 +40,6 @@ type KubernetesService struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	started      bool
-	v1GVR        *schema.GroupVersionResource
 	mu           sync.RWMutex
 	ingressApps  map[ingressKey][]ingressApp
 	domainIndex  map[string]ingressAppKey
@@ -256,68 +254,26 @@ func (k *KubernetesService) Init() error {
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create discovery client: %w", err)
-	}
-
 	k.client = client
 	k.ctx, k.cancel = context.WithCancel(context.Background())
 
-	// Check which Ingress APIs are available
-	apiGroups, err := discoveryClient.ServerPreferredResources()
+	gvr := schema.GroupVersionResource{
+		Group:    "networking.k8s.io",
+		Version:  "v1",
+		Resource: "ingresses",
+	}
+
+	accessCtx, accessCancel := context.WithTimeout(k.ctx, 5*time.Second)
+	defer accessCancel()
+	_, err = k.client.Resource(gvr).List(accessCtx, metav1.ListOptions{Limit: 1})
 	if err != nil {
-		// This can happen with partial discovery errors, log and continue
-		tlog.App.Debug().Err(err).Msg("Failed to discover API resources")
-	}
-
-	v1Available := false
-	for _, apiGroup := range apiGroups {
-		if apiGroup.GroupVersion == "networking.k8s.io/v1" {
-			for _, resource := range apiGroup.APIResources {
-				if resource.Name == "ingresses" && resource.Kind == "Ingress" {
-					v1Available = true
-				}
-			}
-		}
-	}
-
-	// Check permissions for the v1 API
-	checkAccess := func(gvr schema.GroupVersionResource) bool {
-		ctx, cancel := context.WithTimeout(k.ctx, 5*time.Second)
-		defer cancel()
-
-		_, err := k.client.Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
-		if err != nil {
-			tlog.App.Debug().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Cannot access Ingress API")
-			return false
-		}
-		return true
-	}
-
-	if v1Available {
-		gvr := schema.GroupVersionResource{
-			Group:    "networking.k8s.io",
-			Version:  "v1",
-			Resource: "ingresses",
-		}
-		if checkAccess(gvr) {
-			tlog.App.Debug().Msg("networking.k8s.io/v1 Ingress API accessible")
-			k.v1GVR = &gvr
-			go k.watchIngressV1()
-		} else {
-			tlog.App.Warn().Msg("Insufficient permissions for networking.k8s.io/v1 Ingress")
-			v1Available = false
-		}
-	} else {
-		tlog.App.Debug().Msg("networking.k8s.io/v1 Ingress API not available")
-	}
-
-	if !v1Available {
-		tlog.App.Warn().Msg("No Ingress API available or accessible, Kubernetes label provider will not work")
+		tlog.App.Warn().Err(err).Msg("Insufficient permissions for networking.k8s.io/v1 Ingress, Kubernetes label provider will not work")
 		k.started = false
 		return nil
 	}
+
+	tlog.App.Debug().Msg("networking.k8s.io/v1 Ingress API accessible")
+	go k.watchGVR(gvr)
 
 	k.started = true
 	tlog.App.Info().Msg("Kubernetes label provider initialized")
@@ -345,10 +301,3 @@ func (k *KubernetesService) GetLabels(appDomain string) (config.App, error) {
 	return config.App{}, nil
 }
 
-// watchIngressV1 starts watching networking.k8s.io/v1 ingresses
-func (k *KubernetesService) watchIngressV1() {
-	if k.v1GVR == nil {
-		return
-	}
-	k.watchGVR(*k.v1GVR)
-}
