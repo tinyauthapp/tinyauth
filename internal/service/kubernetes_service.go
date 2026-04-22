@@ -171,11 +171,44 @@ func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
 	return nil
 }
 
+// runWatcher drains events from an active watcher until it closes or the context is done.
+// Returns true if the caller should restart the watcher, false if it should exit.
+func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.Interface, resyncTicker *time.Ticker) bool {
+	for {
+		select {
+		case <-k.ctx.Done():
+			w.Stop()
+			return false
+		case event, ok := <-w.ResultChan():
+			if !ok {
+				tlog.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Watcher channel closed, restarting in 5 seconds")
+				w.Stop()
+				time.Sleep(5 * time.Second)
+				return true
+			}
+			item, ok := event.Object.(*unstructured.Unstructured)
+			if !ok {
+				tlog.App.Warn().Str("api", gvr.GroupVersion().String()).Msg("Failed to cast watched object")
+				continue
+			}
+			switch event.Type {
+			case watch.Added, watch.Modified:
+				k.updateFromItem(item)
+			case watch.Deleted:
+				k.removeIngress(item.GetNamespace(), item.GetName())
+			}
+		case <-resyncTicker.C:
+			if err := k.resyncGVR(gvr); err != nil {
+				tlog.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed")
+			}
+		}
+	}
+}
+
 func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 	resyncTicker := time.NewTicker(5 * time.Minute)
 	defer resyncTicker.Stop()
 
-	// Initial resync
 	if err := k.resyncGVR(gvr); err != nil {
 		tlog.App.Error().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Initial resync failed, retrying in 30 seconds")
 		time.Sleep(30 * time.Second)
@@ -200,45 +233,11 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 				continue
 			}
 			tlog.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Watcher started")
-		inner:
-			for {
-				select {
-				case <-k.ctx.Done():
-					watcher.Stop()
-					cancel()
-					return
-				case event, ok := <-watcher.ResultChan():
-					if !ok {
-						tlog.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Watcher channel closed, restarting in 5 seconds")
-						watcher.Stop()
-						cancel()
-						time.Sleep(5 * time.Second)
-						break inner
-					}
-					switch event.Type {
-					case watch.Added, watch.Modified:
-						item, ok := event.Object.(*unstructured.Unstructured)
-						if !ok {
-							tlog.App.Warn().Str("api", gvr.GroupVersion().String()).Msg("Failed to cast watched object")
-							continue
-						}
-						k.updateFromItem(item)
-					case watch.Deleted:
-						item, ok := event.Object.(*unstructured.Unstructured)
-						if !ok {
-							tlog.App.Warn().Str("api", gvr.GroupVersion().String()).Msg("Failed to cast watched object")
-							continue
-						}
-						k.removeIngress(item.GetNamespace(), item.GetName())
-					default:
-						// ignore other event types
-					}
-				case <-resyncTicker.C:
-					if err := k.resyncGVR(gvr); err != nil {
-						tlog.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed")
-					}
-				}
+			if !k.runWatcher(gvr, watcher, resyncTicker) {
+				cancel()
+				return
 			}
+			cancel()
 		}
 	}
 }
