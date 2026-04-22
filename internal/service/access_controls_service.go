@@ -8,6 +8,10 @@ import (
 	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
 )
 
+type LabelProvider interface {
+	GetLabels(appDomain string) (config.App, error)
+}
+
 type AccessControlsService struct {
 	labelProvider LabelProvider
 	static        map[string]config.App
