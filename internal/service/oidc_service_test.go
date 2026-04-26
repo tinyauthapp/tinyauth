@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/repository"
-	"github.com/steveiliop56/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/service"
 )
 
 func newTestUser() repository.OidcUserinfo {
