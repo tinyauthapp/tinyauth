@@ -57,7 +57,7 @@
     "fieldRequired": "This field is required",
     "invalidInput": "Invalid input",
     "domainWarningTitle": "Invalid Domain",
-    "domainWarningSubtitle": "This instance is configured to be accessed from <code>{{appUrl}}</code>, but <code>{{currentUrl}}</code> is being used. If you proceed, you may encounter issues with authentication.",
+    "domainWarningSubtitle": "Estás accediendo a esta instancia desde un dominio incorrecto. Si sigues, puedes encontrar problemas con la autenticación.",
     "domainWarningCurrent": "Current:",
     "domainWarningExpected": "Expected:",
     "ignoreTitle": "Ignore",

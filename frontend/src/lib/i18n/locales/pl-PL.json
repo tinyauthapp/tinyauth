@@ -57,7 +57,7 @@
     "fieldRequired": "To pole jest wymagane",
     "invalidInput": "Nieprawidłowe dane wejściowe",
     "domainWarningTitle": "Nieprawidłowa domena",
-    "domainWarningSubtitle": "Ta instancja jest skonfigurowana do uzyskania dostępu z <code>{{appUrl}}</code>, ale <code>{{currentUrl}}</code> jest w użyciu. Jeśli będziesz kontynuować, mogą wystąpić problemy z uwierzytelnianiem.",
+    "domainWarningSubtitle": "Masz dostęp do tej instancji z nieprawidłowej domeny. Jeśli kontynuujesz, możesz napotkać problemy z uwierzytelnianiem.",
     "domainWarningCurrent": "Bieżąca:",
     "domainWarningExpected": "Oczekiwana:",
     "ignoreTitle": "Zignoruj",

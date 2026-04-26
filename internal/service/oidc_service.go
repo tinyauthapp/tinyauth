@@ -506,6 +506,7 @@ func (service *OIDCService) GenerateAccessToken(c *gin.Context, client config.OI
 		TokenExpiresAt:        tokenExpiresAt,
 		RefreshTokenExpiresAt: refrshTokenExpiresAt,
 		Nonce:                 codeEntry.Nonce,
+		CodeHash:              codeEntry.CodeHash,
 	})
 
 	if err != nil {
@@ -588,6 +589,10 @@ func (service *OIDCService) DeleteUserinfo(c *gin.Context, sub string) error {
 
 func (service *OIDCService) DeleteToken(c *gin.Context, tokenHash string) error {
 	return service.queries.DeleteOidcToken(c, tokenHash)
+}
+
+func (service *OIDCService) DeleteTokenByCodeHash(c *gin.Context, codeHash string) error {
+	return service.queries.DeleteOidcTokenByCodeHash(c, codeHash)
 }
 
 func (service *OIDCService) GetAccessToken(c *gin.Context, tokenHash string) (repository.OidcToken, error) {

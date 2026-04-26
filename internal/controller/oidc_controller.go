@@ -275,6 +275,9 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	case "authorization_code":
 		entry, err := controller.oidc.GetCodeEntry(c, controller.oidc.Hash(req.Code), client.ClientID)
 		if err != nil {
+			if err := controller.oidc.DeleteTokenByCodeHash(c, controller.oidc.Hash(req.Code)); err != nil {
+				tlog.App.Error().Err(err).Msg("Failed to delete access token by code hash")
+			}
 			if errors.Is(err, service.ErrCodeNotFound) {
 				tlog.App.Warn().Msg("Code not found")
 				c.JSON(400, gin.H{

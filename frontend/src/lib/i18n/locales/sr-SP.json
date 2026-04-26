@@ -57,7 +57,7 @@
     "fieldRequired": "Ово поље је неопходно",
     "invalidInput": "Неисправан унос",
     "domainWarningTitle": "Неисправан домен",
-    "domainWarningSubtitle": "Ова инстанца је подешена да јој се приступа са <code>{{appUrl}}</code>, али се користи <code>{{currentUrl}}</code>. Ако наставите, можете искусити проблеме са аутентификацијом.",
+    "domainWarningSubtitle": "You are accessing this instance from an incorrect domain. If you proceed, you may encounter issues with authentication.",
     "domainWarningCurrent": "Тренутни:",
     "domainWarningExpected": "Очекивани:",
     "ignoreTitle": "Игнориши",

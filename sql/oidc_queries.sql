@@ -48,9 +48,10 @@ INSERT INTO "oidc_tokens" (
     "client_id",
     "token_expires_at",
     "refresh_token_expires_at",
+    "code_hash",
     "nonce"
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -74,6 +75,10 @@ WHERE "refresh_token_hash" = ?;
 -- name: GetOidcTokenBySub :one
 SELECT * FROM "oidc_tokens"
 WHERE "sub" = ?;
+
+-- name: DeleteOidcTokenByCodeHash :exec
+DELETE FROM "oidc_tokens"
+WHERE "code_hash" = ?;
 
 -- name: DeleteOidcToken :exec
 DELETE FROM "oidc_tokens"

@@ -44,7 +44,13 @@ func NewBootstrapApp(config config.Config) *BootstrapApp {
 }
 
 func (app *BootstrapApp) Setup() error {
+	fmt.Println("Tinyauth is moving to an organization! All versions after v5.0.7 will be released under ghcr.io/tinyauthapp/tinyauth. Existing images will continue to work but new features and updates (including security ones) will only be released under the new image path.")
+
 	// get app url
+	if app.config.AppURL == "" {
+		return fmt.Errorf("app URL cannot be empty, perhaps config loading failed")
+	}
+
 	appUrl, err := url.Parse(app.config.AppURL)
 
 	if err != nil {

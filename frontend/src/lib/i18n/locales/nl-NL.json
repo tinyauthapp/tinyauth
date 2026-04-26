@@ -57,7 +57,7 @@
     "fieldRequired": "Dit veld is verplicht",
     "invalidInput": "Ongeldige invoer",
     "domainWarningTitle": "Ongeldig domein",
-    "domainWarningSubtitle": "Deze instantie is geconfigureerd voor toegang tot <code>{{appUrl}}</code>, maar <code>{{currentUrl}}</code> wordt gebruikt. Als je doorgaat, kun je problemen ondervinden met authenticatie.",
+    "domainWarningSubtitle": "U benadert deze instantie vanuit een onjuist domein. Als u doorgaat, kunt u problemen ondervinden met authenticatie.",
     "domainWarningCurrent": "Huidig:",
     "domainWarningExpected": "Verwacht:",
     "ignoreTitle": "Negeren",

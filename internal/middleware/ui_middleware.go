@@ -46,6 +46,11 @@ func (m *UIMiddleware) Middleware() gin.HandlerFunc {
 		case "api", "resources", ".well-known":
 			c.Next()
 			return
+		case "robots.txt":
+			c.Writer.Header().Set("Content-Type", "text/plain")
+			c.Writer.WriteHeader(http.StatusOK)
+			c.Writer.Write([]byte("User-agent: *\nDisallow: /\n"))
+			return
 		default:
 			_, err := fs.Stat(m.uiFs, path)
 

@@ -30,7 +30,7 @@
     "logoutSuccessTitle": "로그아웃 완료",
     "logoutSuccessSubtitle": "로그아웃되었습니다",
     "logoutTitle": "로그아웃",
-    "logoutUsernameSubtitle": "현재 <code>{{username}}</code>(으)로 로그인되어 있습니다. 아래 버튼을 클릭하여 로그아웃하세요.",
+    "logoutUsernameSubtitle": "현재 <code>{{username}}</code>로 로그인되어 있습니다. 아래 버튼을 클릭하여 로그아웃하세요.",
     "logoutOauthSubtitle": "현재 {{provider}} OAuth 제공자를 통해 <code>{{username}}</code>(으)로 로그인되어 있습니다. 아래 버튼을 클릭하여 로그아웃하세요.",
     "notFoundTitle": "페이지를 찾을 수 없습니다",
     "notFoundSubtitle": "찾으시는 페이지가 존재하지 않습니다.",

@@ -57,7 +57,7 @@
     "fieldRequired": "Este campo é obrigatório",
     "invalidInput": "Entrada inválida",
     "domainWarningTitle": "Domínio inválido",
-    "domainWarningSubtitle": "Esta instância está configurada para ser acedida a partir de <code>{{appUrl}}</code>, mas está a ser usado <code>{{currentUrl}}</code>. Se continuares, poderás ter problemas de autenticação.",
+    "domainWarningSubtitle": "Acessa essa instância de um domínio incorreto. Se você continuar, você pode encontrar problemas com a autenticação.",
     "domainWarningCurrent": "Current:",
     "domainWarningExpected": "Expected:",
     "ignoreTitle": "Ignorar",

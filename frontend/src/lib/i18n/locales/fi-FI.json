@@ -57,7 +57,7 @@
     "fieldRequired": "Tämä kenttä on pakollinen",
     "invalidInput": "Virheellinen syöte",
     "domainWarningTitle": "Virheellinen verkkotunnus",
-    "domainWarningSubtitle": "Tämä instanssi on määritelty käyttämään osoitetta <code>{{appUrl}}</code>, mutta nykyinen osoite on <code>{{currentUrl}}</code>. Jos jatkat, saatat törmätä ongelmiin autentikoinnissa.",
+    "domainWarningSubtitle": "You are accessing this instance from an incorrect domain. If you proceed, you may encounter issues with authentication.",
     "domainWarningCurrent": "Current:",
     "domainWarningExpected": "Expected:",
     "ignoreTitle": "Jätä huomiotta",

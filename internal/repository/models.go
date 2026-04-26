@@ -19,6 +19,7 @@ type OidcToken struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
+	CodeHash              string
 	Scope                 string
 	ClientID              string
 	TokenExpiresAt        int64

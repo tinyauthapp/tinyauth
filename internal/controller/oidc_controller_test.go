@@ -387,7 +387,7 @@ func TestOIDCController(t *testing.T) {
 				err = json.Unmarshal(secondRecorder.Body.Bytes(), &secondRes)
 				assert.NoError(t, err)
 
-				assert.Equal(t, secondRes["error"], "invalid_grant")
+				assert.Equal(t, "invalid_grant", secondRes["error"])
 			},
 		},
 		{
@@ -776,6 +776,74 @@ func TestOIDCController(t *testing.T) {
 				queryParams := url.Query()
 				error := queryParams.Get("error")
 				assert.NotEmpty(t, error)
+			},
+		},
+		{
+			description: "Ensure access token gets invalidated on double code use",
+			middlewares: []gin.HandlerFunc{
+				simpleCtx,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				authorizeCodeTest, found := getTestByDescription("Ensure authorize succeeds with valid params")
+				assert.True(t, found, "Authorize test not found")
+				authorizeCodeTest(t, router, recorder)
+
+				var res map[string]any
+				err := json.Unmarshal(recorder.Body.Bytes(), &res)
+				assert.NoError(t, err)
+
+				redirectURI := res["redirect_uri"].(string)
+				url, err := url.Parse(redirectURI)
+				assert.NoError(t, err)
+
+				queryParams := url.Query()
+				code := queryParams.Get("code")
+				assert.NotEmpty(t, code)
+
+				reqBody := controller.TokenRequest{
+					GrantType:   "authorization_code",
+					Code:        code,
+					RedirectURI: "https://test.example.com/callback",
+				}
+				reqBodyEncoded, err := query.Values(reqBody)
+				assert.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.SetBasicAuth("some-client-id", "some-client-secret")
+				recorder = httptest.NewRecorder()
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 200, recorder.Code)
+
+				err = json.Unmarshal(recorder.Body.Bytes(), &res)
+				assert.NoError(t, err)
+
+				accessToken := res["access_token"].(string)
+				assert.NotEmpty(t, accessToken)
+
+				req = httptest.NewRequest("GET", "/api/oidc/userinfo", nil)
+				req.Header.Set("Authorization", "Bearer "+accessToken)
+				recorder = httptest.NewRecorder()
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, 200, recorder.Code)
+
+				req = httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.SetBasicAuth("some-client-id", "some-client-secret")
+				recorder = httptest.NewRecorder()
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, 400, recorder.Code)
+
+				req = httptest.NewRequest("GET", "/api/oidc/userinfo", nil)
+				req.Header.Set("Authorization", "Bearer "+accessToken)
+				recorder = httptest.NewRecorder()
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, 401, recorder.Code)
+
+				err = json.Unmarshal(recorder.Body.Bytes(), &res)
+				assert.NoError(t, err)
+				assert.Equal(t, "invalid_grant", res["error"])
 			},
 		},
 	}

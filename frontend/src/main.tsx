@@ -23,39 +23,41 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AppContextProvider>
-        <UserContextProvider>
-          <TooltipProvider>
-            <ThemeProvider defaultTheme="system" storageKey="tinyauth-theme">
-              <BrowserRouter>
-                <Routes>
-                  <Route element={<Layout />} errorElement={<ErrorPage />}>
-                    <Route path="/" element={<App />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/authorize" element={<AuthorizePage />} />
-                    <Route path="/logout" element={<LogoutPage />} />
-                    <Route path="/continue" element={<ContinuePage />} />
-                    <Route path="/totp" element={<TotpPage />} />
-                    <Route
-                      path="/forgot-password"
-                      element={<ForgotPasswordPage />}
-                    />
-                    <Route
-                      path="/unauthorized"
-                      element={<UnauthorizedPage />}
-                    />
-                    <Route path="/error" element={<ErrorPage />} />
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Route>
-                </Routes>
-              </BrowserRouter>
-              <Toaster />
-            </ThemeProvider>
-          </TooltipProvider>
-        </UserContextProvider>
-      </AppContextProvider>
-    </QueryClientProvider>
-  </StrictMode>,
+  <main>
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AppContextProvider>
+          <UserContextProvider>
+            <TooltipProvider>
+              <ThemeProvider defaultTheme="system" storageKey="tinyauth-theme">
+                <BrowserRouter>
+                  <Routes>
+                    <Route element={<Layout />} errorElement={<ErrorPage />}>
+                      <Route path="/" element={<App />} />
+                      <Route path="/login" element={<LoginPage />} />
+                      <Route path="/authorize" element={<AuthorizePage />} />
+                      <Route path="/logout" element={<LogoutPage />} />
+                      <Route path="/continue" element={<ContinuePage />} />
+                      <Route path="/totp" element={<TotpPage />} />
+                      <Route
+                        path="/forgot-password"
+                        element={<ForgotPasswordPage />}
+                      />
+                      <Route
+                        path="/unauthorized"
+                        element={<UnauthorizedPage />}
+                      />
+                      <Route path="/error" element={<ErrorPage />} />
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Route>
+                  </Routes>
+                </BrowserRouter>
+                <Toaster />
+              </ThemeProvider>
+            </TooltipProvider>
+          </UserContextProvider>
+        </AppContextProvider>
+      </QueryClientProvider>
+    </StrictMode>
+  </main>,
 );

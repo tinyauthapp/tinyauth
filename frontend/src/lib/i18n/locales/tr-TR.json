@@ -57,7 +57,7 @@
     "fieldRequired": "Bu alan zorunludur",
     "invalidInput": "Geçersiz girdi",
     "domainWarningTitle": "Geçersiz alan adı",
-    "domainWarningSubtitle": "Bu örnek, <code>{{appUrl}}</code> adresinden erişilecek şekilde yapılandırılmıştır, ancak <code>{{currentUrl}}</code> kullanılmaktadır. Devam ederseniz, kimlik doğrulama ile ilgili sorunlarla karşılaşabilirsiniz.",
+    "domainWarningSubtitle": "You are accessing this instance from an incorrect domain. If you proceed, you may encounter issues with authentication.",
     "domainWarningCurrent": "Current:",
     "domainWarningExpected": "Expected:",
     "ignoreTitle": "Yoksay",

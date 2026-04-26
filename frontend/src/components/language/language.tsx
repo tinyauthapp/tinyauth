@@ -21,7 +21,7 @@ export const LanguageSelector = () => {
 
   return (
     <Select onValueChange={handleSelect} value={language}>
-      <SelectTrigger>
+      <SelectTrigger aria-label="Select language">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>
       <SelectContent>
