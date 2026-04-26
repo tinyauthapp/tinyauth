@@ -10,8 +10,8 @@
     <img alt="Issues" src="https://img.shields.io/github/issues/tinyauthapp/tinyauth">
     <img alt="Tinyauth CI" src="https://github.com/tinyauthapp/tinyauth/actions/workflows/ci.yml/badge.svg">
     <a title="Crowdin" target="_blank" href="https://crowdin.com/project/tinyauth"><img src="https://badges.crowdin.net/tinyauth/localized.svg"></a>
-    <a href="https://scorecard.dev/viewer/?uri=github.com/steveiliop56/tinyauth" target="_blank" title="OpenSSF Scorecard">
-      <img src="https://api.scorecard.dev/projects/github.com/steveiliop56/tinyauth/badge">
+    <a href="https://scorecard.dev/viewer/?uri=github.com/tinyauthapp/tinyauth" target="_blank" title="OpenSSF Scorecard">
+      <img src="https://api.scorecard.dev/projects/github.com/tinyauthapp/tinyauth/badge">
     </a>
 </div>
 
