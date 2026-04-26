@@ -42,7 +42,7 @@ If you are still not sure if Tinyauth suits your needs you can try out the [demo
 
 You can find documentation and guides on all of the available configuration of Tinyauth in the [website](https://tinyauth.app).
 
-If you wish to contribute to the documentation head over to the [repository](https://github.com/tinyauthapp/tinyauth-docs).
+If you wish to contribute to the documentation head over to the [repository](https://github.com/tinyauthapp/docs).
 
 ## Discord
 
