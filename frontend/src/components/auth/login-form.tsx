@@ -17,6 +17,7 @@ interface Props {
   onSubmit: (data: LoginSchema) => void;
   loading?: boolean;
   formId?: string;
+  params?: string;
 }
 
 export const LoginForm = (props: Props) => {
@@ -71,6 +72,12 @@ export const LoginForm = (props: Props) => {
                 </FormControl>
                 <a
                   href="/forgot-password"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.replace(
+                      `/forgot-password${props.params ? `${props.params}` : ""}`,
+                    );
+                  }}
                   className="text-muted-foreground hover:text-muted-foreground/80 text-sm absolute right-0 bottom-[2.565rem]" // 2.565 is *just* perfect
                 >
                   {t("forgotPasswordTitle")}
