@@ -108,6 +108,7 @@ type AuthorizeRequest struct {
 	Nonce               string `json:"nonce" url:"nonce"`
 	CodeChallenge       string `json:"code_challenge" url:"code_challenge"`
 	CodeChallengeMethod string `json:"code_challenge_method" url:"code_challenge_method"`
+	Request             string `json:"request" url:"request"`
 }
 
 type OIDCServiceConfig struct {
