@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/config"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/stretchr/testify/assert"

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/decoders"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
