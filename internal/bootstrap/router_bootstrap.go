@@ -87,7 +87,7 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 
 	oauthController.SetupRoutes()
 
-	oidcController := controller.NewOIDCController(controller.OIDCControllerConfig{}, app.services.oidcService, apiRouter)
+	oidcController := controller.NewOIDCController(controller.OIDCControllerConfig{}, app.services.oidcService, apiRouter, engine)
 
 	oidcController.SetupRoutes()
 

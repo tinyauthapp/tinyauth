@@ -100,14 +100,14 @@ type TokenResponse struct {
 }
 
 type AuthorizeRequest struct {
-	Scope               string `json:"scope" binding:"required"`
-	ResponseType        string `json:"response_type" binding:"required"`
-	ClientID            string `json:"client_id" binding:"required"`
-	RedirectURI         string `json:"redirect_uri" binding:"required"`
-	State               string `json:"state"`
-	Nonce               string `json:"nonce"`
-	CodeChallenge       string `json:"code_challenge"`
-	CodeChallengeMethod string `json:"code_challenge_method"`
+	Scope               string `json:"scope" binding:"required" url:"scope"`
+	ResponseType        string `json:"response_type" binding:"required" url:"response_type"`
+	ClientID            string `json:"client_id" binding:"required" url:"client_id"`
+	RedirectURI         string `json:"redirect_uri" binding:"required" url:"redirect_uri"`
+	State               string `json:"state" url:"state"`
+	Nonce               string `json:"nonce" url:"nonce"`
+	CodeChallenge       string `json:"code_challenge" url:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method" url:"code_challenge_method"`
 }
 
 type OIDCServiceConfig struct {

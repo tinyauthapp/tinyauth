@@ -12,14 +12,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOIDCController(t *testing.T) {
@@ -846,6 +846,34 @@ func TestOIDCController(t *testing.T) {
 				assert.Equal(t, "invalid_grant", res["error"])
 			},
 		},
+		{
+			description: "Test authorize request with POST method",
+			middlewares: []gin.HandlerFunc{
+				simpleCtx,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				body := service.AuthorizeRequest{
+					Scope:               "openid",
+					ResponseType:        "code",
+					ClientID:            "some-client-id",
+					RedirectURI:         "https://test.example.com/callback",
+					State:               "some-state",
+					Nonce:               "some-nonce",
+					CodeChallenge:       "some-challenge",
+					CodeChallengeMethod: "plain",
+				}
+				queries, err := query.Values(body)
+				assert.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/authorize", strings.NewReader(string(queries.Encode())))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, 302, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.NotEmpty(t, location)
+				assert.Equal(t, "https://tinyauth.example.com/authorize?client_id=some-client-id&code_challenge=some-challenge&code_challenge_method=plain&nonce=some-nonce&redirect_uri=https%3A%2F%2Ftest.example.com%2Fcallback&response_type=code&scope=openid&state=some-state", location)
+			},
+		},
 	}
 
 	app := bootstrap.NewBootstrapApp(config.Config{})
@@ -869,7 +897,7 @@ func TestOIDCController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			oidcController := controller.NewOIDCController(controllerCfg, oidcService, group)
+			oidcController := controller.NewOIDCController(controllerCfg, oidcService, group, router)
 			oidcController.SetupRoutes()
 
 			recorder := httptest.NewRecorder()
