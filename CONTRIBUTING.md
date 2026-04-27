@@ -2,6 +2,9 @@
 
 Contributing to Tinyauth is straightforward. Follow the steps below to set up a development server.
 
+> [!NOTE]
+> If you are using large language models to contribute to the project, please ensure that you have read and understood the [AI Policy](AI_POLICY.md).
+
 ## Requirements
 
 - Bun
@@ -15,7 +18,7 @@ Contributing to Tinyauth is straightforward. Follow the steps below to set up a 
 Start by cloning the repository:
 
 ```sh
-git clone https://github.com/steveiliop56/tinyauth
+git clone https://github.com/tinyauthapp/tinyauth
 cd tinyauth
 ```
 

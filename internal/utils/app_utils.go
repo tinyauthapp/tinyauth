@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/weppos/publicsuffix-go/publicsuffix"

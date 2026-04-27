@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Delete old release
         run: gh release delete --cleanup-tag --yes nightly || echo release not found
@@ -33,7 +33,7 @@ jobs:
       BUILD_TIMESTAMP: ${{ steps.metadata.outputs.BUILD_TIMESTAMP }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -51,7 +51,7 @@ jobs:
       - generate-metadata
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -80,12 +80,12 @@ jobs:
       - name: Build
         run: |
           cp -r frontend/dist internal/assets/dist
-          go build -ldflags "-s -w -X github.com/steveiliop56/tinyauth/internal/config.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/steveiliop56/tinyauth/internal/config.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/steveiliop56/tinyauth/internal/config.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-amd64 ./cmd/tinyauth
+          go build -ldflags "-s -w -X github.com/tinyauthapp/tinyauth/internal/config.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/tinyauthapp/tinyauth/internal/config.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/tinyauthapp/tinyauth/internal/config.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-amd64 ./cmd/tinyauth
         env:
           CGO_ENABLED: 0
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: tinyauth-amd64
           path: tinyauth-amd64
@@ -97,7 +97,7 @@ jobs:
       - generate-metadata
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -126,12 +126,12 @@ jobs:
       - name: Build
         run: |
           cp -r frontend/dist internal/assets/dist
-          go build -ldflags "-s -w -X github.com/steveiliop56/tinyauth/internal/config.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/steveiliop56/tinyauth/internal/config.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/steveiliop56/tinyauth/internal/config.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-arm64 ./cmd/tinyauth
+          go build -ldflags "-s -w -X github.com/tinyauthapp/tinyauth/internal/config.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/tinyauthapp/tinyauth/internal/config.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/tinyauthapp/tinyauth/internal/config.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-arm64 ./cmd/tinyauth
         env:
           CGO_ENABLED: 0
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: tinyauth-arm64
           path: tinyauth-arm64
@@ -143,7 +143,7 @@ jobs:
       - generate-metadata
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -186,7 +186,7 @@ jobs:
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: digests-linux-amd64
           path: ${{ runner.temp }}/digests/*
@@ -201,7 +201,7 @@ jobs:
       - image-build
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -245,7 +245,7 @@ jobs:
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: digests-distroless-linux-amd64
           path: ${{ runner.temp }}/digests/*
@@ -259,7 +259,7 @@ jobs:
       - generate-metadata
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -302,7 +302,7 @@ jobs:
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: digests-linux-arm64
           path: ${{ runner.temp }}/digests/*
@@ -317,7 +317,7 @@ jobs:
       - image-build-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           ref: nightly
 
@@ -361,7 +361,7 @@ jobs:
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: digests-distroless-linux-arm64
           path: ${{ runner.temp }}/digests/*

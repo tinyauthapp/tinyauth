@@ -1,4 +1,4 @@
-module github.com/steveiliop56/tinyauth
+module github.com/tinyauthapp/tinyauth
 
 go 1.26.0
 
@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/pquerna/otp v1.5.0
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
 	github.com/tinyauthapp/paerser v0.0.0-20260410140347-85c3740d6298
 	github.com/weppos/publicsuffix-go v0.50.3
@@ -24,7 +24,7 @@ require (
 	gotest.tools/v3 v3.5.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
-	modernc.org/sqlite v1.48.2
+	modernc.org/sqlite v1.49.1
 )
 
 require (
@@ -32,7 +32,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.2 // indirect
 	charm.land/lipgloss/v2 v2.0.1 // indirect
 	dario.cat/mergo v1.0.1 // indirect
-	github.com/Azure/go-ntlmssp v0.1.0 // indirect
+	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
@@ -145,7 +145,7 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	rsc.io/qr v0.2.0 // indirect

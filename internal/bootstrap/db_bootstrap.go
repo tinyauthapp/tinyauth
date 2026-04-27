@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/steveiliop56/tinyauth/internal/assets"
+	"github.com/tinyauthapp/tinyauth/internal/assets"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"

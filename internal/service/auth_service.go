@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/repository"
-	"github.com/steveiliop56/tinyauth/internal/utils"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

@@ -3,7 +3,7 @@
   "embeds": [
     {
       "title": "Welcome to Tinyauth Discord!",
-      "description": "Tinyauth is a simple authentication middleware that adds a simple login screen or OAuth with Google, Github and any provider to all of your docker apps. It supports all the popular proxies like Traefik, Nginx and Caddy.\n\n**Information**\n\n• Github: <https://github.com/steveiliop56/tinyauth>\n• Website: <https://tinyauth.app>",
+      "description": "Tinyauth is a simple authentication middleware that adds a simple login screen or OAuth with Google, Github and any provider to all of your docker apps. It supports all the popular proxies like Traefik, Nginx and Caddy.\n\n**Information**\n\n• Github: <https://github.com/tinyauthapp/tinyauth>\n• Website: <https://tinyauth.app>",
       "url": "https://tinyauth.app",
       "color": 7002085,
       "author": {
@@ -14,7 +14,7 @@
       },
       "timestamp": "2025-06-06T12:25:27.629Z",
       "thumbnail": {
-        "url": "https://github.com/steveiliop56/tinyauth/blob/main/assets/logo.png?raw=true"
+        "url": "https://github.com/tinyauthapp/tinyauth/blob/main/assets/logo.png?raw=true"
       }
     }
   ],

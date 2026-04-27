@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/config"
 
 	"github.com/tinyauthapp/paerser/cli"
 )

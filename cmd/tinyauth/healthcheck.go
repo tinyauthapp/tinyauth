@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/tinyauthapp/paerser/cli"
 )
 

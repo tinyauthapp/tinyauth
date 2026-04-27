@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/controller"
-	"github.com/steveiliop56/tinyauth/internal/repository"
-	"github.com/steveiliop56/tinyauth/internal/utils"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
 type BootstrapApp struct {
@@ -44,8 +44,6 @@ func NewBootstrapApp(config config.Config) *BootstrapApp {
 }
 
 func (app *BootstrapApp) Setup() error {
-	fmt.Println("Tinyauth is moving to an organization! All versions after v5.0.7 will be released under ghcr.io/tinyauthapp/tinyauth. Existing images will continue to work but new features and updates (including security ones) will only be released under the new image path.")
-
 	// get app url
 	if app.config.AppURL == "" {
 		return fmt.Errorf("app URL cannot be empty, perhaps config loading failed")
@@ -65,7 +63,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// Parse users
-	users, err := utils.GetUsers(app.config.Auth.Users, app.config.Auth.UsersFile)
+	users, err := utils.GetUsers(app.config.Auth.Users, app.config.Auth.UsersFile, app.config.Auth.UserAttributes)
 
 	if err != nil {
 		return err

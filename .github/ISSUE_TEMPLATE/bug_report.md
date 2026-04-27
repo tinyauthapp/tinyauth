@@ -3,7 +3,8 @@ name: Bug report
 about: Create a report to help improve Tinyauth
 title: "[BUG]"
 labels: bug
-assignees: steveiliop56
+assignees:
+  - steveiliop56
 
 ---
 

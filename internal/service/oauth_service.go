@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/config"
 	"golang.org/x/oauth2"
 )
 

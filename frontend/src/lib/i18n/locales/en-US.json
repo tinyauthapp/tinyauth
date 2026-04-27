@@ -79,5 +79,6 @@
     "profileScopeName": "Profile",
     "profileScopeDescription": "Allows the app to access your profile information.",
     "groupsScopeName": "Groups",
-    "groupsScopeDescription": "Allows the app to access your group information."
+    "groupsScopeDescription": "Allows the app to access your group information.",
+    "backToLoginButton": "Back to login"
 }

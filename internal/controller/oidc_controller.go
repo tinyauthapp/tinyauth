@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
 
-	"github.com/steveiliop56/tinyauth/internal/service"
-	"github.com/steveiliop56/tinyauth/internal/utils"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
 type OIDCControllerConfig struct{}

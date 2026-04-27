@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/steveiliop56/tinyauth/internal/utils"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 
 	"gotest.tools/v3/assert"
 )
