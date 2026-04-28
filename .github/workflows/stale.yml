@@ -3,11 +3,15 @@ on:
   schedule:
     - cron: 0 10 * * *
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v10
+      - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10
         with:
           days-before-stale: 30
           stale-pr-message: This PR has been inactive for 30 days and will be marked as stale.
