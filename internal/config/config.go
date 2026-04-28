@@ -59,6 +59,9 @@ func NewDefaultConfiguration() *Config {
 		Experimental: ExperimentalConfig{
 			ConfigFile: "",
 		},
+		Tailscale: TailscaleConfig{
+			Dir: "./state",
+		},
 	}
 }
 
@@ -91,6 +94,7 @@ type Config struct {
 	Ldap         LdapConfig         `description:"LDAP configuration." yaml:"ldap"`
 	Experimental ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
 	Log          LogConfig          `description:"Logging configuration." yaml:"log"`
+	Tailscale    TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
 }
 
 type DatabaseConfig struct {
@@ -209,6 +213,13 @@ type ExperimentalConfig struct {
 	ConfigFile string `description:"Path to config file." yaml:"-"`
 }
 
+type TailscaleConfig struct {
+	Dir       string `description:"Tailscale state directory." yaml:"dir"`
+	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
+	AuthKey   string `description:"Tailscale auth key." yaml:"authKey"`
+	Ephemeral bool   `description:"Use ephemeral Tailscale node." yaml:"ephemeral"`
+}
+
 // Config loader options
 
 const DefaultNamePrefix = "TINYAUTH_"
@@ -269,6 +280,13 @@ type UserSearch struct {
 	Type     string // local, ldap or unknown
 }
 
+type TailscaleWhoisResponse struct {
+	UserID      string
+	LoginName   string
+	DisplayName string
+	NodeName    string
+}
+
 type UserContext struct {
 	Username    string
 	Name        string
@@ -284,6 +302,7 @@ type UserContext struct {
 	OAuthSub    string
 	LdapGroups  string
 	Attributes  UserAttributes
+	Tailscale   *TailscaleWhoisResponse
 }
 
 // API responses and queries

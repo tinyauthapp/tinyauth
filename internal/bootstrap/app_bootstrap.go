@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -204,7 +205,20 @@ func (app *BootstrapApp) Setup() error {
 		go app.heartbeatRoutine()
 	}
 
-	// If we have an socket path, bind to it
+	// Start listeners and monitor for errors
+	err = app.setupListeners(router)
+
+	if err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
+
+	return nil
+}
+
+func (app *BootstrapApp) setupListeners(router *gin.Engine) error {
+	errChan := make(chan error, 1)
+
+	// First check socket
 	if app.config.Server.SocketPath != "" {
 		if _, err := os.Stat(app.config.Server.SocketPath); err == nil {
 			tlog.App.Info().Msgf("Removing existing socket file %s", app.config.Server.SocketPath)
@@ -215,21 +229,44 @@ func (app *BootstrapApp) Setup() error {
 		}
 
 		tlog.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
-		if err := router.RunUnix(app.config.Server.SocketPath); err != nil {
-			tlog.App.Fatal().Err(err).Msg("Failed to start server")
-		}
 
-		return nil
+		go func() {
+			err := router.RunUnix(app.config.Server.SocketPath)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to start server on unix socket: %w", err)
+			}
+		}()
 	}
 
-	// Start server
+	// Then normal TCP listener
 	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
 	tlog.App.Info().Msgf("Starting server on %s", address)
-	if err := router.Run(address); err != nil {
-		tlog.App.Fatal().Err(err).Msg("Failed to start server")
+
+	go func() {
+		err := router.Run(address)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to start server on TCP: %w", err)
+		}
+	}()
+
+	// Finally tailscale listener if configured
+	if app.services.tailscaleService.IsConnfigured() {
+		tailscaleListener, err := app.services.tailscaleService.CreateListener()
+		if err != nil {
+			return fmt.Errorf("failed to create tailscale listener: %w", err)
+		}
+
+		tlog.App.Info().Msgf("Starting server on Tailscale interface with hostname %s", app.services.tailscaleService.GetHostname())
+
+		go func() {
+			err := router.RunListener(tailscaleListener)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to start server on Tailscale interface: %w", err)
+			}
+		}()
 	}
 
-	return nil
+	return <-errChan
 }
 
 func (app *BootstrapApp) heartbeatRoutine() {

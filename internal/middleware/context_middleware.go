@@ -37,16 +37,18 @@ type ContextMiddlewareConfig struct {
 }
 
 type ContextMiddleware struct {
-	config ContextMiddlewareConfig
-	auth   *service.AuthService
-	broker *service.OAuthBrokerService
+	config    ContextMiddlewareConfig
+	auth      *service.AuthService
+	broker    *service.OAuthBrokerService
+	tailscale *service.TailscaleService
 }
 
-func NewContextMiddleware(config ContextMiddlewareConfig, auth *service.AuthService, broker *service.OAuthBrokerService) *ContextMiddleware {
+func NewContextMiddleware(config ContextMiddlewareConfig, auth *service.AuthService, broker *service.OAuthBrokerService, tailscale *service.TailscaleService) *ContextMiddleware {
 	return &ContextMiddleware{
-		config: config,
-		auth:   auth,
-		broker: broker,
+		config:    config,
+		auth:      auth,
+		broker:    broker,
+		tailscale: tailscale,
 	}
 }
 
@@ -69,7 +71,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		if cookie.TotpPending {
-			c.Set("context", &config.UserContext{
+			ctx := m.addTailscaleContext(c, config.UserContext{
 				Username:    cookie.Username,
 				Name:        cookie.Name,
 				Email:       cookie.Email,
@@ -77,6 +79,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				TotpPending: true,
 				TotpEnabled: true,
 			})
+			c.Set("context", &ctx)
 			c.Next()
 			return
 		}
@@ -119,7 +122,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			}
 
 			m.auth.RefreshSessionCookie(c)
-			c.Set("context", &config.UserContext{
+			ctx := m.addTailscaleContext(c, config.UserContext{
 				Username:   cookie.Username,
 				Name:       cookie.Name,
 				Email:      cookie.Email,
@@ -128,6 +131,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				LdapGroups: strings.Join(ldapGroups, ","),
 				Attributes: localAttributes,
 			})
+			c.Set("context", &ctx)
 			c.Next()
 			return
 		default:
@@ -146,7 +150,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			}
 
 			m.auth.RefreshSessionCookie(c)
-			c.Set("context", &config.UserContext{
+			ctx := m.addTailscaleContext(c, config.UserContext{
 				Username:    cookie.Username,
 				Name:        cookie.Name,
 				Email:       cookie.Email,
@@ -157,6 +161,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				IsLoggedIn:  true,
 				OAuth:       true,
 			})
+			c.Set("context", &ctx)
 			c.Next()
 			return
 		}
@@ -166,7 +171,8 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		if basic == nil {
 			tlog.App.Debug().Msg("No basic auth provided")
-			c.Next()
+			ctx := m.addTailscaleContext(c, config.UserContext{})
+			c.Set("context", &ctx)
 			return
 		}
 
@@ -218,7 +224,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				email = user.Attributes.Email
 			}
 
-			c.Set("context", &config.UserContext{
+			ctx := m.addTailscaleContext(c, config.UserContext{
 				Username:    user.Username,
 				Name:        name,
 				Email:       email,
@@ -227,6 +233,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				IsBasicAuth: true,
 				Attributes:  user.Attributes,
 			})
+			c.Set("context", &ctx)
 			c.Next()
 			return
 		case "ldap":
@@ -240,7 +247,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				return
 			}
 
-			c.Set("context", &config.UserContext{
+			ctx := m.addTailscaleContext(c, config.UserContext{
 				Username:    basic.Username,
 				Name:        utils.Capitalize(basic.Username),
 				Email:       utils.CompileUserEmail(basic.Username, m.config.CookieDomain),
@@ -249,10 +256,14 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				LdapGroups:  strings.Join(ldapUser.Groups, ","),
 				IsBasicAuth: true,
 			})
+			c.Set("context", &ctx)
 			c.Next()
 			return
 		}
 
+		// unreachable but just in case
+		ctx := m.addTailscaleContext(c, config.UserContext{})
+		c.Set("context", &ctx)
 		c.Next()
 	}
 }
@@ -264,4 +275,24 @@ func (m *ContextMiddleware) isIgnorePath(path string) bool {
 		}
 	}
 	return false
+}
+
+func (m *ContextMiddleware) addTailscaleContext(c *gin.Context, ctx config.UserContext) config.UserContext {
+	if !m.tailscale.IsConnfigured() {
+		return ctx
+	}
+
+	ip := c.Request.RemoteAddr
+
+	whois, err := m.tailscale.Whois(c, ip)
+
+	if err != nil {
+		tlog.App.Warn().Err(err).Msg("Error performing Tailscale whois")
+		return ctx
+	}
+
+	tlog.App.Trace().Interface("whois", whois).Msg("Tailscale whois result")
+
+	ctx.Tailscale = &whois
+	return ctx
 }

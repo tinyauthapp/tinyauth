@@ -31,7 +31,7 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 
 	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
 		CookieDomain: app.context.cookieDomain,
-	}, app.services.authService, app.services.oauthBrokerService)
+	}, app.services.authService, app.services.oauthBrokerService, app.services.tailscaleService)
 
 	err := contextMiddleware.Init()
 

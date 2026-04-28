@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"fmt"
+
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
@@ -13,6 +15,7 @@ type Services struct {
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
+	tailscaleService     *service.TailscaleService
 }
 
 func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, error) {
@@ -67,6 +70,27 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	}
 
 	services.oauthBrokerService = oauthBrokerService
+
+	tailscaleHostname := app.config.Tailscale.Hostname
+
+	if tailscaleHostname == "" {
+		tailscaleHostname = fmt.Sprintf("tinyauth-%s", app.context.uuid)
+	}
+
+	tailscaleService := service.NewTailscaleService(service.TailscaleServiceConfig{
+		Dir:      app.config.Tailscale.Dir,
+		Hostname: tailscaleHostname,
+		AuthKey:  app.config.Tailscale.AuthKey,
+	})
+
+	err = tailscaleService.Init()
+
+	if err != nil {
+		tlog.App.Warn().Err(err).Msg("Failed to setup Tailscale service, starting without it")
+		tailscaleService.Destroy()
+	} else {
+		services.tailscaleService = tailscaleService
+	}
 
 	authService := service.NewAuthService(service.AuthServiceConfig{
 		Users:              app.context.users,
