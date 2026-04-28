@@ -46,6 +46,7 @@ func (controller *UserController) SetupRoutes() {
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
 	userGroup.POST("/totp", controller.totpHandler)
+	userGroup.POST("/tailscale", controller.tailscaleHandler)
 }
 
 func (controller *UserController) loginHandler(c *gin.Context) {
@@ -289,6 +290,53 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	}
 	if user.Attributes.Email != "" {
 		sessionCookie.Email = user.Attributes.Email
+	}
+
+	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")
+
+	err = controller.auth.CreateSessionCookie(c, &sessionCookie)
+
+	if err != nil {
+		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"status":  200,
+		"message": "Login successful",
+	})
+}
+
+func (controller *UserController) tailscaleHandler(c *gin.Context) {
+	context, err := utils.GetContext(c)
+
+	if err != nil {
+		tlog.App.Error().Err(err).Msg("Failed to get user context")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	if context.Tailscale == nil {
+		tlog.App.Warn().Msg("Tailscale session requested but Tailscale device not found")
+		c.JSON(404, gin.H{
+			"status":  404,
+			"message": "Not Found",
+		})
+		return
+	}
+
+	sessionCookie := repository.Session{
+		Username: context.Tailscale.LoginName,
+		Name:     context.Tailscale.DisplayName,
+		Email:    context.Tailscale.LoginName,
+		Provider: "tailscale",
 	}
 
 	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")

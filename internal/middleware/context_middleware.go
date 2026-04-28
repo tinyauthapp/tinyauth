@@ -63,6 +63,8 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
+		tlog.App.Trace().Interface("cookies", c.Request.Cookies()).Msg("cookies")
+
 		cookie, err := m.auth.GetSessionCookie(c)
 
 		if err != nil {
@@ -130,6 +132,18 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				IsLoggedIn: true,
 				LdapGroups: strings.Join(ldapGroups, ","),
 				Attributes: localAttributes,
+			})
+			c.Set("context", &ctx)
+			c.Next()
+			return
+		case "tailscale":
+			m.auth.RefreshSessionCookie(c)
+			ctx := m.addTailscaleContext(c, config.UserContext{
+				Username:   cookie.Username,
+				Name:       cookie.Name,
+				Email:      cookie.Email,
+				Provider:   cookie.Provider,
+				IsLoggedIn: true,
 			})
 			c.Set("context", &ctx)
 			c.Next()

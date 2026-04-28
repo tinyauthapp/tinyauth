@@ -11,16 +11,17 @@ import (
 )
 
 type UserContextResponse struct {
-	Status      int    `json:"status"`
-	Message     string `json:"message"`
-	IsLoggedIn  bool   `json:"isLoggedIn"`
-	Username    string `json:"username"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Provider    string `json:"provider"`
-	OAuth       bool   `json:"oauth"`
-	TotpPending bool   `json:"totpPending"`
-	OAuthName   string `json:"oauthName"`
+	Status            int    `json:"status"`
+	Message           string `json:"message"`
+	IsLoggedIn        bool   `json:"isLoggedIn"`
+	Username          string `json:"username"`
+	Name              string `json:"name"`
+	Email             string `json:"email"`
+	Provider          string `json:"provider"`
+	OAuth             bool   `json:"oauth"`
+	TotpPending       bool   `json:"totpPending"`
+	OAuthName         string `json:"oauthName"`
+	TailscaleNodeName string `json:"tailscaleNodeName"`
 }
 
 type AppContextResponse struct {
@@ -89,6 +90,10 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 		OAuth:       context.OAuth,
 		TotpPending: context.TotpPending,
 		OAuthName:   context.OAuthName,
+	}
+
+	if context.Tailscale != nil {
+		userContext.TailscaleNodeName = context.Tailscale.NodeName
 	}
 
 	if err != nil {

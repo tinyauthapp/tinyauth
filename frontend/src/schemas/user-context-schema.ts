@@ -9,6 +9,7 @@ export const userContextSchema = z.object({
   oauth: z.boolean(),
   totpPending: z.boolean(),
   oauthName: z.string(),
+  tailscaleNodeName: z.string(),
 });
 
 export type UserContextSchema = z.infer<typeof userContextSchema>;

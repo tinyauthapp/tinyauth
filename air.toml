@@ -2,7 +2,7 @@ root = "/tinyauth"
 tmp_dir = "tmp"
 
 [build]
-pre_cmd = ["mkdir -p internal/assets/dist", "mkdir -p /data", "echo 'backend running' > internal/assets/dist/index.html"]
+pre_cmd = ["mkdir -p internal/assets/dist", "mkdir -p /data"] # "echo 'backend running' > internal/assets/dist/index.html"
 cmd = "CGO_ENABLED=0 go build -gcflags=\"all=-N -l\" -o tmp/tinyauth ./cmd/tinyauth"
 bin = "tmp/tinyauth"
 full_bin = "dlv --listen :4000 --headless=true --api-version=2 --accept-multiclient --log=true exec tmp/tinyauth --continue --check-go-version=false"

@@ -36,12 +36,13 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export const LoginPage = () => {
-  const { isLoggedIn } = useUserContext();
+  const { isLoggedIn, tailscaleNodeName } = useUserContext();
   const { providers, title, oauthAutoRedirect } = useAppContext();
   const { search } = useLocation();
   const { t } = useTranslation();
 
   const [showRedirectButton, setShowRedirectButton] = useState(false);
+  const [useTailscale, setUseTailscale] = useState(tailscaleNodeName !== "");
 
   const hasAutoRedirectedRef = useRef(false);
 
@@ -148,6 +149,32 @@ export const LoginPage = () => {
     },
   });
 
+  const { mutate: tailscaleMutate, isPending: tailscaleIsPending } =
+    useMutation({
+      mutationFn: () => axios.post("/api/user/tailscale"),
+      mutationKey: ["tailscale"],
+      onSuccess: () => {
+        toast.success("Logged in", {
+          description: t("Tailscale session confirmed"),
+        });
+
+        redirectTimer.current = window.setTimeout(() => {
+          if (oidcParams.isOidc) {
+            window.location.replace(`/authorize?${oidcParams.compiled}`);
+            return;
+          }
+          window.location.replace(
+            `/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
+          );
+        }, 500);
+      },
+      onError: () => {
+        toast.error("Failed to login", {
+          description: "Failed to authenticate with Tailscale.",
+        });
+      },
+    });
+
   useEffect(() => {
     if (
       !isLoggedIn &&
@@ -228,6 +255,47 @@ export const LoginPage = () => {
       </Card>
     );
   }
+
+  if (useTailscale) {
+    return (
+      <Card>
+        <CardHeader className="gap-3">
+          <TailscaleIcon className="mx-auto h-8 w-8" />
+          <CardTitle className="text-center text-xl">
+            Tinyauth x Tailscale
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="text-muted-foreground text-sm">
+            We detected that you are accessing Tinyauth from an authorized
+            Tailscale device. Would you like to continue with your Tailscale
+            credentials?
+          </div>
+          <div className="text-muted-foreground text-sm">
+            Machine Name: <code>{tailscaleNodeName}</code>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col items-stretch gap-3">
+          <Button
+            className="w-full"
+            onClick={() => tailscaleMutate()}
+            loading={tailscaleIsPending}
+          >
+            Continue with Tailscale
+          </Button>
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={() => setUseTailscale(false)}
+            disabled={tailscaleIsPending}
+          >
+            Use other login method
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="gap-1.5">

@@ -327,6 +327,16 @@ func (auth *AuthService) CreateSessionCookie(c *gin.Context, data *repository.Se
 		return err
 	}
 
+	if data.Provider == "tailscale" {
+		// TODO: use domain from tailscale to set cookie, this is mostly a hack for now
+		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", c.Request.Host))
+		if err != nil {
+			return err
+		}
+		c.SetCookie(auth.config.SessionCookieName, session.UUID, expiry, "/", fmt.Sprintf(".%s", tsCookieDomain), auth.config.SecureCookie, true)
+		return nil
+	}
+
 	c.SetCookie(auth.config.SessionCookieName, session.UUID, expiry, "/", fmt.Sprintf(".%s", auth.config.CookieDomain), auth.config.SecureCookie, true)
 
 	return nil
