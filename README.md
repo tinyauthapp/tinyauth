@@ -13,6 +13,7 @@
     <a href="https://scorecard.dev/viewer/?uri=github.com/tinyauthapp/tinyauth" target="_blank" title="OpenSSF Scorecard">
       <img src="https://api.scorecard.dev/projects/github.com/tinyauthapp/tinyauth/badge">
     </a>
+    <a href="https://www.bestpractices.dev/projects/12681" target="_blank" title="OSSF Best Practices"><img src="https://www.bestpractices.dev/projects/12681/baseline"></a>
 </div>
 
 <br />
