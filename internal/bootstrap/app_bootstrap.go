@@ -30,6 +30,7 @@ type BootstrapApp struct {
 		redirectCookieName     string
 		oauthSessionCookieName string
 		users                  []config.User
+		oauthWhitelist         []string
 		oauthProviders         map[string]config.OAuthServiceConfig
 		configuredProviders    []controller.Provider
 		oidcClients            []config.OIDCClientConfig
@@ -70,6 +71,13 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	app.context.users = users
+
+	oauthWhitelist, err := utils.GetStringList(app.config.OAuth.Whitelist, app.config.OAuth.WhitelistFile)
+	if err != nil {
+		return err
+	}
+
+	app.context.oauthWhitelist = oauthWhitelist
 
 	// Setup OAuth providers
 	app.context.oauthProviders = app.config.OAuth.Providers

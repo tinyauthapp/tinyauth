@@ -160,6 +160,7 @@ type IPConfig struct {
 
 type OAuthConfig struct {
 	Whitelist    []string                      `description:"Comma-separated list of allowed OAuth domains." yaml:"whitelist"`
+	WhitelistFile string                       `description:"Path to the OAuth whitelist file." yaml:"whitelistFile"`
 	AutoRedirect string                        `description:"The OAuth provider to use for automatic redirection." yaml:"autoRedirect"`
 	Providers    map[string]OAuthServiceConfig `description:"OAuth providers configuration." yaml:"providers"`
 }

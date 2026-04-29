@@ -34,32 +34,9 @@ func ParseUsers(usersStr []string, userAttributes map[string]config.UserAttribut
 }
 
 func GetUsers(usersCfg []string, usersPath string, userAttributes map[string]config.UserAttributes) ([]config.User, error) {
-	var usersStr []string
-
-	if len(usersCfg) == 0 && usersPath == "" {
-		return []config.User{}, nil
-	}
-
-	if len(usersCfg) > 0 {
-		usersStr = append(usersStr, usersCfg...)
-	}
-
-	if usersPath != "" {
-		contents, err := ReadFile(usersPath)
-
-		if err != nil {
-			return []config.User{}, err
-		}
-
-		lines := strings.SplitSeq(contents, "\n")
-
-		for line := range lines {
-			lineTrimmed := strings.TrimSpace(line)
-			if lineTrimmed == "" {
-				continue
-			}
-			usersStr = append(usersStr, lineTrimmed)
-		}
+	usersStr, err := GetStringList(usersCfg, usersPath)
+	if err != nil {
+		return []config.User{}, err
 	}
 
 	return ParseUsers(usersStr, userAttributes)
