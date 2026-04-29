@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/config"
 
 	"github.com/tinyauthapp/paerser/cli"
 	"github.com/tinyauthapp/paerser/env"

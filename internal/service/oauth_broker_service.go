@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"golang.org/x/exp/slices"
 	"golang.org/x/oauth2"

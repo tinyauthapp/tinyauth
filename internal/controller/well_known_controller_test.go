@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/steveiliop56/tinyauth/internal/bootstrap"
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/controller"
-	"github.com/steveiliop56/tinyauth/internal/repository"
-	"github.com/steveiliop56/tinyauth/internal/service"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +67,7 @@ func TestWellKnownController(t *testing.T) {
 					SubjectTypesSupported:                  []string{"pairwise"},
 					IDTokenSigningAlgValuesSupported:       []string{"RS256"},
 					TokenEndpointAuthMethodsSupported:      []string{"client_secret_basic", "client_secret_post"},
-					ClaimsSupported:                        []string{"sub", "updated_at", "name", "preferred_username", "email", "email_verified", "groups"},
+					ClaimsSupported:                        []string{"sub", "updated_at", "name", "preferred_username", "email", "email_verified", "groups", "phone_number", "phone_number_verified", "address", "given_name", "family_name", "middle_name", "nickname", "profile", "picture", "website", "gender", "birthdate", "zoneinfo", "locale"},
 					ServiceDocumentation:                   "https://tinyauth.app/docs/guides/oidc",
 					RequestParameterSupported:              true,
 					RequestObjectSigningAlgValuesSupported: []string{"none"},

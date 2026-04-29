@@ -3,8 +3,8 @@ package decoders_test
 import (
 	"testing"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/decoders"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 
 	"gotest.tools/v3/assert"
 )

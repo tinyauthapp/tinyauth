@@ -15,7 +15,7 @@ services:
       traefik.http.routers.whoami.middlewares: tinyauth
 
   tinyauth:
-    image: ghcr.io/steveiliop56/tinyauth:v5
+    image: ghcr.io/tinyauthapp/tinyauth:v5
     environment:
       - TINYAUTH_APPURL=https://tinyauth.example.com
       - TINYAUTH_AUTH_USERS=user:$$2a$$10$$UdLYoJ5lgPsC0RKqYH/jMua7zIn0g9kPqWmhYayJYLaZQ/FTmH2/u # user:password

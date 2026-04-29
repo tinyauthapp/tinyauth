@@ -17,7 +17,7 @@ PROD_COMPOSE := $(shell test -f "docker-compose.test.prod.yml" && echo "docker-c
 
 # Deps
 deps:
-	bun install --cwd frontend
+	bun install --frozen-lockfile --cwd frontend
 	go mod download
 
 # Clean data
@@ -37,9 +37,9 @@ webui: clean-webui
 # Build the binary
 binary: webui
 	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "-s -w \
-	-X github.com/steveiliop56/tinyauth/internal/config.Version=${TAG_NAME} \
-	-X github.com/steveiliop56/tinyauth/internal/config.CommitHash=${COMMIT_HASH} \
-	-X github.com/steveiliop56/tinyauth/internal/config.BuildTimestamp=${BUILD_TIMESTAMP}" \
+	-X github.com/tinyauthapp/tinyauth/internal/config.Version=${TAG_NAME} \
+	-X github.com/tinyauthapp/tinyauth/internal/config.CommitHash=${COMMIT_HASH} \
+	-X github.com/tinyauthapp/tinyauth/internal/config.BuildTimestamp=${BUILD_TIMESTAMP}" \
 	-o ${BIN_NAME} ./cmd/tinyauth
 
 # Build for amd64

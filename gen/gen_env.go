@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/config"
 )
 
 type EnvEntry struct {

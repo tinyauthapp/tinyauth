@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/decoders"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	container "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"

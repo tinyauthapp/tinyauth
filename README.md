@@ -5,11 +5,15 @@
 </div>
 
 <div align="center">
-    <img alt="License" src="https://img.shields.io/github/license/steveiliop56/tinyauth">
-    <img alt="Release" src="https://img.shields.io/github/v/release/steveiliop56/tinyauth">
-    <img alt="Issues" src="https://img.shields.io/github/issues/steveiliop56/tinyauth">
-    <img alt="Tinyauth CI" src="https://github.com/steveiliop56/tinyauth/actions/workflows/ci.yml/badge.svg">
+    <img alt="License" src="https://img.shields.io/github/license/tinyauthapp/tinyauth">
+    <img alt="Release" src="https://img.shields.io/github/v/release/tinyauthapp/tinyauth">
+    <img alt="Issues" src="https://img.shields.io/github/issues/tinyauthapp/tinyauth">
+    <img alt="Tinyauth CI" src="https://github.com/tinyauthapp/tinyauth/actions/workflows/ci.yml/badge.svg">
     <a title="Crowdin" target="_blank" href="https://crowdin.com/project/tinyauth"><img src="https://badges.crowdin.net/tinyauth/localized.svg"></a>
+    <a href="https://scorecard.dev/viewer/?uri=github.com/tinyauthapp/tinyauth" target="_blank" title="OpenSSF Scorecard">
+      <img src="https://api.scorecard.dev/projects/github.com/tinyauthapp/tinyauth/badge">
+    </a>
+    <a href="https://www.bestpractices.dev/projects/12681" target="_blank" title="OSSF Best Practices"><img src="https://www.bestpractices.dev/projects/12681/baseline"></a>
 </div>
 
 <br />
@@ -39,7 +43,7 @@ If you are still not sure if Tinyauth suits your needs you can try out the [demo
 
 You can find documentation and guides on all of the available configuration of Tinyauth in the [website](https://tinyauth.app).
 
-If you wish to contribute to the documentation head over to the [repository](https://github.com/steveiliop56/tinyauth-docs).
+If you wish to contribute to the documentation head over to the [repository](https://github.com/tinyauthapp/docs).
 
 ## Discord
 
@@ -47,7 +51,7 @@ Tinyauth has a [Discord](https://discord.gg/eHzVaCzRRd) server. Feel free to hop
 
 ## Contributing
 
-All contributions to the codebase are welcome! If you have any free time, feel free to pick up an [issue](https://github.com/steveiliop56/tinyauth/issues) or add your own missing features. Make sure to check out the [contributing guide](./CONTRIBUTING.md) for instructions on how to get the development server up and running.
+All contributions to the codebase are welcome! If you have any free time, feel free to pick up an [issue](https://github.com/tinyauthapp/tinyauth/issues) or add your own missing features. Make sure to check out the [contributing guide](./CONTRIBUTING.md) for instructions on how to get the development server up and running.
 
 ## Localization
 
@@ -72,4 +76,4 @@ A big thank you to the following people for providing me with more coffee:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=steveiliop56/tinyauth&type=Date)](https://www.star-history.com/#steveiliop56/tinyauth&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=tinyauthapp/tinyauth&type=Date)](https://www.star-history.com/#tinyauthapp/tinyauth&Date)

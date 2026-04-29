@@ -9,7 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	ldapgo "github.com/go-ldap/ldap/v3"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
 type LdapServiceConfig struct {

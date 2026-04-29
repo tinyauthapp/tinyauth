@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"charm.land/huh/v2"
-	"github.com/steveiliop56/tinyauth/internal/bootstrap"
-	"github.com/steveiliop56/tinyauth/internal/config"
-	"github.com/steveiliop56/tinyauth/internal/utils/loaders"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils/loaders"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tinyauthapp/paerser/cli"

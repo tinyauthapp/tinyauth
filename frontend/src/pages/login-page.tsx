@@ -264,6 +264,10 @@ export const LoginPage = () => {
             onSubmit={(values) => loginMutate(values)}
             loading={loginIsPending || oauthIsPending}
             formId={formId}
+            params={(() => {
+              const eparams = searchParams.toString();
+              return eparams.length > 0 ? `?${eparams}` : "";
+            })()}
           />
         )}
         {providers.length == 0 && (

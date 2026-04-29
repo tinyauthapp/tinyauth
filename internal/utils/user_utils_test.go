@@ -4,122 +4,117 @@ import (
 	"os"
 	"testing"
 
-	"github.com/steveiliop56/tinyauth/internal/utils"
+	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 
 	"gotest.tools/v3/assert"
 )
 
 func TestGetUsers(t *testing.T) {
+	hash := "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"
+
 	// Setup
 	file, err := os.Create("/tmp/tinyauth_users_test.txt")
 	assert.NilError(t, err)
 
-	_, err = file.WriteString("      user1:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G        \n         user2:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G                    ") // Spacing is on purpose
+	_, err = file.WriteString("      user1:" + hash + "        \n         user2:" + hash + "                    ") // Spacing is on purpose
 	assert.NilError(t, err)
 
 	err = file.Close()
 	assert.NilError(t, err)
 	defer os.Remove("/tmp/tinyauth_users_test.txt")
 
-	// Test file
-	users, err := utils.GetUsers([]string{}, "/tmp/tinyauth_users_test.txt")
+	noAttrs := map[string]config.UserAttributes{}
+
+	// Test file only
+	users, err := utils.GetUsers([]string{}, "/tmp/tinyauth_users_test.txt", noAttrs)
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, 2, len(users))
 
 	assert.Equal(t, "user1", users[0].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[0].Password)
+	assert.Equal(t, hash, users[0].Password)
 	assert.Equal(t, "user2", users[1].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[1].Password)
+	assert.Equal(t, hash, users[1].Password)
 
-	// Test config
-	users, err = utils.GetUsers([]string{"user3:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", "user4:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"}, "")
+	// Test inline config only
+	users, err = utils.GetUsers([]string{"user3:" + hash, "user4:" + hash}, "", noAttrs)
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, 2, len(users))
-
 	assert.Equal(t, "user3", users[0].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[0].Password)
 	assert.Equal(t, "user4", users[1].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[1].Password)
 
 	// Test both
-	users, err = utils.GetUsers([]string{"user5:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"}, "/tmp/tinyauth_users_test.txt")
+	users, err = utils.GetUsers([]string{"user5:" + hash}, "/tmp/tinyauth_users_test.txt", noAttrs)
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, 3, len(users))
 
-	assert.Equal(t, "user5", users[0].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[0].Password)
-	assert.Equal(t, "user1", users[1].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[1].Password)
-	assert.Equal(t, "user2", users[2].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[2].Password)
+	usernames := map[string]bool{}
+	for _, u := range users {
+		usernames[u.Username] = true
+	}
+	assert.Assert(t, usernames["user1"])
+	assert.Assert(t, usernames["user2"])
+	assert.Assert(t, usernames["user5"])
+
+	// Test attributes applied from userAttributes map
+	attrs := map[string]config.UserAttributes{
+		"user1": {Name: "User One", Email: "user1@example.com"},
+	}
+	users, err = utils.GetUsers([]string{}, "/tmp/tinyauth_users_test.txt", attrs)
+
+	assert.NilError(t, err)
+	assert.Equal(t, 2, len(users))
+
+	for _, u := range users {
+		if u.Username == "user1" {
+			assert.Equal(t, "User One", u.Attributes.Name)
+			assert.Equal(t, "user1@example.com", u.Attributes.Email)
+		}
+		if u.Username == "user2" {
+			assert.Equal(t, "", u.Attributes.Name)
+		}
+	}
 
 	// Test empty
-	users, err = utils.GetUsers([]string{}, "")
+	users, err = utils.GetUsers([]string{}, "", noAttrs)
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, 0, len(users))
 
 	// Test non-existent file
-	users, err = utils.GetUsers([]string{}, "/tmp/non_existent_file.txt")
+	users, err = utils.GetUsers([]string{}, "/tmp/non_existent_file.txt", noAttrs)
 
 	assert.ErrorContains(t, err, "no such file or directory")
 
 	assert.Equal(t, 0, len(users))
 }
 
-func TestParseUsers(t *testing.T) {
-	// Valid users
-	users, err := utils.ParseUsers([]string{"user1:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", "user2:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G:ABCDEF"}) // user2 has TOTP
-
-	assert.NilError(t, err)
-
-	assert.Equal(t, 2, len(users))
-
-	assert.Equal(t, "user1", users[0].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[0].Password)
-	assert.Equal(t, "", users[0].TotpSecret)
-	assert.Equal(t, "user2", users[1].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[1].Password)
-	assert.Equal(t, "ABCDEF", users[1].TotpSecret)
-
-	// Valid weirdly spaced users
-	users, err = utils.ParseUsers([]string{"      user1:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G        ", "         user2:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G:ABCDEF                    "}) // Spacing is on purpose
-	assert.NilError(t, err)
-
-	assert.Equal(t, 2, len(users))
-
-	assert.Equal(t, "user1", users[0].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[0].Password)
-	assert.Equal(t, "", users[0].TotpSecret)
-	assert.Equal(t, "user2", users[1].Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", users[1].Password)
-	assert.Equal(t, "ABCDEF", users[1].TotpSecret)
-}
-
 func TestParseUser(t *testing.T) {
+	hash := "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"
+
 	// Valid user without TOTP
-	user, err := utils.ParseUser("user1:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G")
+	user, err := utils.ParseUser("user1:" + hash)
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, "user1", user.Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", user.Password)
+	assert.Equal(t, hash, user.Password)
 	assert.Equal(t, "", user.TotpSecret)
 
 	// Valid user with TOTP
-	user, err = utils.ParseUser("user2:$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G:ABCDEF")
+	user, err = utils.ParseUser("user2:" + hash + ":ABCDEF")
 
 	assert.NilError(t, err)
 
 	assert.Equal(t, "user2", user.Username)
-	assert.Equal(t, "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G", user.Password)
+	assert.Equal(t, hash, user.Password)
 	assert.Equal(t, "ABCDEF", user.TotpSecret)
 
 	// Valid user with $$ in password

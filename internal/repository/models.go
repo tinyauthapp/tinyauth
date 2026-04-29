@@ -34,6 +34,19 @@ type OidcUserinfo struct {
 	Email             string
 	Groups            string
 	UpdatedAt         int64
+	GivenName         string
+	FamilyName        string
+	MiddleName        string
+	Nickname          string
+	Profile           string
+	Picture           string
+	Website           string
+	Gender            string
+	Birthdate         string
+	Zoneinfo          string
+	Locale            string
+	PhoneNumber       string
+	Address           string
 }
 
 type Session struct {

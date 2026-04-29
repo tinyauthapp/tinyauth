@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steveiliop56/tinyauth/internal/assets"
-	"github.com/steveiliop56/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/assets"
+	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/gin-gonic/gin"
 )
