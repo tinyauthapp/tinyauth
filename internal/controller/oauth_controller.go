@@ -27,6 +27,7 @@ type OAuthControllerConfig struct {
 	SecureCookie           bool
 	AppURL                 string
 	CookieDomain           string
+	SubdomainsEnabled      bool
 }
 
 type OAuthController struct {
@@ -106,7 +107,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", fmt.Sprintf(".%s", controller.config.CookieDomain), controller.config.SecureCookie, true)
+	c.SetCookie(controller.config.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -136,7 +137,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, "", -1, "/", fmt.Sprintf(".%s", controller.config.CookieDomain), controller.config.SecureCookie, true)
+	c.SetCookie(controller.config.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
 
 	oauthPendingSession, err := controller.auth.GetOAuthPendingSession(sessionIdCookie)
 
@@ -281,4 +282,11 @@ func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) 
 		params.ResponseType != "" &&
 		params.ClientID != "" &&
 		params.RedirectURI != ""
+}
+
+func (controller *OAuthController) getCookieDomain() string {
+	if controller.config.SubdomainsEnabled {
+		return "." + controller.config.CookieDomain
+	}
+	return controller.config.CookieDomain
 }
