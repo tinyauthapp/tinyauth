@@ -39,6 +39,7 @@ func (m *UIMiddleware) Init() error {
 func (m *UIMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/")
+		method := c.Request.Method
 
 		tlog.App.Debug().Str("path", path).Msg("path")
 
@@ -52,6 +53,12 @@ func (m *UIMiddleware) Middleware() gin.HandlerFunc {
 			c.Writer.Write([]byte("User-agent: *\nDisallow: /\n"))
 			return
 		default:
+			// For OIDC post authentication, we need to redirect the POST to /authorize to the backend
+			if method == http.MethodPost && strings.HasPrefix(path, "authorize") {
+				c.Next()
+				return
+			}
+
 			_, err := fs.Stat(m.uiFs, path)
 
 			// Enough for one authentication flow

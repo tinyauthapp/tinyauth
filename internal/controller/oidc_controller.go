@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -21,6 +22,7 @@ type OIDCController struct {
 	config OIDCControllerConfig
 	router *gin.RouterGroup
 	oidc   *service.OIDCService
+	engine *gin.Engine
 }
 
 type AuthorizeCallback struct {
@@ -57,11 +59,12 @@ type ClientCredentials struct {
 	ClientSecret string
 }
 
-func NewOIDCController(config OIDCControllerConfig, oidcService *service.OIDCService, router *gin.RouterGroup) *OIDCController {
+func NewOIDCController(config OIDCControllerConfig, oidcService *service.OIDCService, router *gin.RouterGroup, engine *gin.Engine) *OIDCController {
 	return &OIDCController{
 		config: config,
 		oidc:   oidcService,
 		router: router,
+		engine: engine,
 	}
 }
 
@@ -72,6 +75,7 @@ func (controller *OIDCController) SetupRoutes() {
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)
 	oidcGroup.POST("/userinfo", controller.Userinfo)
+	controller.engine.POST("/authorize", controller.AuthorizePseudoPost)
 }
 
 func (controller *OIDCController) GetClientInfo(c *gin.Context) {
@@ -193,6 +197,18 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 		"status":       200,
 		"redirect_uri": fmt.Sprintf("%s?%s", req.RedirectURI, queries.Encode()),
 	})
+}
+
+// Pseudo handler that will just redirect to get in frontend then back to backend
+func (controller *OIDCController) AuthorizePseudoPost(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		tlog.App.Error().Err(err).Msg("Failed to read request body")
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/authorize", controller.oidc.GetIssuer()))
+		return
+	}
+	redirectUrl := fmt.Sprintf("%s/authorize?%s", controller.oidc.GetIssuer(), body)
+	c.Redirect(http.StatusFound, redirectUrl)
 }
 
 func (controller *OIDCController) Token(c *gin.Context) {
