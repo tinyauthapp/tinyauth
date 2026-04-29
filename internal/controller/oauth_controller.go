@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -176,7 +175,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		tlog.App.Warn().Str("email", user.Email).Msg("Email not whitelisted")
 		tlog.AuditLoginFailure(c, user.Email, req.Provider, "email not whitelisted")
 
-		queries, err := query.Values(config.UnauthorizedQuery{
+		queries, err := query.Values(UnauthorizedQuery{
 			Username: user.Email,
 		})
 
@@ -236,13 +235,15 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")
 
-	err = controller.auth.CreateSessionCookie(c, &sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
 		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
 		return
 	}
+
+	http.SetCookie(c.Writer, cookie)
 
 	tlog.AuditLoginSuccess(c, sessionCookie.Username, sessionCookie.Provider)
 
@@ -259,7 +260,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	}
 
 	if oauthPendingSession.CallbackParams.RedirectURI != "" {
-		queries, err := query.Values(config.RedirectQuery{
+		queries, err := query.Values(RedirectQuery{
 			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
 		})
 
