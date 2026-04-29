@@ -30,6 +30,10 @@ const MaxOAuthPendingSessions = 256
 const OAuthCleanupCount = 16
 const MaxLoginAttemptRecords = 256
 
+var (
+	ErrUserNotFound = errors.New("user not found")
+)
+
 // slightly modified version of the AuthorizeRequest from the OIDC service to basically accept all
 // parameters and pass them to the authorize page if needed
 type OAuthURLParams struct {
@@ -136,7 +140,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 		}, nil
 	}
 
-	return nil, fmt.Errorf("user not found")
+	return nil, ErrUserNotFound
 }
 
 func (auth *AuthService) CheckUserPassword(search model.UserSearch, password string) error {
