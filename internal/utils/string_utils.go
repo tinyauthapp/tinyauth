@@ -28,3 +28,41 @@ func CoalesceToString(value any) string {
 		return ""
 	}
 }
+
+func ParseNonEmptyLines(contents string) []string {
+	lines := make([]string, 0)
+
+	for line := range strings.SplitSeq(contents, "\n") {
+		lineTrimmed := strings.TrimSpace(line)
+		if lineTrimmed == "" {
+			continue
+		}
+		lines = append(lines, lineTrimmed)
+	}
+
+	return lines
+}
+
+func GetStringList(valuesCfg []string, valuesPath string) ([]string, error) {
+	values := make([]string, 0, len(valuesCfg))
+
+	for _, value := range valuesCfg {
+		valueTrimmed := strings.TrimSpace(value)
+		if valueTrimmed == "" {
+			continue
+		}
+		values = append(values, valueTrimmed)
+	}
+
+	if valuesPath == "" {
+		return values, nil
+	}
+
+	contents, err := ReadFile(valuesPath)
+	if err != nil {
+		return []string{}, err
+	}
+
+	values = append(values, ParseNonEmptyLines(contents)...)
+	return values, nil
+}

@@ -70,7 +70,7 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 
 	authService := service.NewAuthService(service.AuthServiceConfig{
 		Users:              app.context.users,
-		OauthWhitelist:     app.config.OAuth.Whitelist,
+		OauthWhitelist:     app.context.oauthWhitelist,
 		SessionExpiry:      app.config.Auth.SessionExpiry,
 		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
 		SecureCookie:       app.config.Auth.SecureCookie,
