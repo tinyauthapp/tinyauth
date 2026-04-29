@@ -564,7 +564,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 	entry, err := service.queries.GetOidcTokenByRefreshToken(c, service.Hash(refreshToken))
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return TokenResponse{}, ErrTokenNotFound
 		}
 		return TokenResponse{}, err
@@ -643,7 +643,7 @@ func (service *OIDCService) GetAccessToken(c *gin.Context, tokenHash string) (re
 	entry, err := service.queries.GetOidcToken(c, tokenHash)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return repository.OidcToken{}, ErrTokenNotFound
 		}
 		return repository.OidcToken{}, err
@@ -784,7 +784,7 @@ func (service *OIDCService) Cleanup() {
 			token, err := service.queries.GetOidcTokenBySub(ctx, expiredCode.Sub)
 
 			if err != nil {
-				if err == sql.ErrNoRows {
+				if errors.Is(err, sql.ErrNoRows) {
 					continue
 				}
 				tlog.App.Warn().Err(err).Msg("Failed to get OIDC token by sub")

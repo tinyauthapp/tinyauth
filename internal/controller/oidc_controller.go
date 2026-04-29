@@ -429,7 +429,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	entry, err := controller.oidc.GetAccessToken(c, controller.oidc.Hash(token))
 
 	if err != nil {
-		if err == service.ErrTokenNotFound {
+		if errors.Is(err, service.ErrTokenNotFound) {
 			tlog.App.Warn().Msg("OIDC userinfo accessed with invalid token")
 			c.JSON(401, gin.H{
 				"error": "invalid_grant",
