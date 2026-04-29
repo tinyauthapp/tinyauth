@@ -177,3 +177,30 @@ func (c *UserContext) GetName() string {
 		return ""
 	}
 }
+
+func (c *UserContext) ProviderName() string {
+	switch c.Provider {
+	case ProviderBasicAuth, ProviderLocal:
+		return "local"
+	case ProviderLDAP:
+		return "ldap"
+	case ProviderOAuth:
+		return c.OAuth.DisplayName // compatability
+	default:
+		return "unknown"
+	}
+}
+
+func (c *UserContext) TOTPPending() bool {
+	if c.Provider == ProviderLocal {
+		return c.Local.TOTPPending
+	}
+	return false
+}
+
+func (c *UserContext) OAuthName() string {
+	if c.Provider == ProviderOAuth {
+		return c.OAuth.DisplayName
+	}
+	return ""
+}
