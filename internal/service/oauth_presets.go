@@ -1,11 +1,11 @@
 package service
 
 import (
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"golang.org/x/oauth2/endpoints"
 )
 
-func newGoogleOAuthService(config config.OAuthServiceConfig) *OAuthService {
+func newGoogleOAuthService(config model.OAuthServiceConfig) *OAuthService {
 	scopes := []string{"openid", "email", "profile"}
 	config.Scopes = scopes
 	config.AuthURL = endpoints.Google.AuthURL
@@ -14,7 +14,7 @@ func newGoogleOAuthService(config config.OAuthServiceConfig) *OAuthService {
 	return NewOAuthService(config, "google")
 }
 
-func newGitHubOAuthService(config config.OAuthServiceConfig) *OAuthService {
+func newGitHubOAuthService(config model.OAuthServiceConfig) *OAuthService {
 	scopes := []string{"read:user", "user:email"}
 	config.Scopes = scopes
 	config.AuthURL = endpoints.GitHub.AuthURL

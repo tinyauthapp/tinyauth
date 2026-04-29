@@ -3,10 +3,8 @@ package utils_test
 import (
 	"testing"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 
-	"github.com/gin-gonic/gin"
 	"gotest.tools/v3/assert"
 )
 
@@ -127,28 +125,6 @@ func TestFilter(t *testing.T) {
 	expectedStr := []string{"banana", "cherry"}
 	resultStr := utils.Filter(sliceStr, testFuncStr)
 	assert.DeepEqual(t, expectedStr, resultStr)
-}
-
-func TestGetContext(t *testing.T) {
-	// Setup
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(nil)
-
-	// Normal case
-	c.Set("context", &config.UserContext{Username: "testuser"})
-	result, err := utils.GetContext(c)
-	assert.NilError(t, err)
-	assert.Equal(t, "testuser", result.Username)
-
-	// Case with no context
-	c.Set("context", nil)
-	_, err = utils.GetContext(c)
-	assert.Error(t, err, "invalid user context in request")
-
-	// Case with invalid context type
-	c.Set("context", "invalid type")
-	_, err = utils.GetContext(c)
-	assert.Error(t, err, "invalid user context in request")
 }
 
 func TestIsRedirectSafe(t *testing.T) {
