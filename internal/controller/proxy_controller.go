@@ -99,11 +99,15 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
+	if acls == nil {
+		acls = &model.App{}
+	}
+
 	tlog.App.Trace().Interface("acls", acls).Msg("ACLs for resource")
 
 	clientIP := c.ClientIP()
 
-	if controller.auth.IsBypassedIP(acls.IP, clientIP) {
+	if controller.auth.IsBypassedIP(&acls.IP, clientIP) {
 		controller.setHeaders(c, *acls)
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -112,7 +116,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, acls.Path)
+	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, &acls.Path)
 
 	if err != nil {
 		tlog.App.Error().Err(err).Msg("Failed to check if auth is enabled for resource")
@@ -130,7 +134,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.CheckIP(acls.IP, clientIP) {
+	if !controller.auth.CheckIP(&acls.IP, clientIP) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
 			IP:       clientIP,
@@ -169,7 +173,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	tlog.App.Trace().Interface("context", userContext).Msg("User context from request")
 
 	if userContext.Authenticated {
-		userAllowed := controller.auth.IsUserAllowed(c, *userContext, *acls)
+		userAllowed := controller.auth.IsUserAllowed(c, *userContext, acls)
 
 		if !userAllowed {
 			tlog.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User not allowed to access resource")

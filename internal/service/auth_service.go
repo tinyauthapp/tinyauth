@@ -346,7 +346,7 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 	}
 
 	if session.Expiry-currentTime > refreshThreshold {
-		return nil, fmt.Errorf("session not eligible for refresh yet")
+		return nil, nil
 	}
 
 	newExpiry := session.Expiry + refreshThreshold
@@ -443,7 +443,11 @@ func (auth *AuthService) LDAPAuthConfigured() bool {
 	return auth.ldap.IsConfigured()
 }
 
-func (auth *AuthService) IsUserAllowed(c *gin.Context, context model.UserContext, acls model.App) bool {
+func (auth *AuthService) IsUserAllowed(c *gin.Context, context model.UserContext, acls *model.App) bool {
+	if acls == nil {
+		return true
+	}
+
 	if context.Provider == model.ProviderOAuth {
 		tlog.App.Debug().Msg("Checking OAuth whitelist")
 		return utils.CheckFilter(acls.OAuth.Whitelist, context.OAuth.Email)
@@ -507,7 +511,11 @@ func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext
 	return false
 }
 
-func (auth *AuthService) IsAuthEnabled(uri string, path model.AppPath) (bool, error) {
+func (auth *AuthService) IsAuthEnabled(uri string, path *model.AppPath) (bool, error) {
+	if path == nil {
+		return true, nil
+	}
+
 	// Check for block list
 	if path.Block != "" {
 		regex, err := regexp.Compile(path.Block)
@@ -552,7 +560,11 @@ func (auth *AuthService) GetBasicAuth(req *http.Request) (*model.LocalUser, erro
 	}, nil
 }
 
-func (auth *AuthService) CheckIP(acls model.AppIP, ip string) bool {
+func (auth *AuthService) CheckIP(acls *model.AppIP, ip string) bool {
+	if acls == nil {
+		acls = &model.AppIP{}
+	}
+
 	// Merge the global and app IP filter
 	blockedIps := append(auth.config.IP.Block, acls.Block...)
 	allowedIPs := append(auth.config.IP.Allow, acls.Allow...)
@@ -590,7 +602,11 @@ func (auth *AuthService) CheckIP(acls model.AppIP, ip string) bool {
 	return true
 }
 
-func (auth *AuthService) IsBypassedIP(acls model.AppIP, ip string) bool {
+func (auth *AuthService) IsBypassedIP(acls *model.AppIP, ip string) bool {
+	if acls == nil {
+		return false
+	}
+
 	for _, bypassed := range acls.Bypass {
 		res, err := utils.FilterIP(bypassed, ip)
 		if err != nil {

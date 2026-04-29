@@ -30,7 +30,8 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	}
 
 	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
-		CookieDomain: app.context.cookieDomain,
+		CookieDomain:      app.context.cookieDomain,
+		SessionCookieName: app.context.sessionCookieName,
 	}, app.services.authService, app.services.oauthBrokerService)
 
 	err := contextMiddleware.Init()
@@ -98,7 +99,8 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	proxyController.SetupRoutes()
 
 	userController := controller.NewUserController(controller.UserControllerConfig{
-		CookieDomain: app.context.cookieDomain,
+		CookieDomain:      app.context.cookieDomain,
+		SessionCookieName: app.context.sessionCookieName,
 	}, apiRouter, app.services.authService)
 
 	userController.SetupRoutes()

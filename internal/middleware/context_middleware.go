@@ -80,6 +80,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				http.SetCookie(c.Writer, cookie)
 			}
 
+			tlog.App.Trace().Msgf("Authenticated user from session cookie: %s", userContext.GetUsername())
 			c.Set("context", userContext)
 			c.Next()
 			return
