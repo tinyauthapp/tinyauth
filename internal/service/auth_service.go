@@ -90,14 +90,14 @@ type AuthService struct {
 	loginMutex           sync.RWMutex
 	ldapGroupsMutex      sync.RWMutex
 	ldap                 *LdapService
-	queries              *repository.Queries
+	queries              repository.Store
 	oauthBroker          *OAuthBrokerService
 	lockdown             *Lockdown
 	lockdownCtx          context.Context
 	lockdownCancelFunc   context.CancelFunc
 }
 
-func NewAuthService(config AuthServiceConfig, ldap *LdapService, queries *repository.Queries, oauthBroker *OAuthBrokerService) *AuthService {
+func NewAuthService(config AuthServiceConfig, ldap *LdapService, queries repository.Store, oauthBroker *OAuthBrokerService) *AuthService {
 	return &AuthService{
 		config:               config,
 		loginAttempts:        make(map[string]*LoginAttempt),

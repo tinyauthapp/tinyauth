@@ -11,7 +11,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
@@ -101,14 +100,10 @@ func TestWellKnownController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	store, err := bootstrap.NewSQLiteStore(path.Join(tempDir, "tinyauth.db"))
 	require.NoError(t, err)
 
-	queries := repository.New(db)
-
-	oidcService := service.NewOIDCService(oidcServiceCfg, queries)
+	oidcService := service.NewOIDCService(oidcServiceCfg, store)
 	err = oidcService.Init()
 	require.NoError(t, err)
 
@@ -125,9 +120,4 @@ func TestWellKnownController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
-	})
 }

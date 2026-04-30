@@ -121,7 +121,7 @@ type OIDCServiceConfig struct {
 
 type OIDCService struct {
 	config       OIDCServiceConfig
-	queries      *repository.Queries
+	queries      repository.Store
 	clients      map[string]config.OIDCClientConfig
 	privateKey   *rsa.PrivateKey
 	publicKey    crypto.PublicKey
@@ -129,7 +129,7 @@ type OIDCService struct {
 	isConfigured bool
 }
 
-func NewOIDCService(config OIDCServiceConfig, queries *repository.Queries) *OIDCService {
+func NewOIDCService(config OIDCServiceConfig, queries repository.Store) *OIDCService {
 	return &OIDCService{
 		config:  config,
 		queries: queries,

@@ -130,17 +130,14 @@ func (app *BootstrapApp) Setup() error {
 	tlog.App.Trace().Str("redirectCookieName", app.context.redirectCookieName).Msg("Redirect cookie name")
 
 	// Database
-	db, err := app.SetupDatabase(app.config.Database.Path)
+	store, err := app.SetupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
 	}
 
-	// Queries
-	queries := repository.New(db)
-
 	// Services
-	services, err := app.initServices(queries)
+	services, err := app.initServices(store)
 
 	if err != nil {
 		return fmt.Errorf("failed to initialize services: %w", err)
@@ -196,7 +193,7 @@ func (app *BootstrapApp) Setup() error {
 
 	// Start db cleanup routine
 	tlog.App.Debug().Msg("Starting database cleanup routine")
-	go app.dbCleanupRoutine(queries)
+	go app.dbCleanupRoutine(store)
 
 	// If analytics are not disabled, start heartbeat
 	if app.config.Analytics.Enabled {
@@ -286,7 +283,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 	}
 }
 
-func (app *BootstrapApp) dbCleanupRoutine(queries *repository.Queries) {
+func (app *BootstrapApp) dbCleanupRoutine(queries repository.Store) {
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 	ctx := context.Background()

@@ -1,12 +1,12 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "sql/*_queries.sql"
-    schema: "sql/*_schemas.sql"
+    queries: "sql/sqlite/*_queries.sql"
+    schema: "sql/sqlite/*_schemas.sql"
     gen:
       go:
-        package: "repository"
-        out: "internal/repository"
+        package: "sqlite"
+        out: "internal/repository/sqlite"
         rename:
           uuid: "UUID"
           oauth_groups: "OAuthGroups"

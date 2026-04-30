@@ -95,7 +95,7 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	Path string `description:"The path to the database, including file name." yaml:"path"`
+	Path string `description:"The path to the SQLite database, including file name." yaml:"path"`
 }
 
 type AnalyticsConfig struct {

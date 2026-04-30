@@ -18,7 +18,7 @@ type Services struct {
 	oidcService          *service.OIDCService
 }
 
-func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, error) {
+func (app *BootstrapApp) initServices(queries repository.Store) (Services, error) {
 	services := Services{}
 
 	ldapService := service.NewLdapService(service.LdapServiceConfig{
