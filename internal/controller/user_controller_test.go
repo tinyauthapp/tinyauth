@@ -73,12 +73,8 @@ func TestUserController(t *testing.T) {
 		})
 	}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
+	store, err := bootstrap.NewSQLiteStore(cfg.Database.Path)
 	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
 
 	type testCase struct {
 		description string
@@ -254,7 +250,7 @@ func TestUserController(t *testing.T) {
 				totpCtx,
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+				_, err := store.CreateSession(context.TODO(), repository.CreateSessionParams{
 					UUID:        "test-totp-login-uuid",
 					Username:    "test",
 					Email:       "test@example.com",
@@ -378,7 +374,7 @@ func TestUserController(t *testing.T) {
 				totpAttrCtx,
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+				_, err := store.CreateSession(context.TODO(), repository.CreateSessionParams{
 					UUID:        "test-totp-login-attributes-uuid",
 					Username:    "test",
 					Email:       "test@example.com",
@@ -420,7 +416,7 @@ func TestUserController(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
@@ -446,8 +442,5 @@ func TestUserController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
+}
 }

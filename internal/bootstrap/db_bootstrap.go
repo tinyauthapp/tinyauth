@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/tinyauthapp/tinyauth/internal/assets"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/sqlite"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
@@ -14,17 +16,28 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func (app *BootstrapApp) SetupDatabase() error {
-	dir := filepath.Dir(app.config.Database.Path)
+func (app *BootstrapApp) SetupStore() (repository.Store, error) {
+	return app.setupSQLite(app.config.Database.Path)
+}
+
+// NewSQLiteStore opens a SQLite database at the given path, runs migrations, and returns a Store.
+// Useful for testing or when constructing a store outside of a BootstrapApp.
+func NewSQLiteStore(databasePath string) (repository.Store, error) {
+	app := &BootstrapApp{}
+	return app.setupSQLite(databasePath)
+}
+
+func (app *BootstrapApp) setupSQLite(databasePath string) (repository.Store, error) {
+	dir := filepath.Dir(databasePath)
 
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("failed to create database directory %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
 	}
 
-	db, err := sql.Open("sqlite", app.config.Database.Path)
+	db, err := sql.Open("sqlite", databasePath)
 
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Close the database if there is an error during migration
@@ -38,32 +51,29 @@ func (app *BootstrapApp) SetupDatabase() error {
 	// if the sqlite connection starts being a bottleneck
 	db.SetMaxOpenConns(1)
 
-	migrations, err := iofs.New(assets.Migrations, "migrations")
+	migrations, err := iofs.New(assets.Migrations, "migrations/sqlite")
 
 	if err != nil {
-		return fmt.Errorf("failed to create migrations: %w", err)
+		return nil, fmt.Errorf("failed to create migrations: %w", err)
 	}
 
 	target, err := sqlite3.WithInstance(db, &sqlite3.Config{})
 
 	if err != nil {
-		return fmt.Errorf("failed to create sqlite3 instance: %w", err)
+		return nil, fmt.Errorf("failed to create sqlite3 instance: %w", err)
 	}
 
 	migrator, err := migrate.NewWithInstance("iofs", migrations, "sqlite3", target)
 
 	if err != nil {
-		return fmt.Errorf("failed to create migrator: %w", err)
+		return nil, fmt.Errorf("failed to create migrator: %w", err)
 	}
 
 	if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to migrate database: %w", err)
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	app.db = db
-	return nil
-}
 
-func (app *BootstrapApp) GetDB() *sql.DB {
-	return app.db
+	return sqlite.New(db), nil
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -379,18 +378,14 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
+	store, err := bootstrap.NewSQLiteStore(cfg.Database.Path)
 	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
 
 	wg := &sync.WaitGroup{}
 	ctx := context.TODO()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker)
 	aclsService := service.NewAccessControlsService(log, nil, acls)
 
 	for _, test := range tests {
@@ -411,8 +406,4 @@ func TestProxyController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

@@ -43,7 +43,7 @@ type BootstrapApp struct {
 	log      *logger.Logger
 	ctx      context.Context
 	cancel   context.CancelFunc
-	queries  *repository.Queries
+	queries  repository.Store
 	router   *gin.Engine
 	db       *sql.DB
 	wg       sync.WaitGroup
@@ -162,7 +162,7 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
 
 	// database
-	err = app.SetupDatabase()
+	store, err := app.SetupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
@@ -176,9 +176,8 @@ func (app *BootstrapApp) Setup() error {
 		app.db.Close()
 	}()
 
-	// queries
-	queries := repository.New(app.db)
-	app.queries = queries
+	// store
+	app.queries = store
 
 	// services
 	err = app.setupServices()

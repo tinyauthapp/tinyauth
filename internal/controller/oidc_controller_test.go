@@ -18,7 +18,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -839,16 +838,12 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
+	store, err := bootstrap.NewSQLiteStore(cfg.Database.Path)
 	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
 
 	wg := &sync.WaitGroup{}
 
-	oidcService, err := service.NewOIDCService(log, cfg, runtime, queries, context.TODO(), wg)
+	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, context.TODO(), wg)
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -869,8 +864,4 @@ func TestOIDCController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

@@ -79,7 +79,7 @@ type AuthService struct {
 	context context.Context
 
 	ldap        *LdapService
-	queries     *repository.Queries
+	queries     repository.Store
 	oauthBroker *OAuthBrokerService
 
 	loginAttempts        map[string]*LoginAttempt
@@ -100,7 +100,7 @@ func NewAuthService(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	ldap *LdapService,
-	queries *repository.Queries,
+	queries repository.Store,
 	oauthBroker *OAuthBrokerService,
 ) *AuthService {
 	service := &AuthService{

@@ -116,7 +116,7 @@ type OIDCService struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
-	queries *repository.Queries
+	queries repository.Store
 	context context.Context
 
 	clients    map[string]model.OIDCClientConfig
@@ -129,7 +129,7 @@ func NewOIDCService(
 	log *logger.Logger,
 	config model.Config,
 	runtime model.RuntimeConfig,
-	queries *repository.Queries,
+	queries repository.Store,
 	ctx context.Context,
 	wg *sync.WaitGroup) (*OIDCService, error) {
 	// If not configured, skip init
