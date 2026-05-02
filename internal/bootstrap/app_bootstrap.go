@@ -215,6 +215,12 @@ func (app *BootstrapApp) Setup() error {
 		}
 
 		tlog.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
+		go func() {
+			// Ensure processes running as a different user can access the socket.
+			if err := os.Chmod(app.config.Server.SocketPath, 0770); err != nil {
+				tlog.App.Fatal().Err(err).Msg("Failed to update UNIX socket permissions")
+			}
+		}()
 		if err := router.RunUnix(app.config.Server.SocketPath); err != nil {
 			tlog.App.Fatal().Err(err).Msg("Failed to start server")
 		}
