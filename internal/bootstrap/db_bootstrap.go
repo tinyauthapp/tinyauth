@@ -75,5 +75,5 @@ func (app *BootstrapApp) setupSQLite(databasePath string) (repository.Store, err
 
 	app.db = db
 
-	return sqlite.New(db), nil
+	return sqlite.NewStore(sqlite.New(db)), nil
 }
