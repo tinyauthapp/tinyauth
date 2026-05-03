@@ -4,7 +4,8 @@ package config
 func NewDefaultConfiguration() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			Path: "./tinyauth.db",
+			Driver: "sqlite",
+			Path:   "./tinyauth.db",
 		},
 		Analytics: AnalyticsConfig{
 			Enabled: true,
@@ -95,7 +96,8 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	Path string `description:"The path to the database, including file name." yaml:"path"`
+	Driver string `description:"The database driver to use. Valid values: sqlite, memory." yaml:"driver"`
+	Path   string `description:"The path to the SQLite database, including file name. Only used when driver is sqlite." yaml:"path"`
 }
 
 type AnalyticsConfig struct {

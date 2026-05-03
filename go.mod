@@ -20,6 +20,7 @@ require (
 	github.com/weppos/publicsuffix-go v0.50.3
 	golang.org/x/crypto v0.50.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/tools v0.43.0
 	gotest.tools/v3 v3.5.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
@@ -124,6 +125,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect

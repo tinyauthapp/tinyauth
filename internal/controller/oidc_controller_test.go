@@ -12,10 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
@@ -848,14 +847,10 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
+	store := memory.New()
 
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
-	require.NoError(t, err)
-
-	queries := repository.New(db)
-	oidcService := service.NewOIDCService(oidcServiceCfg, queries)
-	err = oidcService.Init()
+	oidcService := service.NewOIDCService(oidcServiceCfg, store)
+	err := oidcService.Init()
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -877,9 +872,4 @@ func TestOIDCController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
-	})
 }

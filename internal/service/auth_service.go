@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -90,14 +89,14 @@ type AuthService struct {
 	loginMutex           sync.RWMutex
 	ldapGroupsMutex      sync.RWMutex
 	ldap                 *LdapService
-	queries              *repository.Queries
+	queries              repository.Store
 	oauthBroker          *OAuthBrokerService
 	lockdown             *Lockdown
 	lockdownCtx          context.Context
 	lockdownCancelFunc   context.CancelFunc
 }
 
-func NewAuthService(config AuthServiceConfig, ldap *LdapService, queries *repository.Queries, oauthBroker *OAuthBrokerService) *AuthService {
+func NewAuthService(config AuthServiceConfig, ldap *LdapService, queries repository.Store, oauthBroker *OAuthBrokerService) *AuthService {
 	return &AuthService{
 		config:               config,
 		loginAttempts:        make(map[string]*LoginAttempt),
@@ -411,7 +410,7 @@ func (auth *AuthService) GetSessionCookie(c *gin.Context) (repository.Session, e
 	session, err := auth.queries.GetSession(c, cookie)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return repository.Session{}, fmt.Errorf("session not found")
 		}
 		return repository.Session{}, err

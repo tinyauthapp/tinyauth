@@ -26,6 +26,12 @@ jobs:
       - name: Go dependencies
         run: go mod download
 
+      - name: Check codegen is up to date
+        run: |
+          go generate ./internal/repository/...
+          git diff --exit-code -- internal/repository/
+          git status --porcelain -- internal/repository/ | grep -q . && echo "untracked files in internal/repository/" && exit 1 || true
+
       - name: Install frontend dependencies
         run: |
           cd frontend
