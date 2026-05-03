@@ -66,5 +66,5 @@ func (app *BootstrapApp) setupSQLite(databasePath string) (repository.Store, err
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	return sqlite.New(db), nil
+	return sqlite.NewStore(sqlite.New(db)), nil
 }
