@@ -123,7 +123,7 @@ func (auth *AuthService) SearchUser(username string) config.UserSearch {
 	}
 
 	if auth.ldap.IsConfigured() {
-		userDN, err := auth.ldap.GetUserDN(username)
+		userDN, email, err := auth.ldap.GetUserInfo(username)
 
 		if err != nil {
 			tlog.App.Warn().Err(err).Str("username", username).Msg("Failed to search for user in LDAP")
@@ -135,6 +135,7 @@ func (auth *AuthService) SearchUser(username string) config.UserSearch {
 		return config.UserSearch{
 			Username: userDN,
 			Type:     "ldap",
+			Email:    email,
 		}
 	}
 

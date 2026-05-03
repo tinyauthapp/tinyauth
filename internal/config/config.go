@@ -268,6 +268,7 @@ type LdapUser struct {
 type UserSearch struct {
 	Username string
 	Type     string // local, ldap or unknown
+	Email    string
 }
 
 type UserContext struct {
