@@ -240,10 +240,15 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				return
 			}
 
+			email := utils.CompileUserEmail(basic.Username, m.config.CookieDomain)
+			if userSearch.Email != "" {
+				email = userSearch.Email
+			}
+
 			c.Set("context", &config.UserContext{
 				Username:    basic.Username,
 				Name:        utils.Capitalize(basic.Username),
-				Email:       utils.CompileUserEmail(basic.Username, m.config.CookieDomain),
+				Email:       email,
 				Provider:    "ldap",
 				IsLoggedIn:  true,
 				LdapGroups:  strings.Join(ldapUser.Groups, ","),
