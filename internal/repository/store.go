@@ -1,6 +1,12 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrNotFound is returned by Store methods when the requested record does not exist.
+var ErrNotFound = errors.New("not found")
 
 // Store is the interface that all storage drivers must implement.
 // The sqlc-generated *Queries struct satisfies this interface for SQLite.

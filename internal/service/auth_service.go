@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -417,7 +416,7 @@ func (auth *AuthService) GetSession(ctx context.Context, uuid string) (*reposito
 	session, err := auth.queries.GetSession(ctx, uuid)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return nil, errors.New("session not found")
 		}
 		return nil, err

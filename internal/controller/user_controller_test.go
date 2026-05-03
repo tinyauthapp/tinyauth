@@ -14,10 +14,10 @@ import (
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -73,8 +73,7 @@ func TestUserController(t *testing.T) {
 		})
 	}
 
-	store, err := bootstrap.NewSQLiteStore(cfg.Database.Path)
-	require.NoError(t, err)
+	store := memory.New()
 
 	type testCase struct {
 		description string
@@ -442,5 +441,4 @@ func TestUserController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-}
 }
