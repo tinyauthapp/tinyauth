@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
@@ -847,11 +847,10 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	store, err := bootstrap.NewSQLiteStore(path.Join(tempDir, "tinyauth.db"))
-	require.NoError(t, err)
+	store := memory.New()
 
 	oidcService := service.NewOIDCService(oidcServiceCfg, store)
-	err = oidcService.Init()
+	err := oidcService.Init()
 	require.NoError(t, err)
 
 	for _, test := range tests {

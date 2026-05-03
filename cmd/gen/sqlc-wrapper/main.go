@@ -449,18 +449,18 @@ func buildBody(m methodInfo) string {
 
 	// no repo-typed result → direct return
 	if len(m.Results) == 0 || m.Results[0].RepoType == "" {
-		return "\treturn " + call + "\n"
+		return "\treturn mapErr(" + call + ")\n"
 	}
 
 	r := m.Results[0]
 	if r.IsSlice {
 		return fmt.Sprintf(
-			"\trows, err := %s\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tout := make([]%s, len(rows))\n\tfor i, row := range rows {\n\t\tout[i] = %s(row)\n\t}\n\treturn out, nil\n",
+			"\trows, err := %s\n\tif err != nil {\n\t\treturn nil, mapErr(err)\n\t}\n\tout := make([]%s, len(rows))\n\tfor i, row := range rows {\n\t\tout[i] = %s(row)\n\t}\n\treturn out, nil\n",
 			call, r.RepoType, converterFn(r.TypeStr),
 		)
 	}
 	return fmt.Sprintf(
-		"\tr, err := %s\n\tif err != nil {\n\t\treturn %s{}, err\n\t}\n\treturn %s(r), nil\n",
+		"\tr, err := %s\n\tif err != nil {\n\t\treturn %s{}, mapErr(err)\n\t}\n\treturn %s(r), nil\n",
 		call, r.RepoType, converterFn(r.TypeStr),
 	)
 }
@@ -477,6 +477,8 @@ package {{.PkgName}}
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"{{.RepoPkg}}"
 )
@@ -489,6 +491,22 @@ type Store struct {
 // NewStore wraps a *Queries to satisfy repository.Store.
 func NewStore(q *Queries) repository.Store {
 	return &Store{q: q}
+}
+
+var errMap = []struct {
+	from error
+	to   error
+}{
+	{sql.ErrNoRows, repository.ErrNotFound},
+}
+
+func mapErr(err error) error {
+	for _, e := range errMap {
+		if errors.Is(err, e.from) {
+			return e.to
+		}
+	}
+	return err
 }
 
 {{range .ModelTypes -}}

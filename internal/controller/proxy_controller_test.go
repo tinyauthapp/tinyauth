@@ -2,13 +2,12 @@ package controller_test
 
 import (
 	"net/http/httptest"
-	"path"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,6 @@ import (
 
 func TestProxyController(t *testing.T) {
 	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
 
 	authServiceCfg := service.AuthServiceConfig{
 		Users: []config.User{
@@ -392,11 +390,10 @@ func TestProxyController(t *testing.T) {
 
 	oauthBrokerCfgs := make(map[string]config.OAuthServiceConfig)
 
-	store, err := bootstrap.NewSQLiteStore(path.Join(tempDir, "tinyauth.db"))
-	require.NoError(t, err)
+	store := memory.New()
 
 	docker := service.NewDockerService()
-	err = docker.Init()
+	err := docker.Init()
 	require.NoError(t, err)
 
 	ldap := service.NewLdapService(service.LdapServiceConfig{})

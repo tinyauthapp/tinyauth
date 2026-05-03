@@ -8,6 +8,7 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/assets"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/repository/sqlite"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -17,14 +18,14 @@ import (
 )
 
 func (app *BootstrapApp) SetupStore() (repository.Store, error) {
-	return app.setupSQLite(app.config.Database.Path)
-}
-
-// NewSQLiteStore opens a SQLite database at the given path, runs migrations, and returns a Store.
-// Useful for testing or when constructing a store outside of a BootstrapApp.
-func NewSQLiteStore(databasePath string) (repository.Store, error) {
-	app := &BootstrapApp{}
-	return app.setupSQLite(databasePath)
+	switch app.config.Database.Driver {
+	case "memory":
+		return memory.New(), nil
+	case "sqlite", "":
+		return app.setupSQLite(app.config.Database.Path)
+	default:
+		return nil, fmt.Errorf("unknown database driver %q: valid values are sqlite, memory", app.config.Database.Driver)
+	}
 }
 
 func (app *BootstrapApp) setupSQLite(databasePath string) (repository.Store, error) {
