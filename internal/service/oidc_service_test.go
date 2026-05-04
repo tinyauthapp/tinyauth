@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 )
 
 func newTestUser() repository.OidcUserinfo {
-	addr := config.AddressClaim{
+	addr := model.AddressClaim{
 		Formatted:     "123 Main St",
 		StreetAddress: "123 Main St",
 		Locality:      "Springfield",
