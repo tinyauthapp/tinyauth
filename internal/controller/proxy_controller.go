@@ -99,16 +99,12 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if acls == nil {
-		acls = &model.App{}
-	}
-
 	tlog.App.Trace().Interface("acls", acls).Msg("ACLs for resource")
 
 	clientIP := c.ClientIP()
 
 	if controller.auth.IsBypassedIP(clientIP, acls) {
-		controller.setHeaders(c, *acls)
+		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
 			"status":  200,
 			"message": "Authenticated",
@@ -126,7 +122,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	if !authEnabled {
 		tlog.App.Debug().Msg("Authentication disabled for resource, allowing access")
-		controller.setHeaders(c, *acls)
+		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
 			"status":  200,
 			"message": "Authenticated",
@@ -267,7 +263,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			c.Header("Remote-Sub", utils.SanitizeHeader(userContext.OAuth.Sub))
 		}
 
-		controller.setHeaders(c, *acls)
+		controller.setHeaders(c, acls)
 
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -300,8 +296,12 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
-func (controller *ProxyController) setHeaders(c *gin.Context, acls model.App) {
+func (controller *ProxyController) setHeaders(c *gin.Context, acls *model.App) {
 	c.Header("Authorization", c.Request.Header.Get("Authorization"))
+
+	if acls == nil {
+		return
+	}
 
 	headers := utils.ParseHeaders(acls.Response.Headers)
 

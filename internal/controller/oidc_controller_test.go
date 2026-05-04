@@ -12,14 +12,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOIDCController(t *testing.T) {
@@ -27,7 +27,7 @@ func TestOIDCController(t *testing.T) {
 	tempDir := t.TempDir()
 
 	oidcServiceCfg := service.OIDCServiceConfig{
-		Clients: map[string]config.OIDCClientConfig{
+		Clients: map[string]model.OIDCClientConfig{
 			"test": {
 				ClientID:            "some-client-id",
 				ClientSecret:        "some-client-secret",
@@ -44,12 +44,16 @@ func TestOIDCController(t *testing.T) {
 	controllerCfg := controller.OIDCControllerConfig{}
 
 	simpleCtx := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:   "test",
-			Name:       "Test User",
-			Email:      "test@example.com",
-			IsLoggedIn: true,
-			Provider:   "local",
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "test",
+					Name:     "Test User",
+					Email:    "test@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
@@ -848,7 +852,7 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
+	app := bootstrap.NewBootstrapApp(model.Config{})
 
 	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
 	require.NoError(t, err)
