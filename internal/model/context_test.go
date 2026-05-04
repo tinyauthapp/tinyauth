@@ -11,13 +11,6 @@ import (
 )
 
 func TestContext(t *testing.T) {
-	errMsg := func(err error) string {
-		if err == nil {
-			return ""
-		}
-		return err.Error()
-	}
-
 	newGinCtx := func(value any, set bool) *gin.Context {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		if set {
@@ -104,9 +97,9 @@ func TestContext(t *testing.T) {
 					Username: "dave", Provider: "github",
 					OAuthGroups: "devs,admins", OAuthSub: "sub-123", OAuthName: "GitHub",
 				})
-				return [4]any{got.Provider, got.OAuth.ID, got.OAuth.Sub, got.OAuth.DisplayName}
+				return [5]any{got.Provider, got.OAuth.ID, got.OAuth.Sub, got.OAuth.DisplayName, got.OAuth.Groups}
 			},
-			expected: [4]any{model.ProviderOAuth, "github", "sub-123", "GitHub"},
+			expected: [5]any{model.ProviderOAuth, "github", "sub-123", "GitHub", []string{"devs", "admins"}},
 		},
 		{
 			description: "Local getters return BaseContext fields",
@@ -240,7 +233,7 @@ func TestContext(t *testing.T) {
 			context:     &model.UserContext{},
 			run: func(c *model.UserContext) any {
 				_, err := c.NewFromGin(newGinCtx(nil, false))
-				return errMsg(err)
+				return err.Error()
 			},
 			expected: "failed to get user context",
 		},
@@ -249,7 +242,7 @@ func TestContext(t *testing.T) {
 			context:     &model.UserContext{},
 			run: func(c *model.UserContext) any {
 				_, err := c.NewFromGin(newGinCtx("not a user context", true))
-				return errMsg(err)
+				return err.Error()
 			},
 			expected: "invalid user context type",
 		},
