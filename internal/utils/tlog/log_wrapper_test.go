@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/rs/zerolog"
@@ -13,13 +13,13 @@ import (
 )
 
 func TestNewLogger(t *testing.T) {
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "debug",
 		Json:  true,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true, Level: "info"},
-			App:   config.LogStreamConfig{Enabled: true, Level: ""},
-			Audit: config.LogStreamConfig{Enabled: false, Level: ""},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true, Level: "info"},
+			App:   model.LogStreamConfig{Enabled: true, Level: ""},
+			Audit: model.LogStreamConfig{Enabled: false, Level: ""},
 		},
 	}
 
@@ -47,13 +47,13 @@ func TestLoggerInit(t *testing.T) {
 }
 
 func TestLoggerWithDisabledStreams(t *testing.T) {
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "info",
 		Json:  false,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: false},
-			App:   config.LogStreamConfig{Enabled: false},
-			Audit: config.LogStreamConfig{Enabled: false},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: false},
+			App:   model.LogStreamConfig{Enabled: false},
+			Audit: model.LogStreamConfig{Enabled: false},
 		},
 	}
 
@@ -67,13 +67,13 @@ func TestLoggerWithDisabledStreams(t *testing.T) {
 func TestLogStreamField(t *testing.T) {
 	var buf bytes.Buffer
 
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "info",
 		Json:  true,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true},
-			App:   config.LogStreamConfig{Enabled: true},
-			Audit: config.LogStreamConfig{Enabled: true},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true},
+			App:   model.LogStreamConfig{Enabled: true},
+			Audit: model.LogStreamConfig{Enabled: true},
 		},
 	}
 

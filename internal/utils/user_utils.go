@@ -37,7 +37,7 @@ func GetUsers(usersCfg []string, usersPath string, userAttributes map[string]mod
 	var usersStr []string
 
 	if len(usersCfg) == 0 && usersPath == "" {
-		return &[]model.LocalUser{}, nil
+		return nil, nil
 	}
 
 	if len(usersCfg) > 0 {
