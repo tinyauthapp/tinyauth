@@ -55,24 +55,24 @@ func TestParseSecretFile(t *testing.T) {
 	assert.Equal(t, "", utils.ParseSecretFile(content))
 }
 
-func TestGetBasicAuth(t *testing.T) {
+func TestEncodeBasicAuth(t *testing.T) {
 	// Normal case
 	username := "user"
 	password := "pass"
 	expected := "dXNlcjpwYXNz" // base64 of "user:pass"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 
 	// Empty username
 	username = ""
 	password = "pass"
 	expected = "OnBhc3M=" // base64 of ":pass"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 
 	// Empty password
 	username = "user"
 	password = ""
 	expected = "dXNlcjo=" // base64 of "user:"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 }
 
 func TestFilterIP(t *testing.T) {

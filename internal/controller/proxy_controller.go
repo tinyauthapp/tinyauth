@@ -314,7 +314,7 @@ func (controller *ProxyController) setHeaders(c *gin.Context, acls model.App) {
 
 	if acls.Response.BasicAuth.Username != "" && basicPassword != "" {
 		tlog.App.Debug().Str("username", acls.Response.BasicAuth.Username).Msg("Setting basic auth header")
-		c.Header("Authorization", fmt.Sprintf("Basic %s", utils.GetBasicAuth(acls.Response.BasicAuth.Username, basicPassword)))
+		c.Header("Authorization", fmt.Sprintf("Basic %s", utils.EncodeBasicAuth(acls.Response.BasicAuth.Username, basicPassword)))
 	}
 }
 
