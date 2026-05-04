@@ -51,19 +51,11 @@ func (docker *DockerService) Init() error {
 }
 
 func (docker *DockerService) getContainers() ([]container.Summary, error) {
-	containers, err := docker.client.ContainerList(docker.context, container.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return containers, nil
+	return docker.client.ContainerList(docker.context, container.ListOptions{})
 }
 
 func (docker *DockerService) inspectContainer(containerId string) (container.InspectResponse, error) {
-	inspect, err := docker.client.ContainerInspect(docker.context, containerId)
-	if err != nil {
-		return container.InspectResponse{}, err
-	}
-	return inspect, nil
+	return docker.client.ContainerInspect(docker.context, containerId)
 }
 
 func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {

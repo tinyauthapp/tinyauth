@@ -107,7 +107,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 
-	if controller.auth.IsBypassedIP(&acls.IP, clientIP) {
+	if controller.auth.IsBypassedIP(clientIP, acls) {
 		controller.setHeaders(c, *acls)
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -116,7 +116,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, &acls.Path)
+	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, acls)
 
 	if err != nil {
 		tlog.App.Error().Err(err).Msg("Failed to check if auth is enabled for resource")
@@ -134,7 +134,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.CheckIP(&acls.IP, clientIP) {
+	if !controller.auth.CheckIP(clientIP, acls) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
 			IP:       clientIP,
@@ -213,9 +213,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			var groupOK bool
 
 			if userContext.IsOAuth() {
-				groupOK = controller.auth.IsInOAuthGroup(c, *userContext, acls.OAuth.Groups)
+				groupOK = controller.auth.IsInOAuthGroup(c, *userContext, acls)
 			} else {
-				groupOK = controller.auth.IsInLDAPGroup(c, *userContext, acls.LDAP.Groups)
+				groupOK = controller.auth.IsInLDAPGroup(c, *userContext, acls)
 			}
 
 			if !groupOK {

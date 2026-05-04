@@ -464,8 +464,8 @@ func (auth *AuthService) IsUserAllowed(c *gin.Context, context model.UserContext
 	return utils.CheckFilter(acls.Users.Allow, context.GetUsername())
 }
 
-func (auth *AuthService) IsInOAuthGroup(c *gin.Context, context model.UserContext, requiredGroups string) bool {
-	if requiredGroups == "" {
+func (auth *AuthService) IsInOAuthGroup(c *gin.Context, context model.UserContext, acls *model.App) bool {
+	if acls == nil {
 		return true
 	}
 
@@ -480,8 +480,8 @@ func (auth *AuthService) IsInOAuthGroup(c *gin.Context, context model.UserContex
 	}
 
 	for _, userGroup := range context.OAuth.Groups {
-		if utils.CheckFilter(requiredGroups, strings.TrimSpace(userGroup)) {
-			tlog.App.Trace().Str("group", userGroup).Str("required", requiredGroups).Msg("User group matched")
+		if utils.CheckFilter(acls.OAuth.Groups, strings.TrimSpace(userGroup)) {
+			tlog.App.Trace().Str("group", userGroup).Str("required", acls.OAuth.Groups).Msg("User group matched")
 			return true
 		}
 	}
@@ -490,8 +490,8 @@ func (auth *AuthService) IsInOAuthGroup(c *gin.Context, context model.UserContex
 	return false
 }
 
-func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext, requiredGroups string) bool {
-	if requiredGroups == "" {
+func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext, acls *model.App) bool {
+	if acls == nil {
 		return true
 	}
 
@@ -501,8 +501,8 @@ func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext
 	}
 
 	for _, userGroup := range context.LDAP.Groups {
-		if utils.CheckFilter(requiredGroups, strings.TrimSpace(userGroup)) {
-			tlog.App.Trace().Str("group", userGroup).Str("required", requiredGroups).Msg("User group matched")
+		if utils.CheckFilter(acls.LDAP.Groups, strings.TrimSpace(userGroup)) {
+			tlog.App.Trace().Str("group", userGroup).Str("required", acls.LDAP.Groups).Msg("User group matched")
 			return true
 		}
 	}
@@ -511,14 +511,14 @@ func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext
 	return false
 }
 
-func (auth *AuthService) IsAuthEnabled(uri string, path *model.AppPath) (bool, error) {
-	if path == nil {
+func (auth *AuthService) IsAuthEnabled(uri string, acls *model.App) (bool, error) {
+	if acls == nil {
 		return true, nil
 	}
 
 	// Check for block list
-	if path.Block != "" {
-		regex, err := regexp.Compile(path.Block)
+	if acls.Path.Block != "" {
+		regex, err := regexp.Compile(acls.Path.Block)
 
 		if err != nil {
 			return true, err
@@ -530,8 +530,8 @@ func (auth *AuthService) IsAuthEnabled(uri string, path *model.AppPath) (bool, e
 	}
 
 	// Check for allow list
-	if path.Allow != "" {
-		regex, err := regexp.Compile(path.Allow)
+	if acls.Path.Allow != "" {
+		regex, err := regexp.Compile(acls.Path.Allow)
 
 		if err != nil {
 			return true, err
@@ -545,29 +545,14 @@ func (auth *AuthService) IsAuthEnabled(uri string, path *model.AppPath) (bool, e
 	return true, nil
 }
 
-// local user is used only as a medium to pass the basic auth credentials, user can be ldap too
-func (auth *AuthService) GetBasicAuth(req *http.Request) (*model.LocalUser, error) {
-	if req == nil {
-		return nil, errors.New("request is nil")
-	}
-	username, password, ok := req.BasicAuth()
-	if !ok {
-		return nil, errors.New("no basic auth credentials provided")
-	}
-	return &model.LocalUser{
-		Username: username,
-		Password: password,
-	}, nil
-}
-
-func (auth *AuthService) CheckIP(acls *model.AppIP, ip string) bool {
+func (auth *AuthService) CheckIP(ip string, acls *model.App) bool {
 	if acls == nil {
-		acls = &model.AppIP{}
+		return true
 	}
 
 	// Merge the global and app IP filter
-	blockedIps := append(auth.config.IP.Block, acls.Block...)
-	allowedIPs := append(auth.config.IP.Allow, acls.Allow...)
+	blockedIps := append(auth.config.IP.Block, acls.IP.Block...)
+	allowedIPs := append(auth.config.IP.Allow, acls.IP.Allow...)
 
 	for _, blocked := range blockedIps {
 		res, err := utils.FilterIP(blocked, ip)
@@ -602,12 +587,12 @@ func (auth *AuthService) CheckIP(acls *model.AppIP, ip string) bool {
 	return true
 }
 
-func (auth *AuthService) IsBypassedIP(acls *model.AppIP, ip string) bool {
+func (auth *AuthService) IsBypassedIP(ip string, acls *model.App) bool {
 	if acls == nil {
 		return false
 	}
 
-	for _, bypassed := range acls.Bypass {
+	for _, bypassed := range acls.IP.Bypass {
 		res, err := utils.FilterIP(bypassed, ip)
 		if err != nil {
 			tlog.App.Warn().Err(err).Str("item", bypassed).Msg("Invalid IP/CIDR in bypass list")

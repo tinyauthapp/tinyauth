@@ -89,7 +89,7 @@ func (k *KubernetesService) removeIngress(namespace, name string) {
 	}
 }
 
-func (k *KubernetesService) getByDomain(domain string) (*model.App, bool) {
+func (k *KubernetesService) getByDomain(domain string) *model.App {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
@@ -97,15 +97,15 @@ func (k *KubernetesService) getByDomain(domain string) (*model.App, bool) {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
 			for _, app := range apps {
 				if app.domain == domain && app.appName == appKey.appName {
-					return &app.app, true
+					return &app.app
 				}
 			}
 		}
 	}
-	return nil, false
+	return nil
 }
 
-func (k *KubernetesService) getByAppName(appName string) (*model.App, bool) {
+func (k *KubernetesService) getByAppName(appName string) *model.App {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
@@ -113,12 +113,12 @@ func (k *KubernetesService) getByAppName(appName string) (*model.App, bool) {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
 			for _, app := range apps {
 				if app.appName == appName {
-					return &app.app, true
+					return &app.app
 				}
 			}
 		}
 	}
-	return nil, false
+	return nil
 }
 
 func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
@@ -287,12 +287,14 @@ func (k *KubernetesService) GetLabels(appDomain string) (*model.App, error) {
 	}
 
 	// First check cache
-	if app, found := k.getByDomain(appDomain); found {
+	app := k.getByDomain(appDomain)
+	if app != nil {
 		tlog.App.Debug().Str("domain", appDomain).Msg("Found labels in cache by domain")
 		return app, nil
 	}
 	appName := strings.SplitN(appDomain, ".", 2)[0]
-	if app, found := k.getByAppName(appName); found {
+	app = k.getByAppName(appName)
+	if app != nil {
 		tlog.App.Debug().Str("domain", appDomain).Str("appName", appName).Msg("Found labels in cache by app name")
 		return app, nil
 	}

@@ -86,10 +86,10 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		basic, err := m.auth.GetBasicAuth(c.Request)
+		username, password, ok := c.Request.BasicAuth()
 
-		if err == nil {
-			userContext, headers, err := m.basicAuth(c.Request.Context(), basic)
+		if ok {
+			userContext, headers, err := m.basicAuth(username, password)
 
 			if err != nil {
 				tlog.App.Error().Msgf("Error authenticating basic auth: %v", err)
@@ -188,39 +188,39 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 	return userContext, cookie, nil
 }
 
-func (m *ContextMiddleware) basicAuth(ctx context.Context, basic *model.LocalUser) (*model.UserContext, map[string]string, error) {
+func (m *ContextMiddleware) basicAuth(username string, password string) (*model.UserContext, map[string]string, error) {
 	headers := make(map[string]string)
 	userContext := new(model.UserContext)
-	locked, remaining := m.auth.IsAccountLocked(basic.Username)
+	locked, remaining := m.auth.IsAccountLocked(username)
 
 	if locked {
-		tlog.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", basic.Username, remaining)
+		tlog.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
 		headers["x-tinyauth-lock-locked"] = "true"
 		headers["x-tinyauth-lock-reset"] = time.Now().Add(time.Duration(remaining) * time.Second).Format(time.RFC3339)
 		return nil, headers, nil
 	}
 
-	search, err := m.auth.SearchUser(basic.Username)
+	search, err := m.auth.SearchUser(username)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("error searching for user: %w", err)
 	}
 
-	err = m.auth.CheckUserPassword(*search, basic.Password)
+	err = m.auth.CheckUserPassword(*search, password)
 
 	if err != nil {
-		m.auth.RecordLoginAttempt(basic.Username, false)
+		m.auth.RecordLoginAttempt(username, false)
 		return nil, nil, fmt.Errorf("invalid password for basic auth user: %w", err)
 	}
 
-	m.auth.RecordLoginAttempt(basic.Username, true)
+	m.auth.RecordLoginAttempt(username, true)
 
 	switch search.Type {
 	case model.UserLocal:
-		user := m.auth.GetLocalUser(basic.Username)
+		user := m.auth.GetLocalUser(username)
 
 		if user.TOTPSecret != "" {
-			return nil, nil, fmt.Errorf("user with totp not allowed to login via basic auth: %s", basic.Username)
+			return nil, nil, fmt.Errorf("user with totp not allowed to login via basic auth: %s", username)
 		}
 
 		userContext.Local = &model.LocalContext{
@@ -233,7 +233,7 @@ func (m *ContextMiddleware) basicAuth(ctx context.Context, basic *model.LocalUse
 		}
 		userContext.Provider = model.ProviderLocal
 	case model.UserLDAP:
-		user, err := m.auth.GetLDAPUser(basic.Username)
+		user, err := m.auth.GetLDAPUser(username)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
@@ -241,9 +241,9 @@ func (m *ContextMiddleware) basicAuth(ctx context.Context, basic *model.LocalUse
 
 		userContext.LDAP = &model.LDAPContext{
 			BaseContext: model.BaseContext{
-				Username: basic.Username,
-				Name:     utils.Capitalize(basic.Username),
-				Email:    utils.CompileUserEmail(basic.Username, m.config.CookieDomain),
+				Username: username,
+				Name:     utils.Capitalize(username),
+				Email:    utils.CompileUserEmail(username, m.config.CookieDomain),
 			},
 			Groups: user.Groups,
 		}

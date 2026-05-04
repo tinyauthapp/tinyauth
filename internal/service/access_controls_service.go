@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -28,26 +27,26 @@ func (acls *AccessControlsService) Init() error {
 	return nil // No initialization needed
 }
 
-func (acls *AccessControlsService) lookupStaticACLs(domain string) (*model.App, error) {
+func (acls *AccessControlsService) lookupStaticACLs(domain string) *model.App {
 	for app, config := range acls.static {
 		if config.Config.Domain == domain {
 			tlog.App.Debug().Str("name", app).Msg("Found matching container by domain")
-			return &config, nil
+			return &config
 		}
 
 		if strings.SplitN(domain, ".", 2)[0] == app {
 			tlog.App.Debug().Str("name", app).Msg("Found matching container by app name")
-			return &config, nil
+			return &config
 		}
 	}
-	return nil, errors.New("no results")
+	return nil
 }
 
 func (acls *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {
 	// First check in the static config
-	app, err := acls.lookupStaticACLs(domain)
+	app := acls.lookupStaticACLs(domain)
 
-	if err == nil {
+	if app != nil {
 		tlog.App.Debug().Msg("Using ACls from static configuration")
 		return app, nil
 	}
