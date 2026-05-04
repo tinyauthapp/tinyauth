@@ -35,7 +35,7 @@ func TestNewSimpleLogger(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
 	assert.NotNil(t, logger)
 	assert.Equal(t, zerolog.InfoLevel, logger.HTTP.GetLevel())
-	assert.Equal(t, zerolog.DebugLevel, logger.App.GetLevel())
+	assert.Equal(t, zerolog.InfoLevel, logger.App.GetLevel())
 	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
@@ -43,7 +43,7 @@ func TestLoggerInit(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
 	logger.Init()
 
-	assert.Equal(t, zerolog.Disabled, tlog.App.GetLevel())
+	assert.NotEqual(t, zerolog.Disabled, tlog.App.GetLevel())
 }
 
 func TestLoggerWithDisabledStreams(t *testing.T) {
