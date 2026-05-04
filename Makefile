@@ -37,9 +37,9 @@ webui: clean-webui
 # Build the binary
 binary: webui
 	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "-s -w \
-	-X github.com/tinyauthapp/tinyauth/internal/config.Version=${TAG_NAME} \
-	-X github.com/tinyauthapp/tinyauth/internal/config.CommitHash=${COMMIT_HASH} \
-	-X github.com/tinyauthapp/tinyauth/internal/config.BuildTimestamp=${BUILD_TIMESTAMP}" \
+	-X github.com/tinyauthapp/tinyauth/internal/model.Version=${TAG_NAME} \
+	-X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
+	-X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" \
 	-o ${BIN_NAME} ./cmd/tinyauth
 
 # Build for amd64
