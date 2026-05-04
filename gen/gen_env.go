@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 )
 
 type EnvEntry struct {
@@ -20,7 +20,7 @@ type EnvEntry struct {
 }
 
 func generateExampleEnv() {
-	cfg := config.NewDefaultConfiguration()
+	cfg := model.NewDefaultConfiguration()
 	entries := make([]EnvEntry, 0)
 
 	root := reflect.TypeOf(cfg).Elem()

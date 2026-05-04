@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 )
 
 type MarkdownEntry struct {
@@ -21,7 +21,7 @@ type MarkdownEntry struct {
 }
 
 func generateMarkdown() {
-	cfg := config.NewDefaultConfiguration()
+	cfg := model.NewDefaultConfiguration()
 	entries := make([]MarkdownEntry, 0)
 
 	root := reflect.TypeOf(cfg).Elem()
