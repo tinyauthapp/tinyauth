@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"os"
+
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
@@ -10,6 +12,7 @@ type Services struct {
 	accessControlService *service.AccessControlsService
 	authService          *service.AuthService
 	dockerService        *service.DockerService
+	kubernetesService    *service.KubernetesService
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
@@ -38,17 +41,34 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 
 	services.ldapService = ldapService
 
-	dockerService := service.NewDockerService()
+	var labelProvider service.LabelProvider
+	var dockerService *service.DockerService
+	var kubernetesService *service.KubernetesService
 
-	err = dockerService.Init()
+	useKubernetes := app.config.LabelProvider == "kubernetes" ||
+		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
 
-	if err != nil {
-		return Services{}, err
+	if useKubernetes {
+		tlog.App.Debug().Msg("Using Kubernetes label provider")
+		kubernetesService = service.NewKubernetesService()
+		err = kubernetesService.Init()
+		if err != nil {
+			return Services{}, err
+		}
+		services.kubernetesService = kubernetesService
+		labelProvider = kubernetesService
+	} else {
+		tlog.App.Debug().Msg("Using Docker label provider")
+		dockerService = service.NewDockerService()
+		err = dockerService.Init()
+		if err != nil {
+			return Services{}, err
+		}
+		services.dockerService = dockerService
+		labelProvider = dockerService
 	}
 
-	services.dockerService = dockerService
-
-	accessControlsService := service.NewAccessControlsService(dockerService, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(labelProvider, app.config.Apps)
 
 	err = accessControlsService.Init()
 
@@ -81,7 +101,7 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 		IP:                 app.config.Auth.IP,
 		LDAPGroupsCacheTTL: app.config.Ldap.GroupCacheTTL,
 		SubdomainsEnabled:  app.config.Auth.SubdomainsEnabled,
-	}, dockerService, services.ldapService, queries, services.oauthBrokerService)
+	}, services.ldapService, queries, services.oauthBrokerService)
 
 	err = authService.Init()
 

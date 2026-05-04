@@ -412,7 +412,7 @@ func TestProxyController(t *testing.T) {
 	err = broker.Init()
 	require.NoError(t, err)
 
-	authService := service.NewAuthService(authServiceCfg, docker, ldap, queries, broker)
+	authService := service.NewAuthService(authServiceCfg, ldap, queries, broker)
 	err = authService.Init()
 	require.NoError(t, err)
 

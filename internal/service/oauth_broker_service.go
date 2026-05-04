@@ -4,7 +4,8 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
-	"golang.org/x/exp/slices"
+	"slices"
+
 	"golang.org/x/oauth2"
 )
 

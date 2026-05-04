@@ -8,15 +8,19 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
-type AccessControlsService struct {
-	docker *DockerService
-	static map[string]config.App
+type LabelProvider interface {
+	GetLabels(appDomain string) (config.App, error)
 }
 
-func NewAccessControlsService(docker *DockerService, static map[string]config.App) *AccessControlsService {
+type AccessControlsService struct {
+	labelProvider LabelProvider
+	static        map[string]config.App
+}
+
+func NewAccessControlsService(labelProvider LabelProvider, static map[string]config.App) *AccessControlsService {
 	return &AccessControlsService{
-		docker: docker,
-		static: static,
+		labelProvider: labelProvider,
+		static:        static,
 	}
 }
 
@@ -48,7 +52,7 @@ func (acls *AccessControlsService) GetAccessControls(domain string) (config.App,
 		return app, nil
 	}
 
-	// Fallback to Docker labels
-	tlog.App.Debug().Msg("Falling back to Docker labels for ACLs")
-	return acls.docker.GetLabels(domain)
+	// Fallback to label provider
+	tlog.App.Debug().Msg("Falling back to label provider for ACLs")
+	return acls.labelProvider.GetLabels(domain)
 }

@@ -15,10 +15,11 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
+	"slices"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/exp/slices"
 	"golang.org/x/oauth2"
 )
 
@@ -83,7 +84,6 @@ type AuthServiceConfig struct {
 
 type AuthService struct {
 	config               AuthServiceConfig
-	docker               *DockerService
 	loginAttempts        map[string]*LoginAttempt
 	ldapGroupsCache      map[string]*LdapGroupsCache
 	oauthPendingSessions map[string]*OAuthPendingSession
@@ -98,17 +98,16 @@ type AuthService struct {
 	lockdownCancelFunc   context.CancelFunc
 }
 
-func NewAuthService(config AuthServiceConfig, docker *DockerService, ldap *LdapService, queries *repository.Queries, oauthBroker *OAuthBrokerService) *AuthService {
+func NewAuthService(config AuthServiceConfig, ldap *LdapService, queries *repository.Queries, oauthBroker *OAuthBrokerService) *AuthService {
 	return &AuthService{
 		config:               config,
-		docker:               docker,
 		loginAttempts:        make(map[string]*LoginAttempt),
 		ldapGroupsCache:      make(map[string]*LdapGroupsCache),
 		oauthPendingSessions: make(map[string]*OAuthPendingSession),
 		ldap:                 ldap,
 		queries:              queries,
 		oauthBroker:          oauthBroker,
-	}
+}
 }
 
 func (auth *AuthService) Init() error {
