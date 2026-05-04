@@ -3,10 +3,9 @@ package decoders_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestDecodeLabels(t *testing.T) {
@@ -64,6 +63,6 @@ func TestDecodeLabels(t *testing.T) {
 
 	// Test
 	result, err := decoders.DecodeLabels[model.Apps](test, "apps")
-	assert.NilError(t, err)
-	assert.DeepEqual(t, expected, result)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }

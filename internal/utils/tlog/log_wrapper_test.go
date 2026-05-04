@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/rs/zerolog"
-	"gotest.tools/v3/assert"
 )
 
 func TestNewLogger(t *testing.T) {
@@ -25,25 +25,25 @@ func TestNewLogger(t *testing.T) {
 
 	logger := tlog.NewLogger(cfg)
 
-	assert.Assert(t, logger != nil)
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.DebugLevel)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.NotNil(t, logger)
+	assert.Equal(t, zerolog.InfoLevel, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.DebugLevel, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestNewSimpleLogger(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
-	assert.Assert(t, logger != nil)
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.NotNil(t, logger)
+	assert.Equal(t, zerolog.InfoLevel, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.DebugLevel, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestLoggerInit(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
 	logger.Init()
 
-	assert.Assert(t, tlog.App.GetLevel() != zerolog.Disabled)
+	assert.Equal(t, zerolog.Disabled, tlog.App.GetLevel())
 }
 
 func TestLoggerWithDisabledStreams(t *testing.T) {
@@ -59,9 +59,9 @@ func TestLoggerWithDisabledStreams(t *testing.T) {
 
 	logger := tlog.NewLogger(cfg)
 
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.Disabled)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.Disabled)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.Equal(t, zerolog.Disabled, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestLogStreamField(t *testing.T) {
@@ -86,7 +86,7 @@ func TestLogStreamField(t *testing.T) {
 
 	var logEntry map[string]interface{}
 	err := json.Unmarshal(buf.Bytes(), &logEntry)
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, "http", logEntry["log_stream"])
 	assert.Equal(t, "test message", logEntry["message"])
