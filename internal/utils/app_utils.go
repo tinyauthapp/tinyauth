@@ -49,6 +49,15 @@ func GetCookieDomain(u string) (string, error) {
 	return domain, nil
 }
 
+func GetStandaloneCookieDomain(u string) (string, error) {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return "", err
+	}
+
+	return parsed.Hostname(), nil
+}
+
 func ParseFileToLine(content string) string {
 	lines := strings.Split(content, "\n")
 	users := make([]string, 0)

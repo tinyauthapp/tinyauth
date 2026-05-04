@@ -83,6 +83,7 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 		RedirectCookieName:     app.context.redirectCookieName,
 		CookieDomain:           app.context.cookieDomain,
 		OAuthSessionCookieName: app.context.oauthSessionCookieName,
+		SubdomainsEnabled:      app.config.Auth.SubdomainsEnabled,
 	}, apiRouter, app.services.authService)
 
 	oauthController.SetupRoutes()

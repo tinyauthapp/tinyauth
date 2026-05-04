@@ -79,6 +79,7 @@ type AuthServiceConfig struct {
 	SessionCookieName  string
 	IP                 config.IPConfig
 	LDAPGroupsCacheTTL int
+	SubdomainsEnabled  bool
 }
 
 type AuthService struct {
@@ -326,7 +327,7 @@ func (auth *AuthService) CreateSessionCookie(c *gin.Context, data *repository.Se
 		return err
 	}
 
-	c.SetCookie(auth.config.SessionCookieName, session.UUID, expiry, "/", fmt.Sprintf(".%s", auth.config.CookieDomain), auth.config.SecureCookie, true)
+	c.SetCookie(auth.config.SessionCookieName, session.UUID, expiry, "/", auth.getCookieDomain(), auth.config.SecureCookie, true)
 
 	return nil
 }
@@ -377,7 +378,7 @@ func (auth *AuthService) RefreshSessionCookie(c *gin.Context) error {
 		return err
 	}
 
-	c.SetCookie(auth.config.SessionCookieName, cookie, int(newExpiry-currentTime), "/", fmt.Sprintf(".%s", auth.config.CookieDomain), auth.config.SecureCookie, true)
+	c.SetCookie(auth.config.SessionCookieName, cookie, int(newExpiry-currentTime), "/", auth.getCookieDomain(), auth.config.SecureCookie, true)
 	tlog.App.Trace().Str("username", session.Username).Msg("Session cookie refreshed")
 
 	return nil
@@ -396,7 +397,7 @@ func (auth *AuthService) DeleteSessionCookie(c *gin.Context) error {
 		return err
 	}
 
-	c.SetCookie(auth.config.SessionCookieName, "", -1, "/", fmt.Sprintf(".%s", auth.config.CookieDomain), auth.config.SecureCookie, true)
+	c.SetCookie(auth.config.SessionCookieName, "", -1, "/", auth.getCookieDomain(), auth.config.SecureCookie, true)
 
 	return nil
 }
@@ -832,4 +833,11 @@ func (auth *AuthService) ClearRateLimitsTestingOnly() {
 		auth.lockdownCancelFunc()
 	}
 	auth.loginMutex.Unlock()
+}
+
+func (auth *AuthService) getCookieDomain() string {
+	if auth.config.SubdomainsEnabled {
+		return "." + auth.config.CookieDomain
+	}
+	return auth.config.CookieDomain
 }
