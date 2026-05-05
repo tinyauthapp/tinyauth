@@ -12,8 +12,9 @@ import (
 )
 
 type GithubEmailResponse []struct {
-	Email   string `json:"email"`
-	Primary bool   `json:"primary"`
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
 }
 
 type GithubUserInfoResponse struct {
@@ -56,7 +57,16 @@ func githubExtractor(client *http.Client, url string) (*model.Claims, error) {
 
 	// Use first available email if no primary email was found
 	if user.Email == "" {
-		user.Email = (*userEmails)[0].Email
+		for _, email := range *userEmails {
+			if email.Verified {
+				user.Email = email.Email
+				break
+			}
+		}
+	}
+
+	if user.Email == "" {
+		return nil, errors.New("no verified email found")
 	}
 
 	user.PreferredUsername = userInfo.Login
