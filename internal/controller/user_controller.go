@@ -226,17 +226,6 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		return
 	}
 
-	context, err := new(model.UserContext).NewFromGin(c)
-
-	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to get user context on logout")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
-
 	cookie, err := controller.auth.DeleteSession(c, uuid)
 
 	if err != nil {
@@ -248,7 +237,14 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		return
 	}
 
-	tlog.AuditLogout(c, context.GetUsername(), context.ProviderName())
+	context, err := new(model.UserContext).NewFromGin(c)
+
+	if err == nil {
+		tlog.AuditLogout(c, context.GetUsername(), context.ProviderName())
+	} else {
+		tlog.App.Warn().Err(err).Msg("Failed to get user context for logout audit, proceeding without username")
+		tlog.AuditLogout(c, "unknown", "unknown")
+	}
 
 	http.SetCookie(c.Writer, cookie)
 
@@ -307,6 +303,15 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	}
 
 	user := controller.auth.GetLocalUser(context.GetUsername())
+
+	if user == nil {
+		tlog.App.Error().Str("username", context.GetUsername()).Msg("User not found in TOTP handler")
+		c.JSON(401, gin.H{
+			"status":  401,
+			"message": "Unauthorized",
+		})
+		return
+	}
 
 	ok := totp.Validate(req.Code, user.TOTPSecret)
 

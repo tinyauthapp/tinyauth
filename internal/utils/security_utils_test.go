@@ -5,19 +5,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
 
 func TestGetSecret(t *testing.T) {
 	// Setup
 	file, err := os.Create("/tmp/tinyauth_test_secret")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = file.WriteString("       secret       \n")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = file.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer os.Remove("/tmp/tinyauth_test_secret")
 
 	// Get from config

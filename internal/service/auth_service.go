@@ -120,7 +120,7 @@ func (auth *AuthService) Init() error {
 }
 
 func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) {
-	if auth.GetLocalUser(username).Username != "" {
+	if auth.GetLocalUser(username) != nil {
 		return &model.UserSearch{
 			Username: username,
 			Type:     model.UserLocal,
@@ -295,6 +295,8 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		expiry = auth.config.SessionExpiry
 	}
 
+	expiresAt := time.Now().Add(time.Duration(expiry) * time.Second)
+
 	session := repository.CreateSessionParams{
 		UUID:        uuid.String(),
 		Username:    data.Username,
@@ -303,7 +305,7 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		Provider:    data.Provider,
 		TotpPending: data.TotpPending,
 		OAuthGroups: data.OAuthGroups,
-		Expiry:      time.Now().Add(time.Duration(expiry) * time.Second).Unix(),
+		Expiry:      expiresAt.Unix(),
 		CreatedAt:   time.Now().Unix(),
 		OAuthName:   data.OAuthName,
 		OAuthSub:    data.OAuthSub,
@@ -320,8 +322,8 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		Value:    session.UUID,
 		Path:     "/",
 		Domain:   fmt.Sprintf(".%s", auth.config.CookieDomain),
-		Expires:  time.Now().Add(time.Duration(expiry) * time.Second),
-		MaxAge:   expiry,
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		Secure:   auth.config.SecureCookie,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -374,7 +376,7 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 		Path:     "/",
 		Domain:   fmt.Sprintf(".%s", auth.config.CookieDomain),
 		Expires:  time.Now().Add(time.Duration(newExpiry-currentTime) * time.Second),
-		MaxAge:   auth.config.SessionExpiry,
+		MaxAge:   int(newExpiry - currentTime),
 		Secure:   auth.config.SecureCookie,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

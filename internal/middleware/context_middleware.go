@@ -70,20 +70,18 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		if err == nil {
 			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid)
 
-			if err != nil {
-				tlog.App.Error().Msgf("Error authenticating session cookie: %v", err)
+			if err == nil {
+				if cookie != nil {
+					http.SetCookie(c.Writer, cookie)
+				}
+
+				tlog.App.Trace().Msgf("Authenticated user from session cookie: %s", userContext.GetUsername())
+				c.Set("context", userContext)
 				c.Next()
 				return
+			} else {
+				tlog.App.Error().Msgf("Error authenticating session cookie: %v", err)
 			}
-
-			if cookie != nil {
-				http.SetCookie(c.Writer, cookie)
-			}
-
-			tlog.App.Trace().Msgf("Authenticated user from session cookie: %s", userContext.GetUsername())
-			c.Set("context", userContext)
-			c.Next()
-			return
 		}
 
 		username, password, ok := c.Request.BasicAuth()

@@ -80,8 +80,12 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 
 	userContext, ok := userContextValue.(*UserContext)
 
-	if !ok {
+	if !ok || userContext == nil {
 		return nil, errors.New("invalid user context type")
+	}
+
+	if userContext.LDAP == nil && userContext.Local == nil && userContext.OAuth == nil {
+		return nil, errors.New("incomplete user context")
 	}
 
 	*c = *userContext
@@ -90,6 +94,10 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 
 // Compatability layer until we get an excuse to drop in database migrations
 func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
+	*c = UserContext{
+		Authenticated: !session.TotpPending,
+	}
+
 	switch session.Provider {
 	case "local":
 		c.Provider = ProviderLocal
@@ -119,15 +127,16 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 				Name:     session.Name,
 				Email:    session.Email,
 			},
-			Groups:      strings.Split(session.OAuthGroups, ","),
+			Groups: func() []string {
+				if session.OAuthGroups == "" {
+					return nil
+				}
+				return strings.Split(session.OAuthGroups, ",")
+			}(),
 			Sub:         session.OAuthSub,
 			DisplayName: session.OAuthName,
 			ID:          session.Provider,
 		}
-	}
-
-	if !session.TotpPending {
-		c.Authenticated = true
 	}
 
 	return c, nil

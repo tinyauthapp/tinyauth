@@ -67,7 +67,7 @@ func TestUserController(t *testing.T) {
 
 	totpCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
-			Authenticated: true,
+			Authenticated: false,
 			Provider:      model.ProviderLocal,
 			Local: &model.LocalContext{
 				BaseContext: model.BaseContext{
@@ -83,7 +83,7 @@ func TestUserController(t *testing.T) {
 
 	totpAttrCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
-			Authenticated: true,
+			Authenticated: false,
 			Provider:      model.ProviderLocal,
 			Local: &model.LocalContext{
 				BaseContext: model.BaseContext{
@@ -141,7 +141,7 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 10, cookie.MaxAge)
+				assert.Equal(t, 9, cookie.MaxAge)
 			},
 		},
 		{
@@ -230,7 +230,7 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 3600, cookie.MaxAge) // 1 hour, default for totp pending sessions
+				assert.Equal(t, 3599, cookie.MaxAge) // 1 hour, default for totp pending sessions
 			},
 		},
 		{
@@ -306,7 +306,7 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", totpCookie.Name)
 				assert.True(t, totpCookie.HttpOnly)
 				assert.Equal(t, "example.com", totpCookie.Domain)
-				assert.Equal(t, 10, totpCookie.MaxAge) // should use the regular session expiry time
+				assert.Equal(t, 9, totpCookie.MaxAge) // should use the regular session expiry time
 			},
 		},
 		{

@@ -5,28 +5,31 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
 
 func TestGetUsers(t *testing.T) {
+	tmpDir := t.TempDir()
+
 	hash := "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"
 
 	// Setup
-	file, err := os.Create("/tmp/tinyauth_users_test.txt")
-	assert.NoError(t, err)
+	file, err := os.Create(tmpDir + "/tinyauth_users_test.txt")
+	require.NoError(t, err)
 
 	_, err = file.WriteString("      user1:" + hash + "        \n         user2:" + hash + "                    ") // Spacing is on purpose
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = file.Close()
-	assert.NoError(t, err)
-	defer os.Remove("/tmp/tinyauth_users_test.txt")
+	require.NoError(t, err)
+	defer os.Remove(tmpDir + "/tinyauth_users_test.txt")
 
 	noAttrs := map[string]model.UserAttributes{}
 
 	// Test file only
-	users, err := utils.GetUsers([]string{}, "/tmp/tinyauth_users_test.txt", noAttrs)
+	users, err := utils.GetUsers([]string{}, tmpDir+"/tinyauth_users_test.txt", noAttrs)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, users)
@@ -47,7 +50,7 @@ func TestGetUsers(t *testing.T) {
 	assert.Equal(t, "user4", (*users)[1].Username)
 
 	// Test both
-	users, err = utils.GetUsers([]string{"user5:" + hash}, "/tmp/tinyauth_users_test.txt", noAttrs)
+	users, err = utils.GetUsers([]string{"user5:" + hash}, tmpDir+"/tinyauth_users_test.txt", noAttrs)
 
 	assert.NoError(t, err)
 
@@ -65,7 +68,7 @@ func TestGetUsers(t *testing.T) {
 	attrs := map[string]model.UserAttributes{
 		"user1": {Name: "User One", Email: "user1@example.com"},
 	}
-	users, err = utils.GetUsers([]string{}, "/tmp/tinyauth_users_test.txt", attrs)
+	users, err = utils.GetUsers([]string{}, tmpDir+"/tinyauth_users_test.txt", attrs)
 
 	assert.NoError(t, err)
 	assert.Len(t, *users, 2)
@@ -87,7 +90,7 @@ func TestGetUsers(t *testing.T) {
 	assert.Nil(t, users)
 
 	// Test non-existent file
-	users, err = utils.GetUsers([]string{}, "/tmp/non_existent_file.txt", noAttrs)
+	users, err = utils.GetUsers([]string{}, tmpDir+"/non_existent_file.txt", noAttrs)
 
 	assert.ErrorContains(t, err, "no such file or directory")
 	assert.Nil(t, users)

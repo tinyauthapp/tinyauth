@@ -258,6 +258,18 @@ func TestContextMiddleware(t *testing.T) {
 				assert.True(t, userCtx.Authenticated)
 			},
 		},
+		{
+			description: "Ensure fallback to basic auth when cookie is missing",
+			run: func(t *testing.T, args runArgs) {
+				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				userCtx, _ := args.do(req)
+
+				require.NotNil(t, userCtx)
+				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.True(t, userCtx.Authenticated)
+			},
+		},
 	}
 
 	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)

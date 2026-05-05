@@ -5,18 +5,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadFile(t *testing.T) {
 	// Setup
 	file, err := os.Create("/tmp/tinyauth_test_file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = file.WriteString("file content\n")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = file.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer os.Remove("/tmp/tinyauth_test_file")
 
 	// Normal case
