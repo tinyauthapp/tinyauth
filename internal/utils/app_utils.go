@@ -7,10 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
-	"github.com/gin-gonic/gin"
 	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
@@ -71,22 +69,6 @@ func Filter[T any](slice []T, test func(T) bool) (res []T) {
 		}
 	}
 	return res
-}
-
-func GetContext(c *gin.Context) (config.UserContext, error) {
-	userContextValue, exists := c.Get("context")
-
-	if !exists {
-		return config.UserContext{}, errors.New("no user context in request")
-	}
-
-	userContext, ok := userContextValue.(*config.UserContext)
-
-	if !ok {
-		return config.UserContext{}, errors.New("invalid user context in request")
-	}
-
-	return *userContext, nil
 }
 
 func IsRedirectSafe(redirectURL string, domain string) bool {

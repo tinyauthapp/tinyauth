@@ -3,9 +3,8 @@ package utils_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestParseHeaders(t *testing.T) {
@@ -18,7 +17,7 @@ func TestParseHeaders(t *testing.T) {
 		"X-Custom-Header": "Value",
 		"Another-Header":  "AnotherValue",
 	}
-	assert.DeepEqual(t, expected, utils.ParseHeaders(headers))
+	assert.Equal(t, expected, utils.ParseHeaders(headers))
 
 	// Case insensitivity and trimming
 	headers = []string{
@@ -29,7 +28,7 @@ func TestParseHeaders(t *testing.T) {
 		"X-Custom-Header": "Value",
 		"Another-Header":  "AnotherValue",
 	}
-	assert.DeepEqual(t, expected, utils.ParseHeaders(headers))
+	assert.Equal(t, expected, utils.ParseHeaders(headers))
 
 	// Invalid headers (missing '=', empty key/value)
 	headers = []string{
@@ -39,7 +38,7 @@ func TestParseHeaders(t *testing.T) {
 		"   =   ",
 	}
 	expected = map[string]string{}
-	assert.DeepEqual(t, expected, utils.ParseHeaders(headers))
+	assert.Equal(t, expected, utils.ParseHeaders(headers))
 
 	// Headers with unsafe characters
 	headers = []string{
@@ -52,7 +51,7 @@ func TestParseHeaders(t *testing.T) {
 		"Another-Header":  "AnotherValue",
 		"Good-Header":     "GoodValue",
 	}
-	assert.DeepEqual(t, expected, utils.ParseHeaders(headers))
+	assert.Equal(t, expected, utils.ParseHeaders(headers))
 
 	// Header with spaces in key (should be ignored)
 	headers = []string{
@@ -62,7 +61,7 @@ func TestParseHeaders(t *testing.T) {
 	expected = map[string]string{
 		"Valid-Header": "ValidValue",
 	}
-	assert.DeepEqual(t, expected, utils.ParseHeaders(headers))
+	assert.Equal(t, expected, utils.ParseHeaders(headers))
 }
 
 func TestSanitizeHeader(t *testing.T) {

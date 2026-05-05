@@ -22,14 +22,14 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	services := Services{}
 
 	ldapService := service.NewLdapService(service.LdapServiceConfig{
-		Address:      app.config.Ldap.Address,
-		BindDN:       app.config.Ldap.BindDN,
-		BindPassword: app.config.Ldap.BindPassword,
-		BaseDN:       app.config.Ldap.BaseDN,
-		Insecure:     app.config.Ldap.Insecure,
-		SearchFilter: app.config.Ldap.SearchFilter,
-		AuthCert:     app.config.Ldap.AuthCert,
-		AuthKey:      app.config.Ldap.AuthKey,
+		Address:      app.config.LDAP.Address,
+		BindDN:       app.config.LDAP.BindDN,
+		BindPassword: app.config.LDAP.BindPassword,
+		BaseDN:       app.config.LDAP.BaseDN,
+		Insecure:     app.config.LDAP.Insecure,
+		SearchFilter: app.config.LDAP.SearchFilter,
+		AuthCert:     app.config.LDAP.AuthCert,
+		AuthKey:      app.config.LDAP.AuthKey,
 	})
 
 	err := ldapService.Init()
@@ -89,7 +89,7 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	services.oauthBrokerService = oauthBrokerService
 
 	authService := service.NewAuthService(service.AuthServiceConfig{
-		Users:              app.context.users,
+		LocalUsers:         app.context.localUsers,
 		OauthWhitelist:     app.config.OAuth.Whitelist,
 		SessionExpiry:      app.config.Auth.SessionExpiry,
 		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
@@ -99,7 +99,7 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 		LoginMaxRetries:    app.config.Auth.LoginMaxRetries,
 		SessionCookieName:  app.context.sessionCookieName,
 		IP:                 app.config.Auth.IP,
-		LDAPGroupsCacheTTL: app.config.Ldap.GroupCacheTTL,
+		LDAPGroupsCacheTTL: app.config.LDAP.GroupCacheTTL,
 	}, services.ldapService, queries, services.oauthBrokerService)
 
 	err = authService.Init()

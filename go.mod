@@ -20,7 +20,6 @@ require (
 	github.com/weppos/publicsuffix-go v0.50.3
 	golang.org/x/crypto v0.50.0
 	golang.org/x/oauth2 v0.36.0
-	gotest.tools/v3 v3.5.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
 	modernc.org/sqlite v1.49.1
@@ -133,6 +132,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.5.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	modernc.org/libc v1.72.0 // indirect

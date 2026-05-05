@@ -3,42 +3,41 @@ package decoders_test
 import (
 	"testing"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestDecodeLabels(t *testing.T) {
 	// Variables
-	expected := config.Apps{
-		Apps: map[string]config.App{
+	expected := model.Apps{
+		Apps: map[string]model.App{
 			"foo": {
-				Config: config.AppConfig{
+				Config: model.AppConfig{
 					Domain: "example.com",
 				},
-				Users: config.AppUsers{
+				Users: model.AppUsers{
 					Allow: "user1,user2",
 					Block: "user3",
 				},
-				OAuth: config.AppOAuth{
+				OAuth: model.AppOAuth{
 					Whitelist: "somebody@example.com",
 					Groups:    "group3",
 				},
-				IP: config.AppIP{
+				IP: model.AppIP{
 					Allow:  []string{"10.71.0.1/24", "10.71.0.2"},
 					Block:  []string{"10.10.10.10", "10.0.0.0/24"},
 					Bypass: []string{"192.168.1.1"},
 				},
-				Response: config.AppResponse{
+				Response: model.AppResponse{
 					Headers: []string{"X-Foo=Bar", "X-Baz=Qux"},
-					BasicAuth: config.AppBasicAuth{
+					BasicAuth: model.AppBasicAuth{
 						Username:     "admin",
 						Password:     "password",
 						PasswordFile: "/path/to/passwordfile",
 					},
 				},
-				Path: config.AppPath{
+				Path: model.AppPath{
 					Allow: "/public",
 					Block: "/private",
 				},
@@ -63,7 +62,7 @@ func TestDecodeLabels(t *testing.T) {
 	}
 
 	// Test
-	result, err := decoders.DecodeLabels[config.Apps](test, "apps")
-	assert.NilError(t, err)
-	assert.DeepEqual(t, expected, result)
+	result, err := decoders.DecodeLabels[model.Apps](test, "apps")
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }

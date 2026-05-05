@@ -5,75 +5,75 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/rs/zerolog"
-	"gotest.tools/v3/assert"
 )
 
 func TestNewLogger(t *testing.T) {
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "debug",
 		Json:  true,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true, Level: "info"},
-			App:   config.LogStreamConfig{Enabled: true, Level: ""},
-			Audit: config.LogStreamConfig{Enabled: false, Level: ""},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true, Level: "info"},
+			App:   model.LogStreamConfig{Enabled: true, Level: ""},
+			Audit: model.LogStreamConfig{Enabled: false, Level: ""},
 		},
 	}
 
 	logger := tlog.NewLogger(cfg)
 
-	assert.Assert(t, logger != nil)
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.DebugLevel)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.NotNil(t, logger)
+	assert.Equal(t, zerolog.InfoLevel, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.DebugLevel, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestNewSimpleLogger(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
-	assert.Assert(t, logger != nil)
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.InfoLevel)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.NotNil(t, logger)
+	assert.Equal(t, zerolog.InfoLevel, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.InfoLevel, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestLoggerInit(t *testing.T) {
 	logger := tlog.NewSimpleLogger()
 	logger.Init()
 
-	assert.Assert(t, tlog.App.GetLevel() != zerolog.Disabled)
+	assert.NotEqual(t, zerolog.Disabled, tlog.App.GetLevel())
 }
 
 func TestLoggerWithDisabledStreams(t *testing.T) {
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "info",
 		Json:  false,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: false},
-			App:   config.LogStreamConfig{Enabled: false},
-			Audit: config.LogStreamConfig{Enabled: false},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: false},
+			App:   model.LogStreamConfig{Enabled: false},
+			Audit: model.LogStreamConfig{Enabled: false},
 		},
 	}
 
 	logger := tlog.NewLogger(cfg)
 
-	assert.Assert(t, logger.HTTP.GetLevel() == zerolog.Disabled)
-	assert.Assert(t, logger.App.GetLevel() == zerolog.Disabled)
-	assert.Assert(t, logger.Audit.GetLevel() == zerolog.Disabled)
+	assert.Equal(t, zerolog.Disabled, logger.HTTP.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.App.GetLevel())
+	assert.Equal(t, zerolog.Disabled, logger.Audit.GetLevel())
 }
 
 func TestLogStreamField(t *testing.T) {
 	var buf bytes.Buffer
 
-	cfg := config.LogConfig{
+	cfg := model.LogConfig{
 		Level: "info",
 		Json:  true,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true},
-			App:   config.LogStreamConfig{Enabled: true},
-			Audit: config.LogStreamConfig{Enabled: true},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true},
+			App:   model.LogStreamConfig{Enabled: true},
+			Audit: model.LogStreamConfig{Enabled: true},
 		},
 	}
 
@@ -86,7 +86,7 @@ func TestLogStreamField(t *testing.T) {
 
 	var logEntry map[string]interface{}
 	err := json.Unmarshal(buf.Bytes(), &logEntry)
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, "http", logEntry["log_stream"])
 	assert.Equal(t, "test message", logEntry["message"])

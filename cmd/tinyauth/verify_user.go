@@ -95,7 +95,7 @@ func verifyUserCmd() *cli.Command {
 				return fmt.Errorf("password is incorrect: %w", err)
 			}
 
-			if user.TotpSecret == "" {
+			if user.TOTPSecret == "" {
 				if tCfg.Totp != "" {
 					tlog.App.Warn().Msg("User does not have TOTP secret")
 				}
@@ -103,7 +103,7 @@ func verifyUserCmd() *cli.Command {
 				return nil
 			}
 
-			ok := totp.Validate(tCfg.Totp, user.TotpSecret)
+			ok := totp.Validate(tCfg.Totp, user.TOTPSecret)
 
 			if !ok {
 				return fmt.Errorf("TOTP code incorrect")

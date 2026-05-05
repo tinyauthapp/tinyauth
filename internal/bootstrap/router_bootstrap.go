@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,7 +14,7 @@ import (
 var DEV_MODES = []string{"main", "test", "development"}
 
 func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
-	if !slices.Contains(DEV_MODES, config.Version) {
+	if !slices.Contains(DEV_MODES, model.Version) {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -30,7 +30,8 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	}
 
 	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
-		CookieDomain: app.context.cookieDomain,
+		CookieDomain:      app.context.cookieDomain,
+		SessionCookieName: app.context.sessionCookieName,
 	}, app.services.authService, app.services.oauthBrokerService)
 
 	err := contextMiddleware.Init()
@@ -98,7 +99,8 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	proxyController.SetupRoutes()
 
 	userController := controller.NewUserController(controller.UserControllerConfig{
-		CookieDomain: app.context.cookieDomain,
+		CookieDomain:      app.context.cookieDomain,
+		SessionCookieName: app.context.sessionCookieName,
 	}, apiRouter, app.services.authService)
 
 	userController.SetupRoutes()

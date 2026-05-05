@@ -1,4 +1,4 @@
-package config
+package model
 
 // Default configuration
 func NewDefaultConfiguration() *Config {
@@ -29,7 +29,7 @@ func NewDefaultConfiguration() *Config {
 			BackgroundImage:       "/background.jpg",
 			WarningsEnabled:       true,
 		},
-		Ldap: LdapConfig{
+		LDAP: LDAPConfig{
 			Insecure:      false,
 			SearchFilter:  "(uid=%s)",
 			GroupCacheTTL: 900, // 15 minutes
@@ -63,20 +63,6 @@ func NewDefaultConfiguration() *Config {
 	}
 }
 
-// Version information, set at build time
-
-var Version = "development"
-var CommitHash = "development"
-var BuildTimestamp = "0000-00-00T00:00:00Z"
-
-// Cookie name templates
-
-var SessionCookieName = "tinyauth-session"
-var CSRFCookieName = "tinyauth-csrf"
-var RedirectCookieName = "tinyauth-redirect"
-var OAuthSessionCookieName = "tinyauth-oauth"
-
-// Main app config
 type Config struct {
 	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
 	Database      DatabaseConfig     `description:"Database configuration." yaml:"database"`
@@ -88,7 +74,7 @@ type Config struct {
 	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth"`
 	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc"`
 	UI            UIConfig           `description:"UI customization." yaml:"ui"`
-	Ldap          LdapConfig         `description:"LDAP configuration." yaml:"ldap"`
+	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
 	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, or kubernetes). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
@@ -177,7 +163,7 @@ type UIConfig struct {
 	WarningsEnabled       bool   `description:"Enable UI warnings." yaml:"warningsEnabled"`
 }
 
-type LdapConfig struct {
+type LDAPConfig struct {
 	Address       string `description:"LDAP server address." yaml:"address"`
 	BindDN        string `description:"Bind DN for LDAP authentication." yaml:"bindDn"`
 	BindPassword  string `description:"Bind password for LDAP authentication." yaml:"bindPassword"`
@@ -210,20 +196,6 @@ type ExperimentalConfig struct {
 	ConfigFile string `description:"Path to config file." yaml:"-"`
 }
 
-// Config loader options
-
-const DefaultNamePrefix = "TINYAUTH_"
-
-// OAuth/OIDC config
-
-type Claims struct {
-	Sub               string `json:"sub"`
-	Name              string `json:"name"`
-	Email             string `json:"email"`
-	PreferredUsername string `json:"preferred_username"`
-	Groups            any    `json:"groups"`
-}
-
 type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`
 	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret"`
@@ -244,60 +216,6 @@ type OIDCClientConfig struct {
 	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile"`
 	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris"`
 	Name                string   `description:"Client name in UI." yaml:"name"`
-}
-
-var OverrideProviders = map[string]string{
-	"google": "Google",
-	"github": "GitHub",
-}
-
-// User/session related stuff
-
-type User struct {
-	Username   string
-	Password   string
-	TotpSecret string
-	Attributes UserAttributes
-}
-
-type LdapUser struct {
-	DN     string
-	Groups []string
-}
-
-type UserSearch struct {
-	Username string
-	Type     string // local, ldap or unknown
-}
-
-type UserContext struct {
-	Username    string
-	Name        string
-	Email       string
-	IsLoggedIn  bool
-	IsBasicAuth bool
-	OAuth       bool
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	TotpEnabled bool
-	OAuthName   string
-	OAuthSub    string
-	LdapGroups  string
-	Attributes  UserAttributes
-}
-
-// API responses and queries
-
-type UnauthorizedQuery struct {
-	Username string `url:"username"`
-	Resource string `url:"resource"`
-	GroupErr bool   `url:"groupErr"`
-	IP       string `url:"ip"`
-}
-
-type RedirectQuery struct {
-	RedirectURI string `url:"redirect_uri"`
 }
 
 // ACLs
@@ -355,7 +273,3 @@ type AppPath struct {
 	Allow string `description:"Comma-separated list of allowed paths." yaml:"allow"`
 	Block string `description:"Comma-separated list of blocked paths." yaml:"block"`
 }
-
-// API server
-
-var ApiServer = "https://api.tinyauth.app"

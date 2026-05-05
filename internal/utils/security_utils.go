@@ -41,7 +41,7 @@ func ParseSecretFile(contents string) string {
 	return ""
 }
 
-func GetBasicAuth(username string, password string) string {
+func EncodeBasicAuth(username string, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }

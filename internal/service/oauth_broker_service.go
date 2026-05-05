@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"slices"
@@ -15,20 +15,20 @@ type OAuthServiceImpl interface {
 	NewRandom() string
 	GetAuthURL(state string, verifier string) string
 	GetToken(code string, verifier string) (*oauth2.Token, error)
-	GetUserinfo(token *oauth2.Token) (config.Claims, error)
+	GetUserinfo(token *oauth2.Token) (*model.Claims, error)
 }
 
 type OAuthBrokerService struct {
 	services map[string]OAuthServiceImpl
-	configs  map[string]config.OAuthServiceConfig
+	configs  map[string]model.OAuthServiceConfig
 }
 
-var presets = map[string]func(config config.OAuthServiceConfig) *OAuthService{
+var presets = map[string]func(config model.OAuthServiceConfig) *OAuthService{
 	"github": newGitHubOAuthService,
 	"google": newGoogleOAuthService,
 }
 
-func NewOAuthBrokerService(configs map[string]config.OAuthServiceConfig) *OAuthBrokerService {
+func NewOAuthBrokerService(configs map[string]model.OAuthServiceConfig) *OAuthBrokerService {
 	return &OAuthBrokerService{
 		services: make(map[string]OAuthServiceImpl),
 		configs:  configs,
