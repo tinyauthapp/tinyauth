@@ -56,19 +56,19 @@ func (c *UserContext) IsAuthenticated() bool {
 }
 
 func (c *UserContext) IsLocal() bool {
-	return c.Provider == ProviderLocal
+	return c.Provider == ProviderLocal && c.Local != nil
 }
 
 func (c *UserContext) IsOAuth() bool {
-	return c.Provider == ProviderOAuth
+	return c.Provider == ProviderOAuth && c.OAuth != nil
 }
 
 func (c *UserContext) IsLDAP() bool {
-	return c.Provider == ProviderLDAP
+	return c.Provider == ProviderLDAP && c.LDAP != nil
 }
 
 func (c *UserContext) IsBasicAuth() bool {
-	return c.Provider == ProviderBasicAuth
+	return c.Provider == ProviderBasicAuth && c.Local != nil
 }
 
 func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
@@ -145,12 +145,24 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 func (c *UserContext) GetUsername() string {
 	switch c.Provider {
 	case ProviderLocal:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Username
 	case ProviderLDAP:
+		if c.LDAP == nil {
+			return ""
+		}
 		return c.LDAP.Username
 	case ProviderBasicAuth:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Username
 	case ProviderOAuth:
+		if c.OAuth == nil {
+			return ""
+		}
 		return c.OAuth.Username
 	default:
 		return ""
@@ -160,12 +172,24 @@ func (c *UserContext) GetUsername() string {
 func (c *UserContext) GetEmail() string {
 	switch c.Provider {
 	case ProviderLocal:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Email
 	case ProviderLDAP:
+		if c.LDAP == nil {
+			return ""
+		}
 		return c.LDAP.Email
 	case ProviderBasicAuth:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Email
 	case ProviderOAuth:
+		if c.OAuth == nil {
+			return ""
+		}
 		return c.OAuth.Email
 	default:
 		return ""
@@ -175,12 +199,24 @@ func (c *UserContext) GetEmail() string {
 func (c *UserContext) GetName() string {
 	switch c.Provider {
 	case ProviderLocal:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Name
 	case ProviderLDAP:
+		if c.LDAP == nil {
+			return ""
+		}
 		return c.LDAP.Name
 	case ProviderBasicAuth:
+		if c.Local == nil {
+			return ""
+		}
 		return c.Local.Name
 	case ProviderOAuth:
+		if c.OAuth == nil {
+			return ""
+		}
 		return c.OAuth.Name
 	default:
 		return ""
@@ -201,14 +237,14 @@ func (c *UserContext) ProviderName() string {
 }
 
 func (c *UserContext) TOTPPending() bool {
-	if c.Provider == ProviderLocal {
+	if c.Provider == ProviderLocal && c.Local != nil {
 		return c.Local.TOTPPending
 	}
 	return false
 }
 
 func (c *UserContext) OAuthName() string {
-	if c.Provider == ProviderOAuth {
+	if c.Provider == ProviderOAuth && c.OAuth != nil {
 		return c.OAuth.DisplayName
 	}
 	return ""

@@ -29,7 +29,7 @@ type BootstrapApp struct {
 		csrfCookieName         string
 		redirectCookieName     string
 		oauthSessionCookieName string
-		localUsers             []model.LocalUser
+		localUsers             *[]model.LocalUser
 		oauthProviders         map[string]model.OAuthServiceConfig
 		configuredProviders    []controller.Provider
 		oidcClients            []model.OIDCClientConfig
@@ -69,7 +69,7 @@ func (app *BootstrapApp) Setup() error {
 		return err
 	}
 
-	app.context.localUsers = *users
+	app.context.localUsers = users
 
 	// Setup OAuth providers
 	app.context.oauthProviders = app.config.OAuth.Providers

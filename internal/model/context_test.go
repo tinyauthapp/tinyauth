@@ -34,25 +34,25 @@ func TestContext(t *testing.T) {
 		},
 		{
 			description: "IsLocal returns true for ProviderLocal",
-			context:     &model.UserContext{Provider: model.ProviderLocal},
+			context:     &model.UserContext{Provider: model.ProviderLocal, Local: &model.LocalContext{}},
 			run:         func(t *testing.T, c *model.UserContext) any { return c.IsLocal() },
 			expected:    true,
 		},
 		{
 			description: "IsOAuth returns true for ProviderOAuth",
-			context:     &model.UserContext{Provider: model.ProviderOAuth},
+			context:     &model.UserContext{Provider: model.ProviderOAuth, OAuth: &model.OAuthContext{}},
 			run:         func(t *testing.T, c *model.UserContext) any { return c.IsOAuth() },
 			expected:    true,
 		},
 		{
 			description: "IsLDAP returns true for ProviderLDAP",
-			context:     &model.UserContext{Provider: model.ProviderLDAP},
+			context:     &model.UserContext{Provider: model.ProviderLDAP, LDAP: &model.LDAPContext{}},
 			run:         func(t *testing.T, c *model.UserContext) any { return c.IsLDAP() },
 			expected:    true,
 		},
 		{
 			description: "IsBasicAuth returns true for ProviderBasicAuth",
-			context:     &model.UserContext{Provider: model.ProviderBasicAuth},
+			context:     &model.UserContext{Provider: model.ProviderBasicAuth, Local: &model.LocalContext{}},
 			run:         func(t *testing.T, c *model.UserContext) any { return c.IsBasicAuth() },
 			expected:    true,
 		},
@@ -257,6 +257,14 @@ func TestContext(t *testing.T) {
 				return err.Error()
 			},
 			expected: "incomplete user context",
+		},
+		{
+			description: "Getters should not panic if provider context is empty",
+			context:     &model.UserContext{Provider: model.ProviderLocal},
+			run: func(t *testing.T, c *model.UserContext) any {
+				return [3]string{c.GetUsername(), c.GetEmail(), c.GetName()}
+			},
+			expected: [3]string{"", "", ""},
 		},
 	}
 

@@ -28,18 +28,21 @@ func (acls *AccessControlsService) Init() error {
 }
 
 func (acls *AccessControlsService) lookupStaticACLs(domain string) *model.App {
+	var appAcls *model.App
 	for app, config := range acls.static {
 		if config.Config.Domain == domain {
 			tlog.App.Debug().Str("name", app).Msg("Found matching container by domain")
-			return &config
+			appAcls = &config
+			break // If we find a match by domain, we can stop searching
 		}
 
 		if strings.SplitN(domain, ".", 2)[0] == app {
 			tlog.App.Debug().Str("name", app).Msg("Found matching container by app name")
-			return &config
+			appAcls = &config
+			break // If we find a match by app name, we can stop searching
 		}
 	}
-	return nil
+	return appAcls
 }
 
 func (acls *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {

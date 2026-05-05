@@ -95,7 +95,8 @@ func (k *KubernetesService) getByDomain(domain string) *model.App {
 
 	if appKey, ok := k.domainIndex[domain]; ok {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for _, app := range apps {
+			for i := range apps {
+				app := &apps[i]
 				if app.domain == domain && app.appName == appKey.appName {
 					return &app.app
 				}
@@ -111,7 +112,8 @@ func (k *KubernetesService) getByAppName(appName string) *model.App {
 
 	if appKey, ok := k.appNameIndex[appName]; ok {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for _, app := range apps {
+			for i := range apps {
+				app := &apps[i]
 				if app.appName == appName {
 					return &app.app
 				}

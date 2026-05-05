@@ -73,7 +73,7 @@ type Lockdown struct {
 }
 
 type AuthServiceConfig struct {
-	LocalUsers         []model.LocalUser
+	LocalUsers         *[]model.LocalUser
 	OauthWhitelist     []string
 	SessionExpiry      int
 	SessionMaxLifetime int
@@ -147,6 +147,9 @@ func (auth *AuthService) CheckUserPassword(search model.UserSearch, password str
 	switch search.Type {
 	case model.UserLocal:
 		user := auth.GetLocalUser(search.Username)
+		if user == nil {
+			return ErrUserNotFound
+		}
 		return bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	case model.UserLDAP:
 		if auth.ldap.IsConfigured() {
@@ -169,7 +172,10 @@ func (auth *AuthService) CheckUserPassword(search model.UserSearch, password str
 }
 
 func (auth *AuthService) GetLocalUser(username string) *model.LocalUser {
-	for _, user := range auth.config.LocalUsers {
+	if auth.config.LocalUsers == nil {
+		return nil
+	}
+	for _, user := range *auth.config.LocalUsers {
 		if user.Username == username {
 			return &user
 		}
@@ -438,7 +444,7 @@ func (auth *AuthService) GetSession(ctx context.Context, uuid string) (*reposito
 }
 
 func (auth *AuthService) LocalAuthConfigured() bool {
-	return len(auth.config.LocalUsers) > 0
+	return auth.config.LocalUsers != nil && len(*auth.config.LocalUsers) > 0
 }
 
 func (auth *AuthService) LDAPAuthConfigured() bool {

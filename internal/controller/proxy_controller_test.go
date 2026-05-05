@@ -21,7 +21,7 @@ func TestProxyController(t *testing.T) {
 	tempDir := t.TempDir()
 
 	authServiceCfg := service.AuthServiceConfig{
-		LocalUsers: []model.LocalUser{
+		LocalUsers: &[]model.LocalUser{
 			{
 				Username: "testuser",
 				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
