@@ -95,7 +95,7 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 		Username:    context.GetUsername(),
 		Name:        context.GetName(),
 		Email:       context.GetEmail(),
-		Provider:    context.ProviderName(),
+		Provider:    context.GetProviderID(),
 		OAuth:       context.IsOAuth(),
 		TOTPPending: context.TOTPPending(),
 		OAuthName:   context.OAuthName(),

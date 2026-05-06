@@ -249,7 +249,7 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err == nil {
-		tlog.AuditLogout(c, context.GetUsername(), context.ProviderName())
+		tlog.AuditLogout(c, context.GetUsername(), context.GetProviderID())
 	} else {
 		tlog.App.Warn().Err(err).Msg("Failed to get user context for logout audit, proceeding without username")
 		tlog.AuditLogout(c, "unknown", "unknown")

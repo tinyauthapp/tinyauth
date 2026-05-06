@@ -109,7 +109,6 @@ func TestContextMiddleware(t *testing.T) {
 				assert.Equal(t, "testuser", userCtx.GetUsername())
 				assert.True(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
-				assert.False(t, userCtx.Local.TOTPEnabled)
 			},
 		},
 		{
@@ -134,7 +133,6 @@ func TestContextMiddleware(t *testing.T) {
 				assert.False(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
 				assert.True(t, userCtx.Local.TOTPPending)
-				assert.True(t, userCtx.Local.TOTPEnabled)
 			},
 		},
 		{

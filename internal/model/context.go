@@ -34,7 +34,6 @@ type BaseContext struct {
 type LocalContext struct {
 	BaseContext
 	TOTPPending bool
-	TOTPEnabled bool
 	Attributes  UserAttributes
 }
 
@@ -223,14 +222,14 @@ func (c *UserContext) GetName() string {
 	}
 }
 
-func (c *UserContext) ProviderName() string {
+func (c *UserContext) GetProviderID() string {
 	switch c.Provider {
 	case ProviderBasicAuth, ProviderLocal:
 		return "local"
 	case ProviderLDAP:
 		return "ldap"
 	case ProviderOAuth:
-		return c.OAuth.DisplayName // compatability
+		return c.OAuth.ID
 	default:
 		return "unknown"
 	}

@@ -123,7 +123,6 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 
 	if userContext.Provider == model.ProviderLocal &&
 		userContext.Local.TOTPPending {
-		userContext.Local.TOTPEnabled = true
 		return userContext, nil, nil
 	}
 

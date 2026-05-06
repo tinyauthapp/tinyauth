@@ -153,29 +153,29 @@ func TestContext(t *testing.T) {
 		{
 			description: "ProviderName returns 'local' for ProviderLocal",
 			context:     &model.UserContext{Provider: model.ProviderLocal},
-			run:         func(t *testing.T, c *model.UserContext) any { return c.ProviderName() },
+			run:         func(t *testing.T, c *model.UserContext) any { return c.GetProviderID() },
 			expected:    "local",
 		},
 		{
 			description: "ProviderName returns 'local' for ProviderBasicAuth",
 			context:     &model.UserContext{Provider: model.ProviderBasicAuth},
-			run:         func(t *testing.T, c *model.UserContext) any { return c.ProviderName() },
+			run:         func(t *testing.T, c *model.UserContext) any { return c.GetProviderID() },
 			expected:    "local",
 		},
 		{
 			description: "ProviderName returns 'ldap' for ProviderLDAP",
 			context:     &model.UserContext{Provider: model.ProviderLDAP},
-			run:         func(t *testing.T, c *model.UserContext) any { return c.ProviderName() },
+			run:         func(t *testing.T, c *model.UserContext) any { return c.GetProviderID() },
 			expected:    "ldap",
 		},
 		{
-			description: "ProviderName returns OAuth DisplayName for ProviderOAuth",
+			description: "ProviderName returns OAuth provider ID for ProviderOAuth",
 			context: &model.UserContext{
 				Provider: model.ProviderOAuth,
-				OAuth:    &model.OAuthContext{DisplayName: "GitHub"},
+				OAuth:    &model.OAuthContext{ID: "github"},
 			},
-			run:      func(t *testing.T, c *model.UserContext) any { return c.ProviderName() },
-			expected: "GitHub",
+			run:      func(t *testing.T, c *model.UserContext) any { return c.GetProviderID() },
+			expected: "github",
 		},
 		{
 			description: "TOTPPending returns true when local context is pending",

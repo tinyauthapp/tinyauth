@@ -98,7 +98,6 @@ func TestProxyController(t *testing.T) {
 					Name:     "Totpuser",
 					Email:    "totpuser@example.com",
 				},
-				TOTPEnabled: true,
 			},
 		})
 		c.Next()

@@ -78,7 +78,6 @@ func TestUserController(t *testing.T) {
 					Email:    "totpuser@example.com",
 				},
 				TOTPPending: true,
-				TOTPEnabled: true,
 			},
 		})
 	}
@@ -94,7 +93,6 @@ func TestUserController(t *testing.T) {
 					Email:    "bob@example.com",
 				},
 				TOTPPending: true,
-				TOTPEnabled: true,
 			},
 		})
 	}
@@ -152,7 +150,9 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 9, cookie.MaxAge)
+				// 3 seconds should be more than enough for even slow test environments
+				assert.GreaterOrEqual(t, cookie.MaxAge, 7)
+				assert.LessOrEqual(t, cookie.MaxAge, 10)
 			},
 		},
 		{
@@ -241,7 +241,8 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 3599, cookie.MaxAge) // 1 hour, default for totp pending sessions
+				assert.GreaterOrEqual(t, cookie.MaxAge, 3597)
+				assert.LessOrEqual(t, cookie.MaxAge, 3600)
 			},
 		},
 		{
@@ -335,7 +336,8 @@ func TestUserController(t *testing.T) {
 				assert.Equal(t, "tinyauth-session", totpCookie.Name)
 				assert.True(t, totpCookie.HttpOnly)
 				assert.Equal(t, "example.com", totpCookie.Domain)
-				assert.Equal(t, 9, totpCookie.MaxAge) // should use the regular session expiry time
+				assert.GreaterOrEqual(t, totpCookie.MaxAge, 7)
+				assert.LessOrEqual(t, totpCookie.MaxAge, 10)
 			},
 		},
 		{
