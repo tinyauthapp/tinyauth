@@ -102,7 +102,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 	}
 
 	if err := controller.auth.CheckUserPassword(*search, req.Password); err != nil {
-		tlog.App.Warn().Str("username", req.Username).Msg("Invalid password")
+		tlog.App.Warn().Err(err).Str("username", req.Username).Msg("Failed to verify password")
 		controller.auth.RecordLoginAttempt(req.Username, false)
 		tlog.AuditLoginFailure(c, req.Username, "username", "invalid password")
 		c.JSON(401, gin.H{
@@ -112,15 +112,19 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		return
 	}
 
-	tlog.App.Info().Str("username", req.Username).Msg("Login successful")
-	tlog.AuditLoginSuccess(c, req.Username, "username")
-
-	controller.auth.RecordLoginAttempt(req.Username, true)
-
 	var localUser *model.LocalUser
 
 	if search.Type == model.UserLocal {
 		localUser = controller.auth.GetLocalUser(req.Username)
+
+		if localUser == nil {
+			tlog.App.Warn().Str("username", req.Username).Msg("User disappeared during login")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 
 		if localUser.TOTPSecret != "" {
 			tlog.App.Debug().Str("username", req.Username).Msg("User has TOTP enabled, requiring TOTP verification")
@@ -197,6 +201,11 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 	}
 
 	http.SetCookie(c.Writer, cookie)
+
+	tlog.App.Info().Str("username", req.Username).Msg("Login successful")
+	tlog.AuditLoginSuccess(c, req.Username, "username")
+
+	controller.auth.RecordLoginAttempt(req.Username, true)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -326,29 +335,15 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		return
 	}
 
-	tlog.App.Info().Str("username", context.GetUsername()).Msg("TOTP verification successful")
-	tlog.AuditLoginSuccess(c, context.GetUsername(), "totp")
-
 	uuid, err := c.Cookie(controller.config.SessionCookieName)
 
-	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to retrieve session cookie in TOTP handler")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
-
-	_, err = controller.auth.DeleteSession(c, uuid)
-
-	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to delete pending TOTP session")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
+	if err == nil {
+		_, err = controller.auth.DeleteSession(c, uuid)
+		if err != nil {
+			tlog.App.Warn().Err(err).Msg("Failed to delete pending TOTP session")
+		}
+	} else {
+		tlog.App.Warn().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session, proceeding without deleting it")
 	}
 
 	controller.auth.RecordLoginAttempt(context.GetUsername(), true)
@@ -381,6 +376,9 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	}
 
 	http.SetCookie(c.Writer, cookie)
+
+	tlog.App.Info().Str("username", context.GetUsername()).Msg("TOTP verification successful")
+	tlog.AuditLoginSuccess(c, context.GetUsername(), "totp")
 
 	c.JSON(200, gin.H{
 		"status":  200,
