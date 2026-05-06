@@ -1,7 +1,9 @@
 package controller_test
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"path"
 	"strings"
@@ -110,6 +112,15 @@ func TestUserController(t *testing.T) {
 			},
 		})
 	}
+
+	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
+
+	app := bootstrap.NewBootstrapApp(model.Config{})
+
+	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	require.NoError(t, err)
+
+	queries := repository.New(db)
 
 	type testCase struct {
 		description string
@@ -282,6 +293,18 @@ func TestUserController(t *testing.T) {
 				totpCtx,
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+					UUID:        "test-totp-login-uuid",
+					Username:    "test",
+					Email:       "test@example.com",
+					Name:        "Test",
+					Provider:    "local",
+					TotpPending: true,
+					Expiry:      time.Now().Add(1 * time.Hour).Unix(),
+					CreatedAt:   time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				assert.NoError(t, err)
 
@@ -295,7 +318,13 @@ func TestUserController(t *testing.T) {
 				recorder = httptest.NewRecorder()
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
 				req.Header.Set("Content-Type", "application/json")
-
+				req.AddCookie(&http.Cookie{
+					Name:     "tinyauth-session",
+					Value:    "test-totp-login-uuid",
+					HttpOnly: true,
+					MaxAge:   3600,
+					Expires:  time.Now().Add(1 * time.Hour),
+				})
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
@@ -387,6 +416,18 @@ func TestUserController(t *testing.T) {
 				totpAttrCtx,
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+					UUID:        "test-totp-login-attributes-uuid",
+					Username:    "test",
+					Email:       "test@example.com",
+					Name:        "Test",
+					Provider:    "local",
+					TotpPending: true,
+					Expiry:      time.Now().Add(1 * time.Hour).Unix(),
+					CreatedAt:   time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
@@ -396,6 +437,13 @@ func TestUserController(t *testing.T) {
 
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(body)))
 				req.Header.Set("Content-Type", "application/json")
+				req.AddCookie(&http.Cookie{
+					Name:     "tinyauth-session",
+					Value:    "test-totp-login-attributes-uuid",
+					HttpOnly: true,
+					MaxAge:   3600,
+					Expires:  time.Now().Add(1 * time.Hour),
+				})
 				router.ServeHTTP(recorder, req)
 
 				require.Equal(t, 200, recorder.Code)
@@ -405,15 +453,6 @@ func TestUserController(t *testing.T) {
 			},
 		},
 	}
-
-	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
-
-	app := bootstrap.NewBootstrapApp(model.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
-	require.NoError(t, err)
-
-	queries := repository.New(db)
 
 	docker := service.NewDockerService()
 	err = docker.Init()
