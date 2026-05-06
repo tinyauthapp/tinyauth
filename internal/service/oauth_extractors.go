@@ -27,7 +27,7 @@ func defaultExtractor(client *http.Client, url string) (*model.Claims, error) {
 	return simpleReq[model.Claims](client, url, nil)
 }
 
-func githubExtractor(client *http.Client, url string) (*model.Claims, error) {
+func githubExtractor(client *http.Client, _ string) (*model.Claims, error) {
 	var user model.Claims
 
 	userInfo, err := simpleReq[GithubUserInfoResponse](client, "https://api.github.com/user", map[string]string{
@@ -49,7 +49,7 @@ func githubExtractor(client *http.Client, url string) (*model.Claims, error) {
 	}
 
 	for _, email := range *userEmails {
-		if email.Primary {
+		if email.Primary && email.Verified {
 			user.Email = email.Email
 			break
 		}

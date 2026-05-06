@@ -329,6 +329,28 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	tlog.App.Info().Str("username", context.GetUsername()).Msg("TOTP verification successful")
 	tlog.AuditLoginSuccess(c, context.GetUsername(), "totp")
 
+	uuid, err := c.Cookie(controller.config.SessionCookieName)
+
+	if err != nil {
+		tlog.App.Error().Err(err).Msg("Failed to retrieve session cookie in TOTP handler")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	_, err = controller.auth.DeleteSession(c, uuid)
+
+	if err != nil {
+		tlog.App.Error().Err(err).Msg("Failed to delete pending TOTP session")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
 	controller.auth.RecordLoginAttempt(context.GetUsername(), true)
 
 	sessionCookie := repository.Session{
