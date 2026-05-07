@@ -137,6 +137,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 
 		return &model.UserSearch{
 			Username: userDN,
+			Email:    email,
 			Type:     model.UserLDAP,
 		}, nil
 	}

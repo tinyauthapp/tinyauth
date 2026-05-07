@@ -185,8 +185,8 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	if search.Type == model.UserLDAP {
 		sessionCookie.Provider = "ldap"
-		if userSearch.Email != "" {
-			sessionCookie.Email = userSearch.Email
+		if search.Email != "" {
+			sessionCookie.Email = search.Email
 		}
 	}
 

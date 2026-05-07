@@ -162,7 +162,11 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 
 		userContext.LDAP.Groups = user.Groups
 		userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+
 		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.config.CookieDomain)
+		if search.Email != "" {
+			userContext.LDAP.Email = search.Email
+		}
 	case model.ProviderOAuth:
 		_, exists := m.broker.GetService(userContext.OAuth.ID)
 
@@ -240,11 +244,15 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			BaseContext: model.BaseContext{
 				Username: username,
 				Name:     utils.Capitalize(username),
-				Email:    utils.CompileUserEmail(username, m.config.CookieDomain),
 			},
 			Groups: user.Groups,
 		}
 		userContext.Provider = model.ProviderLDAP
+
+		userContext.LDAP.Email = utils.CompileUserEmail(username, m.config.CookieDomain)
+		if search.Email != "" {
+			userContext.LDAP.Email = search.Email
+		}
 	}
 
 	userContext.Authenticated = true
