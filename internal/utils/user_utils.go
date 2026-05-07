@@ -13,7 +13,7 @@ func ParseUsers(usersStr []string, userAttributes map[string]model.UserAttribute
 	var users []model.LocalUser
 
 	if len(usersStr) == 0 {
-		return &users, nil
+		return nil, nil
 	}
 
 	for _, user := range usersStr {

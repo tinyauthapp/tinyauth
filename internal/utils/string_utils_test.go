@@ -61,29 +61,29 @@ func TestCompileUserEmail(t *testing.T) {
 func TestParseNonEmptyLines(t *testing.T) {
 	lines := utils.ParseNonEmptyLines(" first@example.com \n\n second@example.com \n   \n")
 
-	assert.DeepEqual(t, []string{"first@example.com", "second@example.com"}, lines)
+	assert.Equal(t, []string{"first@example.com", "second@example.com"}, lines)
 }
 
 func TestGetStringList(t *testing.T) {
 	file, err := os.Create("/tmp/tinyauth_list_test_file")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 
 	_, err = file.WriteString(" third@example.com \n\n fourth@example.com \n")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 
 	err = file.Close()
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	defer os.Remove("/tmp/tinyauth_list_test_file")
 
 	values, err := utils.GetStringList([]string{" first@example.com ", "", "second@example.com"}, "/tmp/tinyauth_list_test_file")
-	assert.NilError(t, err)
-	assert.DeepEqual(t, []string{"first@example.com", "second@example.com", "third@example.com", "fourth@example.com"}, values)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"first@example.com", "second@example.com", "third@example.com", "fourth@example.com"}, values)
 
 	values, err = utils.GetStringList(nil, "")
-	assert.NilError(t, err)
-	assert.DeepEqual(t, []string{}, values)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{}, values)
 
 	values, err = utils.GetStringList(nil, "/tmp/non_existing_list_file")
 	assert.ErrorContains(t, err, "no such file or directory")
-	assert.DeepEqual(t, []string{}, values)
+	assert.Equal(t, []string{}, values)
 }
