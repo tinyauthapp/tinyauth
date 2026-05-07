@@ -30,7 +30,7 @@ func TestGetRootDomain(t *testing.T) {
 	// IP address
 	domain = "http://10.10.10.10"
 	_, err = utils.GetCookieDomain(domain)
-	assert.ErrorContains(t, err, "IP addresses not allowed")
+	assert.ErrorContains(t, err, "ip addresses not allowed")
 
 	// Invalid URL
 	domain = "http://[::1]:namedport"
@@ -179,4 +179,49 @@ func TestIsRedirectSafe(t *testing.T) {
 	redirectURL = "https://malicious-example.com/yoyo"
 	result = utils.IsRedirectSafe(redirectURL, domain)
 	assert.False(t, result)
+}
+
+func TestGetStandaloneCookieDomain(t *testing.T) {
+	// Normal case
+	domain := "http://tinyauth.app"
+	expected := "tinyauth.app"
+	result, err := utils.GetStandaloneCookieDomain(domain)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// URL with subdomain (full hostname is returned, no subdomain stripping)
+	domain = "http://sub.tinyauth.app"
+	expected = "sub.tinyauth.app"
+	result, err = utils.GetStandaloneCookieDomain(domain)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// URL with port (port should be stripped)
+	domain = "http://tinyauth.app:8080"
+	expected = "tinyauth.app"
+	result, err = utils.GetStandaloneCookieDomain(domain)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// URL with path
+	domain = "https://tinyauth.app/some/path"
+	expected = "tinyauth.app"
+	result, err = utils.GetStandaloneCookieDomain(domain)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// IP address
+	domain = "http://10.10.10.10"
+	_, err = utils.GetStandaloneCookieDomain(domain)
+	assert.ErrorContains(t, err, "ip addresses not allowed")
+
+	// Invalid domain (only TLD)
+	domain = "com"
+	_, err = utils.GetStandaloneCookieDomain(domain)
+	assert.ErrorContains(t, err, "invalid app url")
+
+	// Invalid URL
+	domain = "http://[::1]:namedport"
+	_, err = utils.GetStandaloneCookieDomain(domain)
+	assert.ErrorContains(t, err, "parse \"http://[::1]:namedport\": invalid port \":namedport\" after host")
 }
