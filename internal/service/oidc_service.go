@@ -22,7 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-jose/go-jose/v4"
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
@@ -68,27 +68,27 @@ type ClaimSet struct {
 }
 
 type UserinfoResponse struct {
-	Sub                 string               `json:"sub"`
-	Name                string               `json:"name,omitempty"`
-	GivenName           string               `json:"given_name,omitempty"`
-	FamilyName          string               `json:"family_name,omitempty"`
-	MiddleName          string               `json:"middle_name,omitempty"`
-	Nickname            string               `json:"nickname,omitempty"`
-	Profile             string               `json:"profile,omitempty"`
-	Picture             string               `json:"picture,omitempty"`
-	Website             string               `json:"website,omitempty"`
-	Gender              string               `json:"gender,omitempty"`
-	Birthdate           string               `json:"birthdate,omitempty"`
-	Zoneinfo            string               `json:"zoneinfo,omitempty"`
-	Locale              string               `json:"locale,omitempty"`
-	Email               string               `json:"email,omitempty"`
-	PreferredUsername   string               `json:"preferred_username,omitempty"`
-	Groups              []string             `json:"groups,omitempty"`
-	EmailVerified       bool                 `json:"email_verified,omitempty"`
-	PhoneNumber         string               `json:"phone_number,omitempty"`
-	PhoneNumberVerified *bool                `json:"phone_number_verified,omitempty"`
-	Address             *config.AddressClaim `json:"address,omitempty"`
-	UpdatedAt           int64                `json:"updated_at"`
+	Sub                 string              `json:"sub"`
+	Name                string              `json:"name,omitempty"`
+	GivenName           string              `json:"given_name,omitempty"`
+	FamilyName          string              `json:"family_name,omitempty"`
+	MiddleName          string              `json:"middle_name,omitempty"`
+	Nickname            string              `json:"nickname,omitempty"`
+	Profile             string              `json:"profile,omitempty"`
+	Picture             string              `json:"picture,omitempty"`
+	Website             string              `json:"website,omitempty"`
+	Gender              string              `json:"gender,omitempty"`
+	Birthdate           string              `json:"birthdate,omitempty"`
+	Zoneinfo            string              `json:"zoneinfo,omitempty"`
+	Locale              string              `json:"locale,omitempty"`
+	Email               string              `json:"email,omitempty"`
+	PreferredUsername   string              `json:"preferred_username,omitempty"`
+	Groups              []string            `json:"groups,omitempty"`
+	EmailVerified       bool                `json:"email_verified,omitempty"`
+	PhoneNumber         string              `json:"phone_number,omitempty"`
+	PhoneNumberVerified *bool               `json:"phone_number_verified,omitempty"`
+	Address             *model.AddressClaim `json:"address,omitempty"`
+	UpdatedAt           int64               `json:"updated_at"`
 }
 
 type TokenResponse struct {
@@ -112,7 +112,7 @@ type AuthorizeRequest struct {
 }
 
 type OIDCServiceConfig struct {
-	Clients        map[string]config.OIDCClientConfig
+	Clients        map[string]model.OIDCClientConfig
 	PrivateKeyPath string
 	PublicKeyPath  string
 	Issuer         string
@@ -122,7 +122,7 @@ type OIDCServiceConfig struct {
 type OIDCService struct {
 	config       OIDCServiceConfig
 	queries      *repository.Queries
-	clients      map[string]config.OIDCClientConfig
+	clients      map[string]model.OIDCClientConfig
 	privateKey   *rsa.PrivateKey
 	publicKey    crypto.PublicKey
 	issuer       string
@@ -255,7 +255,7 @@ func (service *OIDCService) Init() error {
 	}
 
 	// We will reorganize the client into a map with the client ID as the key
-	service.clients = make(map[string]config.OIDCClientConfig)
+	service.clients = make(map[string]model.OIDCClientConfig)
 
 	for id, client := range service.config.Clients {
 		client.ID = id
@@ -283,7 +283,7 @@ func (service *OIDCService) GetIssuer() string {
 	return service.issuer
 }
 
-func (service *OIDCService) GetClient(id string) (config.OIDCClientConfig, bool) {
+func (service *OIDCService) GetClient(id string) (model.OIDCClientConfig, bool) {
 	client, ok := service.clients[id]
 	return client, ok
 }
@@ -367,43 +367,45 @@ func (service *OIDCService) StoreCode(c *gin.Context, sub string, code string, r
 	return err
 }
 
-func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContext config.UserContext, req AuthorizeRequest) error {
-	addressJSON, err := json.Marshal(userContext.Attributes.Address)
-	if err != nil {
-		return err
-	}
-
+func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContext model.UserContext, req AuthorizeRequest) error {
 	userInfoParams := repository.CreateOidcUserInfoParams{
 		Sub:               sub,
-		Name:              userContext.Name,
-		Email:             userContext.Email,
-		PreferredUsername: userContext.Username,
+		Name:              userContext.GetName(),
+		Email:             userContext.GetEmail(),
+		PreferredUsername: userContext.GetUsername(),
 		UpdatedAt:         time.Now().Unix(),
-		GivenName:         userContext.Attributes.GivenName,
-		FamilyName:        userContext.Attributes.FamilyName,
-		MiddleName:        userContext.Attributes.MiddleName,
-		Nickname:          userContext.Attributes.Nickname,
-		Profile:           userContext.Attributes.Profile,
-		Picture:           userContext.Attributes.Picture,
-		Website:           userContext.Attributes.Website,
-		Gender:            userContext.Attributes.Gender,
-		Birthdate:         userContext.Attributes.Birthdate,
-		Zoneinfo:          userContext.Attributes.Zoneinfo,
-		Locale:            userContext.Attributes.Locale,
-		PhoneNumber:       userContext.Attributes.PhoneNumber,
-		Address:           string(addressJSON),
+	}
+
+	if userContext.IsLocal() {
+		addressJSON, err := json.Marshal(userContext.Local.Attributes.Address)
+		if err != nil {
+			return err
+		}
+		userInfoParams.GivenName = userContext.Local.Attributes.GivenName
+		userInfoParams.FamilyName = userContext.Local.Attributes.FamilyName
+		userInfoParams.MiddleName = userContext.Local.Attributes.MiddleName
+		userInfoParams.Nickname = userContext.Local.Attributes.Nickname
+		userInfoParams.Profile = userContext.Local.Attributes.Profile
+		userInfoParams.Picture = userContext.Local.Attributes.Picture
+		userInfoParams.Website = userContext.Local.Attributes.Website
+		userInfoParams.Gender = userContext.Local.Attributes.Gender
+		userInfoParams.Birthdate = userContext.Local.Attributes.Birthdate
+		userInfoParams.Zoneinfo = userContext.Local.Attributes.Zoneinfo
+		userInfoParams.Locale = userContext.Local.Attributes.Locale
+		userInfoParams.PhoneNumber = userContext.Local.Attributes.PhoneNumber
+		userInfoParams.Address = string(addressJSON)
 	}
 
 	// Tinyauth will pass through the groups it got from an LDAP or an OIDC server
-	if userContext.Provider == "ldap" {
-		userInfoParams.Groups = userContext.LdapGroups
+	if userContext.IsLDAP() {
+		userInfoParams.Groups = strings.Join(userContext.LDAP.Groups, ",")
 	}
 
-	if userContext.OAuth && len(userContext.OAuthGroups) > 0 {
-		userInfoParams.Groups = userContext.OAuthGroups
+	if userContext.IsOAuth() {
+		userInfoParams.Groups = strings.Join(userContext.OAuth.Groups, ",")
 	}
 
-	_, err = service.queries.CreateOidcUserInfo(c, userInfoParams)
+	_, err := service.queries.CreateOidcUserInfo(c, userInfoParams)
 
 	return err
 }
@@ -445,7 +447,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 	return oidcCode, nil
 }
 
-func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
+func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
 	createdAt := time.Now().Unix()
 	expiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
 
@@ -511,7 +513,7 @@ func (service *OIDCService) generateIDToken(client config.OIDCClientConfig, user
 	return token, nil
 }
 
-func (service *OIDCService) GenerateAccessToken(c *gin.Context, client config.OIDCClientConfig, codeEntry repository.OidcCode) (TokenResponse, error) {
+func (service *OIDCService) GenerateAccessToken(c *gin.Context, client model.OIDCClientConfig, codeEntry repository.OidcCode) (TokenResponse, error) {
 	user, err := service.GetUserinfo(c, codeEntry.Sub)
 
 	if err != nil {
@@ -585,7 +587,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 		return TokenResponse{}, err
 	}
 
-	idToken, err := service.generateIDToken(config.OIDCClientConfig{
+	idToken, err := service.generateIDToken(model.OIDCClientConfig{
 		ClientID: entry.ClientID,
 	}, user, entry.Scope, entry.Nonce)
 
@@ -714,7 +716,7 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 	}
 
 	if slices.Contains(scopes, "address") {
-		var addr config.AddressClaim
+		var addr model.AddressClaim
 		if err := json.Unmarshal([]byte(user.Address), &addr); err == nil {
 			userInfo.Address = &addr
 		}

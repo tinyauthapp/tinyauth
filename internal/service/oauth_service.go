@@ -6,21 +6,21 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"golang.org/x/oauth2"
 )
 
-type UserinfoExtractor func(client *http.Client, url string) (config.Claims, error)
+type UserinfoExtractor func(client *http.Client, url string) (*model.Claims, error)
 
 type OAuthService struct {
-	serviceCfg        config.OAuthServiceConfig
+	serviceCfg        model.OAuthServiceConfig
 	config            *oauth2.Config
 	ctx               context.Context
 	userinfoExtractor UserinfoExtractor
 	id                string
 }
 
-func NewOAuthService(config config.OAuthServiceConfig, id string) *OAuthService {
+func NewOAuthService(config model.OAuthServiceConfig, id string) *OAuthService {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
@@ -78,7 +78,7 @@ func (s *OAuthService) GetToken(code string, verifier string) (*oauth2.Token, er
 	return s.config.Exchange(s.ctx, code, oauth2.VerifierOption(verifier))
 }
 
-func (s *OAuthService) GetUserinfo(token *oauth2.Token) (config.Claims, error) {
+func (s *OAuthService) GetUserinfo(token *oauth2.Token) (*model.Claims, error) {
 	client := oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(token))
 	return s.userinfoExtractor(client, s.serviceCfg.UserinfoURL)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
 
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
@@ -111,14 +112,14 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 		return
 	}
 
-	userContext, err := utils.GetContext(c)
+	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
 		controller.authorizeError(c, err, "Failed to get user context", "User is not logged in or the session is invalid", "", "", "")
 		return
 	}
 
-	if !userContext.IsLoggedIn {
+	if !userContext.Authenticated {
 		controller.authorizeError(c, errors.New("err user not logged in"), "User not logged in", "The user is not logged in", "", "", "")
 		return
 	}
@@ -151,7 +152,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 	}
 
 	// WARNING: Since Tinyauth is stateless, we cannot have a sub that never changes. We will just create a uuid out of the username and client name which remains stable, but if username or client name changes then sub changes too.
-	sub := utils.GenerateUUID(fmt.Sprintf("%s:%s", userContext.Username, client.ID))
+	sub := utils.GenerateUUID(fmt.Sprintf("%s:%s", userContext.GetUsername(), client.ID))
 	code := utils.GenerateString(32)
 
 	// Before storing the code, delete old session
@@ -170,7 +171,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 
 	// We also need a snapshot of the user that authorized this (skip if no openid scope)
 	if slices.Contains(strings.Fields(req.Scope), "openid") {
-		err = controller.oidc.StoreUserinfo(c, sub, userContext, req)
+		err = controller.oidc.StoreUserinfo(c, sub, *userContext, req)
 
 		if err != nil {
 			tlog.App.Error().Err(err).Msg("Failed to insert user info into database")

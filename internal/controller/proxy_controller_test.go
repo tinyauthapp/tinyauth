@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestProxyController(t *testing.T) {
@@ -21,7 +21,7 @@ func TestProxyController(t *testing.T) {
 	tempDir := t.TempDir()
 
 	authServiceCfg := service.AuthServiceConfig{
-		Users: []config.User{
+		LocalUsers: &[]model.LocalUser{
 			{
 				Username: "testuser",
 				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
@@ -29,7 +29,7 @@ func TestProxyController(t *testing.T) {
 			{
 				Username:   "totpuser",
 				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TotpSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
+				TOTPSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
 			},
 		},
 		SessionExpiry:     10, // 10 seconds, useful for testing
@@ -43,28 +43,28 @@ func TestProxyController(t *testing.T) {
 		AppURL: "https://tinyauth.example.com",
 	}
 
-	acls := map[string]config.App{
+	acls := map[string]model.App{
 		"app_path_allow": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "path-allow.example.com",
 			},
-			Path: config.AppPath{
+			Path: model.AppPath{
 				Allow: "/allowed",
 			},
 		},
 		"app_user_allow": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "user-allow.example.com",
 			},
-			Users: config.AppUsers{
+			Users: model.AppUsers{
 				Allow: "testuser",
 			},
 		},
 		"ip_bypass": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "ip-bypass.example.com",
 			},
-			IP: config.AppIP{
+			IP: model.AppIP{
 				Bypass: []string{"10.10.10.10"},
 			},
 		},
@@ -74,24 +74,31 @@ func TestProxyController(t *testing.T) {
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
 
 	simpleCtx := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:   "testuser",
-			Name:       "Testuser",
-			Email:      "testuser@example.com",
-			IsLoggedIn: true,
-			Provider:   "local",
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "testuser",
+					Name:     "Testuser",
+					Email:    "testuser@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
 
 	simpleCtxTotp := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:    "totpuser",
-			Name:        "Totpuser",
-			Email:       "totpuser@example.com",
-			IsLoggedIn:  true,
-			Provider:    "local",
-			TotpEnabled: true,
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "totpuser",
+					Name:     "Totpuser",
+					Email:    "totpuser@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
@@ -391,9 +398,9 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	oauthBrokerCfgs := make(map[string]config.OAuthServiceConfig)
+	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
+	app := bootstrap.NewBootstrapApp(model.Config{})
 
 	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
 	require.NoError(t, err)

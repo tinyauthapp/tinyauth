@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
 type BootstrapApp struct {
-	config  config.Config
+	config  model.Config
 	context struct {
 		appUrl                 string
 		uuid                   string
@@ -29,15 +29,16 @@ type BootstrapApp struct {
 		csrfCookieName         string
 		redirectCookieName     string
 		oauthSessionCookieName string
-		users                  []config.User
-		oauthProviders         map[string]config.OAuthServiceConfig
+		localUsers             *[]model.LocalUser
+		oauthProviders         map[string]model.OAuthServiceConfig
+		oauthWhitelist         []string
 		configuredProviders    []controller.Provider
-		oidcClients            []config.OIDCClientConfig
+		oidcClients            []model.OIDCClientConfig
 	}
 	services Services
 }
 
-func NewBootstrapApp(config config.Config) *BootstrapApp {
+func NewBootstrapApp(config model.Config) *BootstrapApp {
 	return &BootstrapApp{
 		config: config,
 	}
@@ -69,7 +70,14 @@ func (app *BootstrapApp) Setup() error {
 		return err
 	}
 
-	app.context.users = users
+	app.context.localUsers = users
+
+	oauthWhitelist, err := utils.GetStringList(app.config.OAuth.Whitelist, app.config.OAuth.WhitelistFile)
+	if err != nil {
+		return err
+	}
+
+	app.context.oauthWhitelist = oauthWhitelist
 
 	// Setup OAuth providers
 	app.context.oauthProviders = app.config.OAuth.Providers
@@ -88,7 +96,7 @@ func (app *BootstrapApp) Setup() error {
 
 	for id, provider := range app.context.oauthProviders {
 		if provider.Name == "" {
-			if name, ok := config.OverrideProviders[id]; ok {
+			if name, ok := model.OverrideProviders[id]; ok {
 				provider.Name = name
 			} else {
 				provider.Name = utils.Capitalize(id)
@@ -104,7 +112,13 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// Get cookie domain
-	cookieDomain, err := utils.GetCookieDomain(app.context.appUrl)
+	cookieDomainResolver := utils.GetCookieDomain
+	if !app.config.Auth.SubdomainsEnabled {
+		tlog.App.Info().Msg("Subdomains disabled, automatic authentication for proxied apps will not work")
+		cookieDomainResolver = utils.GetStandaloneCookieDomain
+	}
+
+	cookieDomain, err := cookieDomainResolver(app.context.appUrl)
 
 	if err != nil {
 		return err
@@ -115,14 +129,14 @@ func (app *BootstrapApp) Setup() error {
 	// Cookie names
 	app.context.uuid = utils.GenerateUUID(appUrl.Hostname())
 	cookieId := strings.Split(app.context.uuid, "-")[0]
-	app.context.sessionCookieName = fmt.Sprintf("%s-%s", config.SessionCookieName, cookieId)
-	app.context.csrfCookieName = fmt.Sprintf("%s-%s", config.CSRFCookieName, cookieId)
-	app.context.redirectCookieName = fmt.Sprintf("%s-%s", config.RedirectCookieName, cookieId)
-	app.context.oauthSessionCookieName = fmt.Sprintf("%s-%s", config.OAuthSessionCookieName, cookieId)
+	app.context.sessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
+	app.context.csrfCookieName = fmt.Sprintf("%s-%s", model.CSRFCookieName, cookieId)
+	app.context.redirectCookieName = fmt.Sprintf("%s-%s", model.RedirectCookieName, cookieId)
+	app.context.oauthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
 
 	// Dumps
 	tlog.App.Trace().Interface("config", app.config).Msg("Config dump")
-	tlog.App.Trace().Interface("users", app.context.users).Msg("Users dump")
+	tlog.App.Trace().Interface("users", app.context.localUsers).Msg("Users dump")
 	tlog.App.Trace().Interface("oauthProviders", app.context.oauthProviders).Msg("OAuth providers dump")
 	tlog.App.Trace().Str("cookieDomain", app.context.cookieDomain).Msg("Cookie domain")
 	tlog.App.Trace().Str("sessionCookieName", app.context.sessionCookieName).Msg("Session cookie name")
@@ -171,7 +185,7 @@ func (app *BootstrapApp) Setup() error {
 		})
 	}
 
-	if services.authService.LdapAuthConfigured() {
+	if services.authService.LDAPAuthConfigured() {
 		configuredProviders = append(configuredProviders, controller.Provider{
 			Name:  "LDAP",
 			ID:    "ldap",
@@ -244,7 +258,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 	var body heartbeat
 
 	body.UUID = app.context.uuid
-	body.Version = config.Version
+	body.Version = model.Version
 
 	bodyJson, err := json.Marshal(body)
 
@@ -257,7 +271,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 		Timeout: 30 * time.Second, // The server should never take more than 30 seconds to respond
 	}
 
-	heartbeatURL := config.ApiServer + "/v1/instances/heartbeat"
+	heartbeatURL := model.APIServer + "/v1/instances/heartbeat"
 
 	for range ticker.C {
 		tlog.App.Debug().Msg("Sending heartbeat")

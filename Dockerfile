@@ -38,9 +38,9 @@ COPY ./internal ./internal
 COPY --from=frontend-builder /frontend/dist ./internal/assets/dist
 
 RUN CGO_ENABLED=0 go build -ldflags "-s -w \
-    -X github.com/tinyauthapp/tinyauth/internal/config.Version=${VERSION} \
-    -X github.com/tinyauthapp/tinyauth/internal/config.CommitHash=${COMMIT_HASH} \
-    -X github.com/tinyauthapp/tinyauth/internal/config.BuildTimestamp=${BUILD_TIMESTAMP}" ./cmd/tinyauth
+    -X github.com/tinyauthapp/tinyauth/internal/model.Version=${VERSION} \
+    -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
+    -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" ./cmd/tinyauth
 
 # Runner
 FROM alpine:3.23 AS runner

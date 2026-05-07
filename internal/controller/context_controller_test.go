@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestContextController(t *testing.T) {
@@ -79,12 +79,16 @@ func TestContextController(t *testing.T) {
 			description: "Ensure user context returns when authorized",
 			middlewares: []gin.HandlerFunc{
 				func(c *gin.Context) {
-					c.Set("context", &config.UserContext{
-						Username:   "johndoe",
-						Name:       "John Doe",
-						Email:      utils.CompileUserEmail("johndoe", controllerConfig.CookieDomain),
-						Provider:   "local",
-						IsLoggedIn: true,
+					c.Set("context", &model.UserContext{
+						Authenticated: true,
+						Provider:      model.ProviderLocal,
+						Local: &model.LocalContext{
+							BaseContext: model.BaseContext{
+								Username: "johndoe",
+								Name:     "John Doe",
+								Email:    utils.CompileUserEmail("johndoe", controllerConfig.CookieDomain),
+							},
+						},
 					})
 				},
 			},

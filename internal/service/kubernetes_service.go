@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
@@ -32,7 +32,7 @@ type ingressAppKey struct {
 type ingressApp struct {
 	domain  string
 	appName string
-	app     config.App
+	app     model.App
 }
 
 type KubernetesService struct {
@@ -89,36 +89,38 @@ func (k *KubernetesService) removeIngress(namespace, name string) {
 	}
 }
 
-func (k *KubernetesService) getByDomain(domain string) (config.App, bool) {
+func (k *KubernetesService) getByDomain(domain string) *model.App {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
 	if appKey, ok := k.domainIndex[domain]; ok {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for _, app := range apps {
+			for i := range apps {
+				app := &apps[i]
 				if app.domain == domain && app.appName == appKey.appName {
-					return app.app, true
+					return &app.app
 				}
 			}
 		}
 	}
-	return config.App{}, false
+	return nil
 }
 
-func (k *KubernetesService) getByAppName(appName string) (config.App, bool) {
+func (k *KubernetesService) getByAppName(appName string) *model.App {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
 	if appKey, ok := k.appNameIndex[appName]; ok {
 		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for _, app := range apps {
+			for i := range apps {
+				app := &apps[i]
 				if app.appName == appName {
-					return app.app, true
+					return &app.app
 				}
 			}
 		}
 	}
-	return config.App{}, false
+	return nil
 }
 
 func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
@@ -129,7 +131,7 @@ func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
 		k.removeIngress(namespace, name)
 		return
 	}
-	labels, err := decoders.DecodeLabels[config.Apps](annotations, "apps")
+	labels, err := decoders.DecodeLabels[model.Apps](annotations, "apps")
 	if err != nil {
 		tlog.App.Debug().Err(err).Msg("Failed to decode labels from annotations")
 		k.removeIngress(namespace, name)
@@ -280,24 +282,25 @@ func (k *KubernetesService) Init() error {
 	return nil
 }
 
-func (k *KubernetesService) GetLabels(appDomain string) (config.App, error) {
+func (k *KubernetesService) GetLabels(appDomain string) (*model.App, error) {
 	if !k.started {
 		tlog.App.Debug().Msg("Kubernetes not connected, returning empty labels")
-		return config.App{}, nil
+		return nil, nil
 	}
 
 	// First check cache
-	if app, found := k.getByDomain(appDomain); found {
+	app := k.getByDomain(appDomain)
+	if app != nil {
 		tlog.App.Debug().Str("domain", appDomain).Msg("Found labels in cache by domain")
 		return app, nil
 	}
 	appName := strings.SplitN(appDomain, ".", 2)[0]
-	if app, found := k.getByAppName(appName); found {
+	app = k.getByAppName(appName)
+	if app != nil {
 		tlog.App.Debug().Str("domain", appDomain).Str("appName", appName).Msg("Found labels in cache by app name")
 		return app, nil
 	}
 
 	tlog.App.Debug().Str("domain", appDomain).Msg("Cache miss, no matching ingress found")
-	return config.App{}, nil
+	return nil, nil
 }
-
