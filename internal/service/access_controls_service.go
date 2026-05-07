@@ -7,7 +7,14 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
-type LabelProvider interface {
+type LabelProvider int
+
+const (
+	LabelProviderDocker LabelProvider = iota
+	LabelProviderKubernetes
+)
+
+type LabelProviderImpl interface {
 	GetLabels(appDomain string) (*model.App, error)
 }
 

@@ -77,7 +77,6 @@ func (l *Logger) WithWriter(writer io.Writer) *Logger {
 func (l *Logger) Init() {
 	base := log.With().
 		Timestamp().
-		Caller().
 		Logger().
 		Level(l.parseLogLevel(l.config.Level)).Output(l.writer)
 
@@ -113,6 +112,9 @@ func (l *Logger) createLogger(component string, cfg model.LogStreamConfig) zerol
 	sub := l.base.With().Str("stream", component).Logger()
 	if cfg.Level != "" {
 		sub = sub.Level(l.parseLogLevel(cfg.Level))
+	}
+	if sub.GetLevel() == zerolog.DebugLevel {
+		sub = sub.With().Caller().Logger()
 	}
 	return sub
 }

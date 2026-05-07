@@ -13,7 +13,7 @@ import (
 
 var DEV_MODES = []string{"main", "test", "development"}
 
-func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
+func (app *App) setupRouter() error {
 	if !slices.Contains(DEV_MODES, model.Version) {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -25,19 +25,19 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 		err := engine.SetTrustedProxies(app.config.Auth.TrustedProxies)
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to set trusted proxies: %w", err)
+			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
 	}
 
 	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
-		CookieDomain:      app.context.cookieDomain,
-		SessionCookieName: app.context.sessionCookieName,
+		CookieDomain:      app.runtime.cookieDomain,
+		SessionCookieName: app.runtime.sessionCookieName,
 	}, app.services.authService, app.services.oauthBrokerService)
 
 	err := contextMiddleware.Init()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize context middleware: %w", err)
+		return fmt.Errorf("failed to initialize context middleware: %w", err)
 	}
 
 	engine.Use(contextMiddleware.Middleware())
@@ -47,7 +47,7 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	err = uiMiddleware.Init()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize UI middleware: %w", err)
+		return fmt.Errorf("failed to initialize UI middleware: %w", err)
 	}
 
 	engine.Use(uiMiddleware.Middleware())
@@ -57,7 +57,7 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	err = zerologMiddleware.Init()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize zerolog middleware: %w", err)
+		return fmt.Errorf("failed to initialize zerolog middleware: %w", err)
 	}
 
 	engine.Use(zerologMiddleware.Middleware())
@@ -65,10 +65,10 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	apiRouter := engine.Group("/api")
 
 	contextController := controller.NewContextController(controller.ContextControllerConfig{
-		Providers:             app.context.configuredProviders,
+		Providers:             app.runtime.configuredProviders,
 		Title:                 app.config.UI.Title,
 		AppURL:                app.config.AppURL,
-		CookieDomain:          app.context.cookieDomain,
+		CookieDomain:          app.runtime.cookieDomain,
 		ForgotPasswordMessage: app.config.UI.ForgotPasswordMessage,
 		BackgroundImage:       app.config.UI.BackgroundImage,
 		OAuthAutoRedirect:     app.config.OAuth.AutoRedirect,
@@ -80,10 +80,10 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	oauthController := controller.NewOAuthController(controller.OAuthControllerConfig{
 		AppURL:                 app.config.AppURL,
 		SecureCookie:           app.config.Auth.SecureCookie,
-		CSRFCookieName:         app.context.csrfCookieName,
-		RedirectCookieName:     app.context.redirectCookieName,
-		CookieDomain:           app.context.cookieDomain,
-		OAuthSessionCookieName: app.context.oauthSessionCookieName,
+		CSRFCookieName:         app.runtime.csrfCookieName,
+		RedirectCookieName:     app.runtime.redirectCookieName,
+		CookieDomain:           app.runtime.cookieDomain,
+		OAuthSessionCookieName: app.runtime.oauthSessionCookieName,
 		SubdomainsEnabled:      app.config.Auth.SubdomainsEnabled,
 	}, apiRouter, app.services.authService)
 
@@ -100,8 +100,8 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 	proxyController.SetupRoutes()
 
 	userController := controller.NewUserController(controller.UserControllerConfig{
-		CookieDomain:      app.context.cookieDomain,
-		SessionCookieName: app.context.sessionCookieName,
+		CookieDomain:      app.runtime.cookieDomain,
+		SessionCookieName: app.runtime.sessionCookieName,
 	}, apiRouter, app.services.authService)
 
 	userController.SetupRoutes()
@@ -121,5 +121,6 @@ func (app *BootstrapApp) setupRouter() (*gin.Engine, error) {
 
 	wellknownController.SetupRoutes()
 
-	return engine, nil
+	app.router = engine
+	return nil
 }
