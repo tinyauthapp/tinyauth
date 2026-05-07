@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 )
 
 type Logger struct {
@@ -22,7 +22,7 @@ var (
 	App   zerolog.Logger
 )
 
-func NewLogger(cfg config.LogConfig) *Logger {
+func NewLogger(cfg model.LogConfig) *Logger {
 	baseLogger := log.With().
 		Timestamp().
 		Caller().
@@ -44,24 +44,24 @@ func NewLogger(cfg config.LogConfig) *Logger {
 }
 
 func NewSimpleLogger() *Logger {
-	return NewLogger(config.LogConfig{
+	return NewLogger(model.LogConfig{
 		Level: "info",
 		Json:  false,
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true},
-			App:   config.LogStreamConfig{Enabled: true},
-			Audit: config.LogStreamConfig{Enabled: false},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true},
+			App:   model.LogStreamConfig{Enabled: true},
+			Audit: model.LogStreamConfig{Enabled: false},
 		},
 	})
 }
 
 func NewTestLogger() *Logger {
-	return NewLogger(config.LogConfig{
+	return NewLogger(model.LogConfig{
 		Level: "trace",
-		Streams: config.LogStreams{
-			HTTP:  config.LogStreamConfig{Enabled: true},
-			App:   config.LogStreamConfig{Enabled: true},
-			Audit: config.LogStreamConfig{Enabled: true},
+		Streams: model.LogStreams{
+			HTTP:  model.LogStreamConfig{Enabled: true},
+			App:   model.LogStreamConfig{Enabled: true},
+			Audit: model.LogStreamConfig{Enabled: true},
 		},
 	})
 }
@@ -72,7 +72,7 @@ func (l *Logger) Init() {
 	App = l.App
 }
 
-func createLogger(component string, streamCfg config.LogStreamConfig, baseLogger zerolog.Logger) zerolog.Logger {
+func createLogger(component string, streamCfg model.LogStreamConfig, baseLogger zerolog.Logger) zerolog.Logger {
 	if !streamCfg.Enabled {
 		return zerolog.Nop()
 	}

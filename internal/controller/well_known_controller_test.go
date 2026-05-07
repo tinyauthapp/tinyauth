@@ -8,14 +8,14 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestWellKnownController(t *testing.T) {
@@ -23,7 +23,7 @@ func TestWellKnownController(t *testing.T) {
 	tempDir := t.TempDir()
 
 	oidcServiceCfg := service.OIDCServiceConfig{
-		Clients: map[string]config.OIDCClientConfig{
+		Clients: map[string]model.OIDCClientConfig{
 			"test": {
 				ClientID:            "some-client-id",
 				ClientSecret:        "some-client-secret",
@@ -101,7 +101,7 @@ func TestWellKnownController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
+	app := bootstrap.NewBootstrapApp(model.Config{})
 
 	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
 	require.NoError(t, err)

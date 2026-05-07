@@ -73,7 +73,7 @@ func generateTotpCmd() *cli.Command {
 				docker = true
 			}
 
-			if user.TotpSecret != "" {
+			if user.TOTPSecret != "" {
 				return fmt.Errorf("user already has a TOTP secret")
 			}
 
@@ -102,14 +102,14 @@ func generateTotpCmd() *cli.Command {
 
 			qrterminal.GenerateWithConfig(key.URL(), config)
 
-			user.TotpSecret = secret
+			user.TOTPSecret = secret
 
 			// If using docker escape re-escape it
 			if docker {
 				user.Password = strings.ReplaceAll(user.Password, "$", "$$")
 			}
 
-			tlog.App.Info().Str("user", fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TotpSecret)).Msg("Add the totp secret to your authenticator app then use the verify command to ensure everything is working correctly.")
+			tlog.App.Info().Str("user", fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TOTPSecret)).Msg("Add the totp secret to your authenticator app then use the verify command to ensure everything is working correctly.")
 
 			return nil
 		},

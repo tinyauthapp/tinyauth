@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"os"
+
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
@@ -10,6 +12,7 @@ type Services struct {
 	accessControlService *service.AccessControlsService
 	authService          *service.AuthService
 	dockerService        *service.DockerService
+	kubernetesService    *service.KubernetesService
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
@@ -19,14 +22,14 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	services := Services{}
 
 	ldapService := service.NewLdapService(service.LdapServiceConfig{
-		Address:      app.config.Ldap.Address,
-		BindDN:       app.config.Ldap.BindDN,
-		BindPassword: app.config.Ldap.BindPassword,
-		BaseDN:       app.config.Ldap.BaseDN,
-		Insecure:     app.config.Ldap.Insecure,
-		SearchFilter: app.config.Ldap.SearchFilter,
-		AuthCert:     app.config.Ldap.AuthCert,
-		AuthKey:      app.config.Ldap.AuthKey,
+		Address:      app.config.LDAP.Address,
+		BindDN:       app.config.LDAP.BindDN,
+		BindPassword: app.config.LDAP.BindPassword,
+		BaseDN:       app.config.LDAP.BaseDN,
+		Insecure:     app.config.LDAP.Insecure,
+		SearchFilter: app.config.LDAP.SearchFilter,
+		AuthCert:     app.config.LDAP.AuthCert,
+		AuthKey:      app.config.LDAP.AuthKey,
 	})
 
 	err := ldapService.Init()
@@ -38,17 +41,34 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 
 	services.ldapService = ldapService
 
-	dockerService := service.NewDockerService()
+	var labelProvider service.LabelProvider
+	var dockerService *service.DockerService
+	var kubernetesService *service.KubernetesService
 
-	err = dockerService.Init()
+	useKubernetes := app.config.LabelProvider == "kubernetes" ||
+		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
 
-	if err != nil {
-		return Services{}, err
+	if useKubernetes {
+		tlog.App.Debug().Msg("Using Kubernetes label provider")
+		kubernetesService = service.NewKubernetesService()
+		err = kubernetesService.Init()
+		if err != nil {
+			return Services{}, err
+		}
+		services.kubernetesService = kubernetesService
+		labelProvider = kubernetesService
+	} else {
+		tlog.App.Debug().Msg("Using Docker label provider")
+		dockerService = service.NewDockerService()
+		err = dockerService.Init()
+		if err != nil {
+			return Services{}, err
+		}
+		services.dockerService = dockerService
+		labelProvider = dockerService
 	}
 
-	services.dockerService = dockerService
-
-	accessControlsService := service.NewAccessControlsService(dockerService, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(labelProvider, app.config.Apps)
 
 	err = accessControlsService.Init()
 
@@ -69,8 +89,13 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 	services.oauthBrokerService = oauthBrokerService
 
 	authService := service.NewAuthService(service.AuthServiceConfig{
+<<<<<<< HEAD
 		Users:              app.context.users,
 		OauthWhitelist:     app.context.oauthWhitelist,
+=======
+		LocalUsers:         app.context.localUsers,
+		OauthWhitelist:     app.config.OAuth.Whitelist,
+>>>>>>> main
 		SessionExpiry:      app.config.Auth.SessionExpiry,
 		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
 		SecureCookie:       app.config.Auth.SecureCookie,
@@ -79,8 +104,9 @@ func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, er
 		LoginMaxRetries:    app.config.Auth.LoginMaxRetries,
 		SessionCookieName:  app.context.sessionCookieName,
 		IP:                 app.config.Auth.IP,
-		LDAPGroupsCacheTTL: app.config.Ldap.GroupCacheTTL,
-	}, dockerService, services.ldapService, queries, services.oauthBrokerService)
+		LDAPGroupsCacheTTL: app.config.LDAP.GroupCacheTTL,
+		SubdomainsEnabled:  app.config.Auth.SubdomainsEnabled,
+	}, services.ldapService, queries, services.oauthBrokerService)
 
 	err = authService.Init()
 

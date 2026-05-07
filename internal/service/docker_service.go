@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
@@ -51,56 +51,48 @@ func (docker *DockerService) Init() error {
 }
 
 func (docker *DockerService) getContainers() ([]container.Summary, error) {
-	containers, err := docker.client.ContainerList(docker.context, container.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return containers, nil
+	return docker.client.ContainerList(docker.context, container.ListOptions{})
 }
 
 func (docker *DockerService) inspectContainer(containerId string) (container.InspectResponse, error) {
-	inspect, err := docker.client.ContainerInspect(docker.context, containerId)
-	if err != nil {
-		return container.InspectResponse{}, err
-	}
-	return inspect, nil
+	return docker.client.ContainerInspect(docker.context, containerId)
 }
 
-func (docker *DockerService) GetLabels(appDomain string) (config.App, error) {
+func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 	if !docker.isConnected {
 		tlog.App.Debug().Msg("Docker not connected, returning empty labels")
-		return config.App{}, nil
+		return nil, nil
 	}
 
 	containers, err := docker.getContainers()
 	if err != nil {
-		return config.App{}, err
+		return nil, err
 	}
 
 	for _, ctr := range containers {
 		inspect, err := docker.inspectContainer(ctr.ID)
 		if err != nil {
-			return config.App{}, err
+			return nil, err
 		}
 
-		labels, err := decoders.DecodeLabels[config.Apps](inspect.Config.Labels, "apps")
+		labels, err := decoders.DecodeLabels[model.Apps](inspect.Config.Labels, "apps")
 		if err != nil {
-			return config.App{}, err
+			return nil, err
 		}
 
 		for appName, appLabels := range labels.Apps {
 			if appLabels.Config.Domain == appDomain {
 				tlog.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
-				return appLabels, nil
+				return &appLabels, nil
 			}
 
 			if strings.SplitN(appDomain, ".", 2)[0] == appName {
 				tlog.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
-				return appLabels, nil
+				return &appLabels, nil
 			}
 		}
 	}
 
 	tlog.App.Debug().Msg("No matching container found, returning empty labels")
-	return config.App{}, nil
+	return nil, nil
 }

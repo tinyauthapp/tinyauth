@@ -4,9 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestCapitalize(t *testing.T) {

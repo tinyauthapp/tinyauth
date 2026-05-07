@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -27,6 +26,7 @@ type OAuthControllerConfig struct {
 	SecureCookie           bool
 	AppURL                 string
 	CookieDomain           string
+	SubdomainsEnabled      bool
 }
 
 type OAuthController struct {
@@ -106,7 +106,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", fmt.Sprintf(".%s", controller.config.CookieDomain), controller.config.SecureCookie, true)
+	c.SetCookie(controller.config.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -136,7 +136,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, "", -1, "/", fmt.Sprintf(".%s", controller.config.CookieDomain), controller.config.SecureCookie, true)
+	c.SetCookie(controller.config.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
 
 	oauthPendingSession, err := controller.auth.GetOAuthPendingSession(sessionIdCookie)
 
@@ -176,7 +176,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		tlog.App.Warn().Str("email", user.Email).Msg("Email not whitelisted")
 		tlog.AuditLoginFailure(c, user.Email, req.Provider, "email not whitelisted")
 
-		queries, err := query.Values(config.UnauthorizedQuery{
+		queries, err := query.Values(UnauthorizedQuery{
 			Username: user.Email,
 		})
 
@@ -236,13 +236,15 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")
 
-	err = controller.auth.CreateSessionCookie(c, &sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
 		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
 		return
 	}
+
+	http.SetCookie(c.Writer, cookie)
 
 	tlog.AuditLoginSuccess(c, sessionCookie.Username, sessionCookie.Provider)
 
@@ -259,7 +261,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	}
 
 	if oauthPendingSession.CallbackParams.RedirectURI != "" {
-		queries, err := query.Values(config.RedirectQuery{
+		queries, err := query.Values(RedirectQuery{
 			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
 		})
 
@@ -281,4 +283,11 @@ func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) 
 		params.ResponseType != "" &&
 		params.ClientID != "" &&
 		params.RedirectURI != ""
+}
+
+func (controller *OAuthController) getCookieDomain() string {
+	if controller.config.SubdomainsEnabled {
+		return "." + controller.config.CookieDomain
+	}
+	return controller.config.CookieDomain
 }
