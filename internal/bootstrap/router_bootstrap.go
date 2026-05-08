@@ -29,10 +29,7 @@ func (app *BootstrapApp) setupRouter() error {
 		}
 	}
 
-	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
-		CookieDomain:      app.runtime.CookieDomain,
-		SessionCookieName: app.runtime.SessionCookieName,
-	}, app.services.authService, app.services.oauthBrokerService)
+	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService)
 
 	err := contextMiddleware.Init()
 
@@ -52,7 +49,7 @@ func (app *BootstrapApp) setupRouter() error {
 
 	engine.Use(uiMiddleware.Middleware())
 
-	zerologMiddleware := middleware.NewZerologMiddleware()
+	zerologMiddleware := middleware.NewZerologMiddleware(app.log)
 
 	err = zerologMiddleware.Init()
 

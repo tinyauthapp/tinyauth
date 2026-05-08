@@ -13,7 +13,6 @@ type RuntimeConfig struct {
 	OAuthWhitelist         []string
 	ConfiguredProviders    []Provider
 	OIDCClients            []OIDCClientConfig
-	LabelProvider          LabelProvider
 }
 
 type Provider struct {
@@ -21,10 +20,3 @@ type Provider struct {
 	ID    string `json:"id"`
 	OAuth bool   `json:"oauth"`
 }
-
-type LabelProvider int
-
-const (
-	LabelProviderDocker LabelProvider = iota
-	LabelProviderKubernetes
-)

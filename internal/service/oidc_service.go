@@ -25,7 +25,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 var (
@@ -111,17 +111,13 @@ type AuthorizeRequest struct {
 	CodeChallengeMethod string `json:"code_challenge_method"`
 }
 
-type OIDCServiceConfig struct {
-	Clients        map[string]model.OIDCClientConfig
-	PrivateKeyPath string
-	PublicKeyPath  string
-	Issuer         string
-	SessionExpiry  int
-}
-
 type OIDCService struct {
-	config       OIDCServiceConfig
-	queries      *repository.Queries
+	log     *logger.Logger
+	config  model.Config
+	runtime model.RuntimeConfig
+	queries *repository.Queries
+	context context.Context
+
 	clients      map[string]model.OIDCClientConfig
 	privateKey   *rsa.PrivateKey
 	publicKey    crypto.PublicKey
@@ -129,10 +125,18 @@ type OIDCService struct {
 	isConfigured bool
 }
 
-func NewOIDCService(config OIDCServiceConfig, queries *repository.Queries) *OIDCService {
+func NewOIDCService(
+	log *logger.Logger,
+	config model.Config,
+	runtime model.RuntimeConfig,
+	queries *repository.Queries,
+	context context.Context) *OIDCService {
 	return &OIDCService{
+		log:     log,
 		config:  config,
+		runtime: runtime,
 		queries: queries,
+		context: context,
 	}
 }
 
@@ -142,7 +146,7 @@ func (service *OIDCService) IsConfigured() bool {
 
 func (service *OIDCService) Init() error {
 	// If not configured, skip init
-	if len(service.config.Clients) == 0 {
+	if len(service.runtime.OIDCClients) == 0 {
 		service.isConfigured = false
 		return nil
 	}
@@ -150,7 +154,7 @@ func (service *OIDCService) Init() error {
 	service.isConfigured = true
 
 	// Ensure issuer is https
-	uissuer, err := url.Parse(service.config.Issuer)
+	uissuer, err := url.Parse(service.runtime.AppURL)
 
 	if err != nil {
 		return err
@@ -163,14 +167,14 @@ func (service *OIDCService) Init() error {
 	service.issuer = fmt.Sprintf("%s://%s", uissuer.Scheme, uissuer.Host)
 
 	// Create/load private and public keys
-	if strings.TrimSpace(service.config.PrivateKeyPath) == "" ||
-		strings.TrimSpace(service.config.PublicKeyPath) == "" {
+	if strings.TrimSpace(service.config.OIDC.PrivateKeyPath) == "" ||
+		strings.TrimSpace(service.config.OIDC.PublicKeyPath) == "" {
 		return errors.New("private key path and public key path are required")
 	}
 
 	var privateKey *rsa.PrivateKey
 
-	fprivateKey, err := os.ReadFile(service.config.PrivateKeyPath)
+	fprivateKey, err := os.ReadFile(service.config.OIDC.PrivateKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -189,8 +193,8 @@ func (service *OIDCService) Init() error {
 			Type:  "RSA PRIVATE KEY",
 			Bytes: der,
 		})
-		tlog.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
-		err = os.WriteFile(service.config.PrivateKeyPath, encoded, 0600)
+		service.log.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
+		err = os.WriteFile(service.config.OIDC.PrivateKeyPath, encoded, 0600)
 		if err != nil {
 			return err
 		}
@@ -200,7 +204,7 @@ func (service *OIDCService) Init() error {
 		if block == nil {
 			return errors.New("failed to decode private key")
 		}
-		tlog.App.Trace().Str("type", block.Type).Msg("Loaded private key")
+		service.log.App.Trace().Str("type", block.Type).Msg("Loaded private key")
 		privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return err
@@ -208,7 +212,7 @@ func (service *OIDCService) Init() error {
 		service.privateKey = privateKey
 	}
 
-	fpublicKey, err := os.ReadFile(service.config.PublicKeyPath)
+	fpublicKey, err := os.ReadFile(service.config.OIDC.PublicKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -224,8 +228,8 @@ func (service *OIDCService) Init() error {
 			Type:  "RSA PUBLIC KEY",
 			Bytes: der,
 		})
-		tlog.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
-		err = os.WriteFile(service.config.PublicKeyPath, encoded, 0644)
+		service.log.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
+		err = os.WriteFile(service.config.OIDC.PublicKeyPath, encoded, 0644)
 		if err != nil {
 			return err
 		}
@@ -235,7 +239,7 @@ func (service *OIDCService) Init() error {
 		if block == nil {
 			return errors.New("failed to decode public key")
 		}
-		tlog.App.Trace().Str("type", block.Type).Msg("Loaded public key")
+		service.log.App.Trace().Str("type", block.Type).Msg("Loaded public key")
 		switch block.Type {
 		case "RSA PUBLIC KEY":
 			publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
@@ -257,7 +261,7 @@ func (service *OIDCService) Init() error {
 	// We will reorganize the client into a map with the client ID as the key
 	service.clients = make(map[string]model.OIDCClientConfig)
 
-	for id, client := range service.config.Clients {
+	for id, client := range service.config.OIDC.Clients {
 		client.ID = id
 		if client.Name == "" {
 			client.Name = utils.Capitalize(client.ID)
@@ -273,8 +277,11 @@ func (service *OIDCService) Init() error {
 		}
 		client.ClientSecretFile = ""
 		service.clients[id] = client
-		tlog.App.Info().Str("id", client.ID).Msg("Registered OIDC client")
+		service.log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
 	}
+
+	// Start cleanup routine
+	go service.cleanupRoutine()
 
 	return nil
 }
@@ -307,7 +314,7 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 			return errors.New("invalid_scope")
 		}
 		if !slices.Contains(SupportedScopes, scope) {
-			tlog.App.Warn().Str("scope", scope).Msg("Unsupported OIDC scope, will be ignored")
+			service.log.App.Warn().Str("scope", scope).Msg("Requested unsupported scope")
 		}
 	}
 
@@ -357,7 +364,7 @@ func (service *OIDCService) StoreCode(c *gin.Context, sub string, code string, r
 			entry.CodeChallenge = req.CodeChallenge
 		} else {
 			entry.CodeChallenge = service.hashAndEncodePKCE(req.CodeChallenge)
-			tlog.App.Warn().Msg("Received plain PKCE code challenge, it's recommended to use S256 for better security")
+			service.log.App.Warn().Msg("Using plain PKCE code challenge method is not recommended, consider switching to S256 for better security")
 		}
 	}
 
@@ -449,7 +456,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 
 func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
 	createdAt := time.Now().Unix()
-	expiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
+	expiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 
 	hasher := sha256.New()
 
@@ -529,16 +536,16 @@ func (service *OIDCService) GenerateAccessToken(c *gin.Context, client model.OID
 	accessToken := utils.GenerateString(32)
 	refreshToken := utils.GenerateString(32)
 
-	tokenExpiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
+	tokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 
 	// Refresh token lives double the time of an access token but can't be used to access userinfo
-	refreshTokenExpiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry*2) * time.Second).Unix()
+	refreshTokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry*2) * time.Second).Unix()
 
 	tokenResponse := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(service.config.SessionExpiry),
+		ExpiresIn:    int64(service.config.Auth.SessionExpiry),
 		IDToken:      idToken,
 		Scope:        strings.ReplaceAll(codeEntry.Scope, ",", " "),
 	}
@@ -598,14 +605,14 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 	accessToken := utils.GenerateString(32)
 	newRefreshToken := utils.GenerateString(32)
 
-	tokenExpiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry) * time.Second).Unix()
-	refreshTokenExpiresAt := time.Now().Add(time.Duration(service.config.SessionExpiry*2) * time.Second).Unix()
+	tokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
+	refreshTokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry*2) * time.Second).Unix()
 
 	tokenResponse := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(service.config.SessionExpiry),
+		ExpiresIn:    int64(service.config.Auth.SessionExpiry),
 		IDToken:      idToken,
 		Scope:        strings.ReplaceAll(entry.Scope, ",", " "),
 	}
@@ -748,56 +755,64 @@ func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) er
 }
 
 // Cleanup routine - Resource heavy due to the linked tables
-func (service *OIDCService) Cleanup() {
-	// We need a context for the routine
-	ctx := context.Background()
+func (service *OIDCService) cleanupRoutine() {
 
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		currentTime := time.Now().Unix()
+	for {
+		select {
+		case <-ticker.C:
+			service.log.App.Debug().Msg("Starting OIDC cleanup routine")
 
-		// For the OIDC tokens, if they are expired we delete the userinfo and codes
-		expiredTokens, err := service.queries.DeleteExpiredOidcTokens(ctx, repository.DeleteExpiredOidcTokensParams{
-			TokenExpiresAt:        currentTime,
-			RefreshTokenExpiresAt: currentTime,
-		})
+			currentTime := time.Now().Unix()
 
-		if err != nil {
-			tlog.App.Warn().Err(err).Msg("Failed to delete expired tokens")
-		}
-
-		for _, expiredToken := range expiredTokens {
-			err := service.DeleteOldSession(ctx, expiredToken.Sub)
-			if err != nil {
-				tlog.App.Warn().Err(err).Msg("Failed to delete old session")
-			}
-		}
-
-		// For expired codes, we need to get the sub, check if tokens are expired and if they are remove everything
-		expiredCodes, err := service.queries.DeleteExpiredOidcCodes(ctx, currentTime)
-
-		if err != nil {
-			tlog.App.Warn().Err(err).Msg("Failed to delete expired codes")
-		}
-
-		for _, expiredCode := range expiredCodes {
-			token, err := service.queries.GetOidcTokenBySub(ctx, expiredCode.Sub)
+			// For the OIDC tokens, if they are expired we delete the userinfo and codes
+			expiredTokens, err := service.queries.DeleteExpiredOidcTokens(service.context, repository.DeleteExpiredOidcTokensParams{
+				TokenExpiresAt:        currentTime,
+				RefreshTokenExpiresAt: currentTime,
+			})
 
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					continue
-				}
-				tlog.App.Warn().Err(err).Msg("Failed to get OIDC token by sub")
+				service.log.App.Warn().Err(err).Msg("Failed to delete expired tokens")
 			}
 
-			if token.TokenExpiresAt < currentTime && token.RefreshTokenExpiresAt < currentTime {
-				err := service.DeleteOldSession(ctx, expiredCode.Sub)
+			for _, expiredToken := range expiredTokens {
+				err := service.DeleteOldSession(service.context, expiredToken.Sub)
 				if err != nil {
-					tlog.App.Warn().Err(err).Msg("Failed to delete session")
+					service.log.App.Warn().Err(err).Msg("Failed to delete session for expired token")
 				}
 			}
+
+			// For expired codes, we need to get the sub, check if tokens are expired and if they are remove everything
+			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(service.context, currentTime)
+
+			if err != nil {
+				service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
+			}
+
+			for _, expiredCode := range expiredCodes {
+				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
+
+				if err != nil {
+					if errors.Is(err, sql.ErrNoRows) {
+						continue
+					}
+					service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+				}
+
+				if token.TokenExpiresAt < currentTime && token.RefreshTokenExpiresAt < currentTime {
+					err := service.DeleteOldSession(service.context, expiredCode.Sub)
+					if err != nil {
+						service.log.App.Warn().Err(err).Msg("Failed to delete session for expired code")
+					}
+				}
+			}
+
+			service.log.App.Debug().Msg("Finished OIDC cleanup routine")
+		case <-service.context.Done():
+			service.log.App.Debug().Msg("OIDC cleanup routine context cancelled, stopping")
+			return
 		}
 	}
 }

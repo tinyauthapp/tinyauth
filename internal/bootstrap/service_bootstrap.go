@@ -4,21 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService := service.NewLdapService(service.LdapServiceConfig{
-		Address:      app.config.LDAP.Address,
-		BindDN:       app.config.LDAP.BindDN,
-		BindPassword: app.config.LDAP.BindPassword,
-		BaseDN:       app.config.LDAP.BaseDN,
-		Insecure:     app.config.LDAP.Insecure,
-		SearchFilter: app.config.LDAP.SearchFilter,
-		AuthCert:     app.config.LDAP.AuthCert,
-		AuthKey:      app.config.LDAP.AuthKey,
-	})
+	ldapService := service.NewLdapService(app.log, app.config, app.ctx)
 
 	err := ldapService.Init()
 
@@ -32,10 +22,12 @@ func (app *BootstrapApp) setupServices() error {
 	useKubernetes := app.config.LabelProvider == "kubernetes" ||
 		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
 
+	var labelProvider service.LabelProviderImpl
+
 	if useKubernetes {
 		app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-		kubernetesService := service.NewKubernetesService()
+		kubernetesService := service.NewKubernetesService(app.log, app.ctx)
 
 		err = kubernetesService.Init()
 
@@ -44,11 +36,11 @@ func (app *BootstrapApp) setupServices() error {
 		}
 
 		app.services.kubernetesService = kubernetesService
-		app.runtime.LabelProvider = model.LabelProviderKubernetes
+		labelProvider = kubernetesService
 	} else {
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService := service.NewDockerService()
+		dockerService := service.NewDockerService(app.log, app.ctx)
 
 		err = dockerService.Init()
 
@@ -57,10 +49,10 @@ func (app *BootstrapApp) setupServices() error {
 		}
 
 		app.services.dockerService = dockerService
-		app.runtime.LabelProvider = model.LabelProviderDocker
+		labelProvider = dockerService
 	}
 
-	accessControlsService := service.NewAccessControlsService(app.runtime.LabelProvider, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(app.log, labelProvider, app.config.Apps)
 
 	err = accessControlsService.Init()
 
@@ -70,7 +62,7 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.accessControlService = accessControlsService
 
-	oauthBrokerService := service.NewOAuthBrokerService(app.runtime.OAuthProviders)
+	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders)
 
 	err = oauthBrokerService.Init()
 
@@ -80,20 +72,7 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.oauthBrokerService = oauthBrokerService
 
-	authService := service.NewAuthService(service.AuthServiceConfig{
-		LocalUsers:         &app.runtime.LocalUsers,
-		OauthWhitelist:     app.runtime.OAuthWhitelist,
-		SessionExpiry:      app.config.Auth.SessionExpiry,
-		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
-		SecureCookie:       app.config.Auth.SecureCookie,
-		CookieDomain:       app.runtime.CookieDomain,
-		LoginTimeout:       app.config.Auth.LoginTimeout,
-		LoginMaxRetries:    app.config.Auth.LoginMaxRetries,
-		SessionCookieName:  app.runtime.SessionCookieName,
-		IP:                 app.config.Auth.IP,
-		LDAPGroupsCacheTTL: app.config.LDAP.GroupCacheTTL,
-		SubdomainsEnabled:  app.config.Auth.SubdomainsEnabled,
-	}, app.services.ldapService, app.queries, app.services.oauthBrokerService)
+	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, app.services.ldapService, app.queries, app.services.oauthBrokerService)
 
 	err = authService.Init()
 
@@ -103,13 +82,7 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.authService = authService
 
-	oidcService := service.NewOIDCService(service.OIDCServiceConfig{
-		Clients:        app.config.OIDC.Clients,
-		PrivateKeyPath: app.config.OIDC.PrivateKeyPath,
-		PublicKeyPath:  app.config.OIDC.PublicKeyPath,
-		Issuer:         app.config.AppURL,
-		SessionExpiry:  app.config.Auth.SessionExpiry,
-	}, app.queries)
+	oidcService := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx)
 
 	err = oidcService.Init()
 

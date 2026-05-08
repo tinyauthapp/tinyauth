@@ -6,20 +6,28 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	container "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
 type DockerService struct {
-	client      *client.Client
-	context     context.Context
+	log     *logger.Logger
+	client  *client.Client
+	context context.Context
+
 	isConnected bool
 }
 
-func NewDockerService() *DockerService {
-	return &DockerService{}
+func NewDockerService(
+	log *logger.Logger,
+	context context.Context,
+) *DockerService {
+	return &DockerService{
+		log:     log,
+		context: context,
+	}
 }
 
 func (docker *DockerService) Init() error {
@@ -28,16 +36,14 @@ func (docker *DockerService) Init() error {
 		return err
 	}
 
-	ctx := context.Background()
-	client.NegotiateAPIVersion(ctx)
+	client.NegotiateAPIVersion(docker.context)
 
 	docker.client = client
-	docker.context = ctx
 
 	_, err = docker.client.Ping(docker.context)
 
 	if err != nil {
-		tlog.App.Debug().Err(err).Msg("Docker not connected")
+		docker.log.App.Debug().Err(err).Msg("Docker not connected")
 		docker.isConnected = false
 		docker.client = nil
 		docker.context = nil
@@ -45,7 +51,9 @@ func (docker *DockerService) Init() error {
 	}
 
 	docker.isConnected = true
-	tlog.App.Debug().Msg("Docker connected")
+	docker.log.App.Debug().Msg("Docker connected successfully")
+
+	go docker.watchAndClose()
 
 	return nil
 }
@@ -60,7 +68,7 @@ func (docker *DockerService) inspectContainer(containerId string) (container.Ins
 
 func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 	if !docker.isConnected {
-		tlog.App.Debug().Msg("Docker not connected, returning empty labels")
+		docker.log.App.Debug().Msg("Docker service not connected, returning empty labels")
 		return nil, nil
 	}
 
@@ -82,17 +90,28 @@ func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 
 		for appName, appLabels := range labels.Apps {
 			if appLabels.Config.Domain == appDomain {
-				tlog.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
+				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
 				return &appLabels, nil
 			}
 
 			if strings.SplitN(appDomain, ".", 2)[0] == appName {
-				tlog.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
+				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
 				return &appLabels, nil
 			}
 		}
 	}
 
-	tlog.App.Debug().Msg("No matching container found, returning empty labels")
+	docker.log.App.Debug().Str("domain", appDomain).Msg("No matching container found for domain")
 	return nil, nil
+}
+
+func (docker *DockerService) watchAndClose() {
+	<-docker.context.Done()
+	docker.log.App.Debug().Msg("Closing Docker client")
+	if docker.client != nil {
+		err := docker.client.Close()
+		if err != nil {
+			docker.log.App.Error().Err(err).Msg("Error closing Docker client")
+		}
+	}
 }

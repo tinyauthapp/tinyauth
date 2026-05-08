@@ -375,7 +375,7 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful TOTP verification")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
