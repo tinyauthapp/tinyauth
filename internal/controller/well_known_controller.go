@@ -26,25 +26,21 @@ type OpenIDConnectConfiguration struct {
 	RequestObjectSigningAlgValuesSupported []string `json:"request_object_signing_alg_values_supported"`
 }
 
-type WellKnownControllerConfig struct{}
-
 type WellKnownController struct {
-	config WellKnownControllerConfig
-	engine *gin.Engine
+	router *gin.RouterGroup
 	oidc   *service.OIDCService
 }
 
-func NewWellKnownController(config WellKnownControllerConfig, oidc *service.OIDCService, engine *gin.Engine) *WellKnownController {
+func NewWellKnownController(oidc *service.OIDCService, router *gin.RouterGroup) *WellKnownController {
 	return &WellKnownController{
-		config: config,
 		oidc:   oidc,
-		engine: engine,
+		router: router,
 	}
 }
 
 func (controller *WellKnownController) SetupRoutes() {
-	controller.engine.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
-	controller.engine.GET("/.well-known/jwks.json", controller.JWKS)
+	controller.router.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
+	controller.router.GET("/.well-known/jwks.json", controller.JWKS)
 }
 
 func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context) {

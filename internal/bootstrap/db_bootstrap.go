@@ -14,7 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func (app *App) SetupDatabase() error {
+func (app *BootstrapApp) SetupDatabase() error {
 	dir := filepath.Dir(app.config.Database.Path)
 
 	if err := os.MkdirAll(dir, 0750); err != nil {

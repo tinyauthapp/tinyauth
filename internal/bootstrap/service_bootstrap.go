@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
-func (app *App) setupServices() error {
+func (app *BootstrapApp) setupServices() error {
 	ldapService := service.NewLdapService(service.LdapServiceConfig{
 		Address:      app.config.LDAP.Address,
 		BindDN:       app.config.LDAP.BindDN,
@@ -44,9 +44,9 @@ func (app *App) setupServices() error {
 		}
 
 		app.services.kubernetesService = kubernetesService
-		app.runtime.labelProvider = service.LabelProviderKubernetes
+		app.runtime.LabelProvider = model.LabelProviderKubernetes
 	} else {
-		tlog.App.Debug().Msg("Using Docker label provider")
+		app.log.App.Debug().Msg("Using Docker label provider")
 
 		dockerService := service.NewDockerService()
 
@@ -57,10 +57,10 @@ func (app *App) setupServices() error {
 		}
 
 		app.services.dockerService = dockerService
-		app.runtime.labelProvider = service.LabelProviderDocker
+		app.runtime.LabelProvider = model.LabelProviderDocker
 	}
 
-	accessControlsService := service.NewAccessControlsService(app.runtime.labelProvider, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(app.runtime.LabelProvider, app.config.Apps)
 
 	err = accessControlsService.Init()
 
@@ -70,7 +70,7 @@ func (app *App) setupServices() error {
 
 	app.services.accessControlService = accessControlsService
 
-	oauthBrokerService := service.NewOAuthBrokerService(app.runtime.oauthProviders)
+	oauthBrokerService := service.NewOAuthBrokerService(app.runtime.OAuthProviders)
 
 	err = oauthBrokerService.Init()
 
@@ -81,15 +81,15 @@ func (app *App) setupServices() error {
 	app.services.oauthBrokerService = oauthBrokerService
 
 	authService := service.NewAuthService(service.AuthServiceConfig{
-		LocalUsers:         &app.runtime.localUsers,
-		OauthWhitelist:     app.runtime.oauthWhitelist,
+		LocalUsers:         &app.runtime.LocalUsers,
+		OauthWhitelist:     app.runtime.OAuthWhitelist,
 		SessionExpiry:      app.config.Auth.SessionExpiry,
 		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
 		SecureCookie:       app.config.Auth.SecureCookie,
-		CookieDomain:       app.runtime.cookieDomain,
+		CookieDomain:       app.runtime.CookieDomain,
 		LoginTimeout:       app.config.Auth.LoginTimeout,
 		LoginMaxRetries:    app.config.Auth.LoginMaxRetries,
-		SessionCookieName:  app.runtime.sessionCookieName,
+		SessionCookieName:  app.runtime.SessionCookieName,
 		IP:                 app.config.Auth.IP,
 		LDAPGroupsCacheTTL: app.config.LDAP.GroupCacheTTL,
 		SubdomainsEnabled:  app.config.Auth.SubdomainsEnabled,

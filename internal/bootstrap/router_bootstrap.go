@@ -13,7 +13,7 @@ import (
 
 var DEV_MODES = []string{"main", "test", "development"}
 
-func (app *App) setupRouter() error {
+func (app *BootstrapApp) setupRouter() error {
 	if !slices.Contains(DEV_MODES, model.Version) {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -30,8 +30,8 @@ func (app *App) setupRouter() error {
 	}
 
 	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareConfig{
-		CookieDomain:      app.runtime.cookieDomain,
-		SessionCookieName: app.runtime.sessionCookieName,
+		CookieDomain:      app.runtime.CookieDomain,
+		SessionCookieName: app.runtime.SessionCookieName,
 	}, app.services.authService, app.services.oauthBrokerService)
 
 	err := contextMiddleware.Init()
@@ -64,52 +64,27 @@ func (app *App) setupRouter() error {
 
 	apiRouter := engine.Group("/api")
 
-	contextController := controller.NewContextController(controller.ContextControllerConfig{
-		Providers:             app.runtime.configuredProviders,
-		Title:                 app.config.UI.Title,
-		AppURL:                app.config.AppURL,
-		CookieDomain:          app.runtime.cookieDomain,
-		ForgotPasswordMessage: app.config.UI.ForgotPasswordMessage,
-		BackgroundImage:       app.config.UI.BackgroundImage,
-		OAuthAutoRedirect:     app.config.OAuth.AutoRedirect,
-		WarningsEnabled:       app.config.UI.WarningsEnabled,
-	}, apiRouter)
+	contextController := controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
 
 	contextController.SetupRoutes()
 
-	oauthController := controller.NewOAuthController(controller.OAuthControllerConfig{
-		AppURL:                 app.config.AppURL,
-		SecureCookie:           app.config.Auth.SecureCookie,
-		CSRFCookieName:         app.runtime.csrfCookieName,
-		RedirectCookieName:     app.runtime.redirectCookieName,
-		CookieDomain:           app.runtime.cookieDomain,
-		OAuthSessionCookieName: app.runtime.oauthSessionCookieName,
-		SubdomainsEnabled:      app.config.Auth.SubdomainsEnabled,
-	}, apiRouter, app.services.authService)
+	oauthController := controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
 
 	oauthController.SetupRoutes()
 
-	oidcController := controller.NewOIDCController(controller.OIDCControllerConfig{}, app.services.oidcService, apiRouter)
+	oidcController := controller.NewOIDCController(app.log, app.services.oidcService, apiRouter)
 
 	oidcController.SetupRoutes()
 
-	proxyController := controller.NewProxyController(controller.ProxyControllerConfig{
-		AppURL: app.config.AppURL,
-	}, apiRouter, app.services.accessControlService, app.services.authService)
+	proxyController := controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService)
 
 	proxyController.SetupRoutes()
 
-	userController := controller.NewUserController(controller.UserControllerConfig{
-		CookieDomain:      app.runtime.cookieDomain,
-		SessionCookieName: app.runtime.sessionCookieName,
-	}, apiRouter, app.services.authService)
+	userController := controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
 
 	userController.SetupRoutes()
 
-	resourcesController := controller.NewResourcesController(controller.ResourcesControllerConfig{
-		Path:    app.config.Resources.Path,
-		Enabled: app.config.Resources.Enabled,
-	}, &engine.RouterGroup)
+	resourcesController := controller.NewResourcesController(app.config, &engine.RouterGroup)
 
 	resourcesController.SetupRoutes()
 
@@ -117,7 +92,7 @@ func (app *App) setupRouter() error {
 
 	healthController.SetupRoutes()
 
-	wellknownController := controller.NewWellKnownController(controller.WellKnownControllerConfig{}, app.services.oidcService, engine)
+	wellknownController := controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
 
 	wellknownController.SetupRoutes()
 

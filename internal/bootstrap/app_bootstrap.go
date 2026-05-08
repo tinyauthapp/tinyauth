@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -36,25 +35,9 @@ type Services struct {
 	oidcService          *service.OIDCService
 }
 
-type RuntimeConfig struct {
-	appUrl                 string
-	uuid                   string
-	cookieDomain           string
-	sessionCookieName      string
-	csrfCookieName         string
-	redirectCookieName     string
-	oauthSessionCookieName string
-	localUsers             []model.LocalUser
-	oauthProviders         map[string]model.OAuthServiceConfig
-	oauthWhitelist         []string
-	configuredProviders    []controller.Provider
-	oidcClients            []model.OIDCClientConfig
-	labelProvider          service.LabelProvider
-}
-
-type App struct {
+type BootstrapApp struct {
 	config   model.Config
-	runtime  RuntimeConfig
+	runtime  model.RuntimeConfig
 	services Services
 	log      *logger.Logger
 	ctx      context.Context
@@ -64,13 +47,13 @@ type App struct {
 	db       *sql.DB
 }
 
-func NewBootstrapApp(config model.Config) *App {
-	return &App{
+func NewBootstrapApp(config model.Config) *BootstrapApp {
+	return &BootstrapApp{
 		config: config,
 	}
 }
 
-func (app *App) Setup() error {
+func (app *BootstrapApp) Setup() error {
 	// create context
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	app.ctx = ctx
@@ -92,7 +75,7 @@ func (app *App) Setup() error {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.appUrl = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -106,7 +89,7 @@ func (app *App) Setup() error {
 		return fmt.Errorf("failed to load users: %w", err)
 	}
 
-	app.runtime.localUsers = *users
+	app.runtime.LocalUsers = *users
 
 	// load oauth whitelist
 	oauthWhitelist, err := utils.GetStringList(app.config.OAuth.Whitelist, app.config.OAuth.WhitelistFile)
@@ -115,25 +98,25 @@ func (app *App) Setup() error {
 		return fmt.Errorf("failed to load oauth whitelist: %w", err)
 	}
 
-	app.runtime.oauthWhitelist = oauthWhitelist
+	app.runtime.OAuthWhitelist = oauthWhitelist
 
 	// Setup oauth providers
-	app.runtime.oauthProviders = app.config.OAuth.Providers
+	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
-	for id, provider := range app.runtime.oauthProviders {
+	for id, provider := range app.runtime.OAuthProviders {
 		secret := utils.GetSecret(provider.ClientSecret, provider.ClientSecretFile)
 		provider.ClientSecret = secret
 		provider.ClientSecretFile = ""
 
 		if provider.RedirectURL == "" {
-			provider.RedirectURL = app.runtime.appUrl + "/api/oauth/callback/" + id
+			provider.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + id
 		}
 
-		app.runtime.oauthProviders[id] = provider
+		app.runtime.OAuthProviders[id] = provider
 	}
 
 	// set presets for built-in providers
-	for id, provider := range app.runtime.oauthProviders {
+	for id, provider := range app.runtime.OAuthProviders {
 		if provider.Name == "" {
 			if name, ok := model.OverrideProviders[id]; ok {
 				provider.Name = name
@@ -141,13 +124,13 @@ func (app *App) Setup() error {
 				provider.Name = utils.Capitalize(id)
 			}
 		}
-		app.runtime.oauthProviders[id] = provider
+		app.runtime.OAuthProviders[id] = provider
 	}
 
 	// setup oidc clients
 	for id, client := range app.config.OIDC.Clients {
 		client.ID = id
-		app.runtime.oidcClients = append(app.runtime.oidcClients, client)
+		app.runtime.OIDCClients = append(app.runtime.OIDCClients, client)
 	}
 
 	// cookie domain
@@ -158,23 +141,23 @@ func (app *App) Setup() error {
 		cookieDomainResolver = utils.GetStandaloneCookieDomain
 	}
 
-	cookieDomain, err := cookieDomainResolver(app.runtime.appUrl)
+	cookieDomain, err := cookieDomainResolver(app.runtime.AppURL)
 
 	if err != nil {
 		return fmt.Errorf("failed to get cookie domain: %w", err)
 	}
 
-	app.runtime.cookieDomain = cookieDomain
+	app.runtime.CookieDomain = cookieDomain
 
 	// cookie names
-	app.runtime.uuid = utils.GenerateUUID(appUrl.Hostname())
+	app.runtime.UUID = utils.GenerateUUID(appUrl.Hostname())
 
-	cookieId := strings.Split(app.runtime.uuid, "-")[0] // first 8 characters of the uuid should be good enough
+	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 
-	app.runtime.sessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
-	app.runtime.csrfCookieName = fmt.Sprintf("%s-%s", model.CSRFCookieName, cookieId)
-	app.runtime.redirectCookieName = fmt.Sprintf("%s-%s", model.RedirectCookieName, cookieId)
-	app.runtime.oauthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
+	app.runtime.SessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
+	app.runtime.CSRFCookieName = fmt.Sprintf("%s-%s", model.CSRFCookieName, cookieId)
+	app.runtime.RedirectCookieName = fmt.Sprintf("%s-%s", model.RedirectCookieName, cookieId)
+	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
 
 	// database
 	err = app.SetupDatabase()
@@ -195,10 +178,10 @@ func (app *App) Setup() error {
 	}
 
 	// configured providers
-	configuredProviders := make([]controller.Provider, 0)
+	configuredProviders := make([]model.Provider, 0)
 
-	for id, provider := range app.runtime.oauthProviders {
-		configuredProviders = append(configuredProviders, controller.Provider{
+	for id, provider := range app.runtime.OAuthProviders {
+		configuredProviders = append(configuredProviders, model.Provider{
 			Name:  provider.Name,
 			ID:    id,
 			OAuth: true,
@@ -210,7 +193,7 @@ func (app *App) Setup() error {
 	})
 
 	if app.services.authService.LocalAuthConfigured() {
-		configuredProviders = append(configuredProviders, controller.Provider{
+		configuredProviders = append(configuredProviders, model.Provider{
 			Name:  "Local",
 			ID:    "local",
 			OAuth: false,
@@ -218,7 +201,7 @@ func (app *App) Setup() error {
 	}
 
 	if app.services.authService.LDAPAuthConfigured() {
-		configuredProviders = append(configuredProviders, controller.Provider{
+		configuredProviders = append(configuredProviders, model.Provider{
 			Name:  "LDAP",
 			ID:    "ldap",
 			OAuth: false,
@@ -229,11 +212,11 @@ func (app *App) Setup() error {
 		return errors.New("no authentication providers configured")
 	}
 
-	for _, provider := range app.runtime.configuredProviders {
+	for _, provider := range app.runtime.ConfiguredProviders {
 		app.log.App.Debug().Str("provider", provider.Name).Msg("Configured authentication provider")
 	}
 
-	app.runtime.configuredProviders = configuredProviders
+	app.runtime.ConfiguredProviders = configuredProviders
 
 	// setup router
 	err = app.setupRouter()
@@ -279,7 +262,7 @@ func (app *App) Setup() error {
 	return nil
 }
 
-func (app *App) serveHTTP() error {
+func (app *BootstrapApp) serveHTTP() error {
 	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
 
 	app.log.App.Info().Msgf("Starting server on %s", address)
@@ -304,7 +287,7 @@ func (app *App) serveHTTP() error {
 	return nil
 }
 
-func (app *App) serveUnix() error {
+func (app *BootstrapApp) serveUnix() error {
 	if app.config.Server.SocketPath == "" {
 		return nil
 	}
@@ -351,7 +334,7 @@ func (app *App) serveUnix() error {
 	return nil
 }
 
-func (app *App) heartbeatRoutine() {
+func (app *BootstrapApp) heartbeatRoutine() {
 	ticker := time.NewTicker(time.Duration(12) * time.Hour)
 	defer ticker.Stop()
 
@@ -362,7 +345,7 @@ func (app *App) heartbeatRoutine() {
 
 	var body Heartbeat
 
-	body.UUID = app.runtime.uuid
+	body.UUID = app.runtime.UUID
 	body.Version = model.Version
 
 	bodyJson, err := json.Marshal(body)
@@ -412,7 +395,7 @@ func (app *App) heartbeatRoutine() {
 	}
 }
 
-func (app *App) dbCleanupRoutine() {
+func (app *BootstrapApp) dbCleanupRoutine() {
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 
