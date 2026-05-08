@@ -249,17 +249,18 @@ func (app *BootstrapApp) Setup() error {
 	}()
 
 	// monitor cancellation and server errors
-	select {
-	case <-app.ctx.Done():
-		app.log.App.Debug().Msg("Shutting down application")
-		return nil
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf("server error: %w", err)
+	for {
+		select {
+		case <-app.ctx.Done():
+			app.log.App.Debug().Msg("Oh, seems like I got to shutdown, bye!")
+			app.db.Close()
+			return nil
+		case err := <-errChan:
+			if err != nil {
+				return fmt.Errorf("server error: %w", err)
+			}
 		}
 	}
-
-	return nil
 }
 
 func (app *BootstrapApp) serveHTTP() error {
