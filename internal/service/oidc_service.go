@@ -756,14 +756,14 @@ func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) er
 
 // Cleanup routine - Resource heavy due to the linked tables
 func (service *OIDCService) cleanupRoutine() {
-
+	service.log.App.Debug().Msg("Starting OIDC cleanup routine")
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			service.log.App.Debug().Msg("Starting OIDC cleanup routine")
+			service.log.App.Debug().Msg("Performing OIDC cleanup routine")
 
 			currentTime := time.Now().Unix()
 

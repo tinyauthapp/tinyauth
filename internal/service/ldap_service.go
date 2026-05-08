@@ -89,6 +89,8 @@ func (ldap *LdapService) Init() error {
 	}
 
 	go func() {
+		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
+
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 

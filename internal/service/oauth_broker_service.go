@@ -35,6 +35,7 @@ func NewOAuthBrokerService(
 	configs map[string]model.OAuthServiceConfig,
 ) *OAuthBrokerService {
 	return &OAuthBrokerService{
+		log:      log,
 		services: make(map[string]OAuthServiceImpl),
 		configs:  configs,
 	}

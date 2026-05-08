@@ -162,7 +162,7 @@ func TestLogger(t *testing.T) {
 				l.AuditLoginFailure("test", "test", "test", "test")
 
 				assert.NotEmpty(t, buf.String())
-				assert.Equal(t, 119, buf.Len()) // it's the length of the test log entry
+				assert.Equal(t, 81, buf.Len()) // it's the length of the test log entry
 			},
 		},
 	}

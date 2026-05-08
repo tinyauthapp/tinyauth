@@ -87,6 +87,10 @@ func (l *Logger) Init() {
 		})
 	}
 
+	if base.GetLevel() == zerolog.TraceLevel || base.GetLevel() == zerolog.DebugLevel {
+		base = base.With().Caller().Logger()
+	}
+
 	l.base = base
 	l.audit = l.createLogger("audit", l.config.Streams.Audit)
 	l.HTTP = l.createLogger("http", l.config.Streams.HTTP)
@@ -112,9 +116,6 @@ func (l *Logger) createLogger(component string, cfg model.LogStreamConfig) zerol
 	sub := l.base.With().Str("stream", component).Logger()
 	if cfg.Level != "" {
 		sub = sub.Level(l.parseLogLevel(cfg.Level))
-	}
-	if sub.GetLevel() == zerolog.DebugLevel {
-		sub = sub.With().Caller().Logger()
 	}
 	return sub
 }

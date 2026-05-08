@@ -252,7 +252,7 @@ func (app *BootstrapApp) Setup() error {
 	for {
 		select {
 		case <-app.ctx.Done():
-			app.log.App.Debug().Msg("Oh, seems like I got to shutdown, bye!")
+			app.log.App.Info().Msg("Oh, seems like I got to shutdown, bye!")
 			app.db.Close()
 			return nil
 		case err := <-errChan:
@@ -410,6 +410,8 @@ func (app *BootstrapApp) dbCleanupRoutine() {
 			if err != nil {
 				app.log.App.Error().Err(err).Msg("Failed to delete expired sessions")
 			}
+
+			app.log.App.Debug().Msg("Database cleanup completed")
 		case <-app.ctx.Done():
 			app.log.App.Debug().Msg("Stopping database cleanup routine")
 			ticker.Stop()

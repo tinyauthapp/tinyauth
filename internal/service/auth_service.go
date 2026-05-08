@@ -724,12 +724,16 @@ func (auth *AuthService) EndOAuthSession(sessionId string) {
 }
 
 func (auth *AuthService) CleanupOAuthSessionsRoutine() {
+	auth.log.App.Debug().Msg("Starting OAuth session cleanup routine")
+
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
+			auth.log.App.Debug().Msg("Running OAuth session cleanup")
+
 			auth.oauthMutex.Lock()
 
 			now := time.Now()
@@ -741,7 +745,9 @@ func (auth *AuthService) CleanupOAuthSessionsRoutine() {
 			}
 
 			auth.oauthMutex.Unlock()
+			auth.log.App.Debug().Msg("OAuth session cleanup completed")
 		case <-auth.context.Done():
+			auth.log.App.Debug().Msg("Stopping OAuth session cleanup routine")
 			return
 		}
 	}
