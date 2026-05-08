@@ -10,7 +10,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,22 +35,24 @@ var (
 	}
 )
 
-type ContextMiddlewareConfig struct {
-	CookieDomain      string
-	SessionCookieName string
-}
-
 type ContextMiddleware struct {
-	config ContextMiddlewareConfig
-	auth   *service.AuthService
-	broker *service.OAuthBrokerService
+	log     *logger.Logger
+	runtime model.RuntimeConfig
+	auth    *service.AuthService
+	broker  *service.OAuthBrokerService
 }
 
-func NewContextMiddleware(config ContextMiddlewareConfig, auth *service.AuthService, broker *service.OAuthBrokerService) *ContextMiddleware {
+func NewContextMiddleware(
+	log *logger.Logger,
+	runtime model.RuntimeConfig,
+	auth *service.AuthService,
+	broker *service.OAuthBrokerService,
+) *ContextMiddleware {
 	return &ContextMiddleware{
-		config: config,
-		auth:   auth,
-		broker: broker,
+		log:     log,
+		runtime: runtime,
+		auth:    auth,
+		broker:  broker,
 	}
 }
 
@@ -65,7 +67,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		uuid, err := c.Cookie(m.config.SessionCookieName)
+		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
 		if err == nil {
 			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid)
@@ -75,12 +77,12 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 					http.SetCookie(c.Writer, cookie)
 				}
 
-				tlog.App.Trace().Msgf("Authenticated user from session cookie: %s", userContext.GetUsername())
+				m.log.App.Debug().Msgf("Authenticated user %s via session cookie", userContext.GetUsername())
 				c.Set("context", userContext)
 				c.Next()
 				return
 			} else {
-				tlog.App.Error().Msgf("Error authenticating session cookie: %v", err)
+				m.log.App.Error().Msgf("Error authenticating session cookie: %v", err)
 			}
 		}
 
@@ -90,7 +92,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			userContext, headers, err := m.basicAuth(username, password)
 
 			if err != nil {
-				tlog.App.Error().Msgf("Error authenticating basic auth: %v", err)
+				m.log.App.Error().Msgf("Error authenticating basic auth: %v", err)
 				c.Next()
 				return
 			}
@@ -141,7 +143,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 		}
 
 		if userContext.Local.Attributes.Email == "" {
-			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.config.CookieDomain)
+			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
 	case model.ProviderLDAP:
 		search, err := m.auth.SearchUser(userContext.LDAP.Username)
@@ -162,7 +164,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 
 		userContext.LDAP.Groups = user.Groups
 		userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
-		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.config.CookieDomain)
+		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
 	case model.ProviderOAuth:
 		_, exists := m.broker.GetService(userContext.OAuth.ID)
 
@@ -191,7 +193,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 	locked, remaining := m.auth.IsAccountLocked(username)
 
 	if locked {
-		tlog.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
+		m.log.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
 		headers["x-tinyauth-lock-locked"] = "true"
 		headers["x-tinyauth-lock-reset"] = time.Now().Add(time.Duration(remaining) * time.Second).Format(time.RFC3339)
 		return nil, headers, nil
@@ -224,7 +226,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			BaseContext: model.BaseContext{
 				Username: user.Username,
 				Name:     utils.Capitalize(user.Username),
-				Email:    utils.CompileUserEmail(user.Username, m.config.CookieDomain),
+				Email:    utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
 			},
 			Attributes: user.Attributes,
 		}
@@ -240,7 +242,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			BaseContext: model.BaseContext{
 				Username: username,
 				Name:     utils.Capitalize(username),
-				Email:    utils.CompileUserEmail(username, m.config.CookieDomain),
+				Email:    utils.CompileUserEmail(username, m.runtime.CookieDomain),
 			},
 			Groups: user.Groups,
 		}

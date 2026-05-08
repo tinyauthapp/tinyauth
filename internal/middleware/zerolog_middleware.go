@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 // See context middleware for explanation of why we have to do this
@@ -17,10 +17,14 @@ var (
 	}
 )
 
-type ZerologMiddleware struct{}
+type ZerologMiddleware struct {
+	log *logger.Logger
+}
 
-func NewZerologMiddleware() *ZerologMiddleware {
-	return &ZerologMiddleware{}
+func NewZerologMiddleware(log *logger.Logger) *ZerologMiddleware {
+	return &ZerologMiddleware{
+		log: log,
+	}
 }
 
 func (m *ZerologMiddleware) Init() error {
@@ -50,7 +54,7 @@ func (m *ZerologMiddleware) Middleware() gin.HandlerFunc {
 
 		latency := time.Since(tStart).String()
 
-		subLogger := tlog.HTTP.With().Str("method", method).
+		subLogger := m.log.HTTP.With().Str("method", method).
 			Str("path", path).
 			Str("address", address).
 			Str("client_ip", clientIP).
