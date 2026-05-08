@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -45,6 +46,7 @@ type BootstrapApp struct {
 	queries  *repository.Queries
 	router   *gin.Engine
 	db       *sql.DB
+	wg       sync.WaitGroup
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -227,33 +229,39 @@ func (app *BootstrapApp) Setup() error {
 
 	// start db cleanup routine
 	app.log.App.Debug().Msg("Starting database cleanup routine")
-	go app.dbCleanupRoutine()
+	app.wg.Go(app.dbCleanupRoutine)
 
 	// if analytics are not disabled, start heartbeat
 	if app.config.Analytics.Enabled {
 		app.log.App.Debug().Msg("Starting heartbeat routine")
-		go app.heartbeatRoutine()
+		app.wg.Go(app.heartbeatRoutine)
 	}
 
 	// create err channel to listen for server errors
 	errChan := make(chan error, 1)
 
 	// serve unix
-	go func() {
-		errChan <- app.serveUnix()
-	}()
+	app.wg.Go(func() {
+		if err := app.serveUnix(); err != nil {
+			errChan <- err
+		}
+	})
 
 	// serve to http
-	go func() {
-		errChan <- app.serveHTTP()
-	}()
+	app.wg.Go(func() {
+		if err := app.serveHTTP(); err != nil {
+			errChan <- err
+		}
+	})
 
 	// monitor cancellation and server errors
 	for {
 		select {
 		case <-app.ctx.Done():
-			app.log.App.Info().Msg("Oh, seems like I got to shutdown, bye!")
+			app.wg.Wait()
+			app.log.App.Debug().Msg("Closing database")
 			app.db.Close()
+			app.log.App.Info().Msg("Oh, it's time for me to go, bye!")
 			return nil
 		case err := <-errChan:
 			if err != nil {
@@ -275,14 +283,14 @@ func (app *BootstrapApp) serveHTTP() error {
 
 	go func() {
 		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down server")
+		app.log.App.Debug().Msg("Shutting down http listener")
 		server.Close()
 	}()
 
 	err := server.ListenAndServe()
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start server: %w", err)
+		return fmt.Errorf("failed to start http listener: %w", err)
 	}
 
 	return nil
@@ -312,24 +320,26 @@ func (app *BootstrapApp) serveUnix() error {
 		return fmt.Errorf("failed to create unix socket listner: %w", err)
 	}
 
+	server := &http.Server{
+		Handler: app.router.Handler(),
+	}
+
+	defer server.Close()
 	defer listener.Close()
 	defer os.Remove(app.config.Server.SocketPath)
 
 	go func() {
 		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down server")
+		app.log.App.Debug().Msg("Shutting down unix sokcet listener")
+		server.Close()
 		listener.Close()
 		os.Remove(app.config.Server.SocketPath)
 	}()
 
-	server := &http.Server{
-		Handler: app.router.Handler(),
-	}
-
 	err = server.Serve(listener)
 
-	if err != nil && !errors.Is(err, net.ErrClosed) {
-		return fmt.Errorf("failed to start server: %w", err)
+	if err != nil && (!errors.Is(err, net.ErrClosed) || !errors.Is(err, http.ErrServerClosed)) {
+		return fmt.Errorf("failed to start unix socket listener: %w", err)
 	}
 
 	return nil

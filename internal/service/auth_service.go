@@ -77,6 +77,7 @@ type AuthService struct {
 	config  model.Config
 	runtime model.RuntimeConfig
 	context context.Context
+	wg      *sync.WaitGroup
 
 	ldap        *LdapService
 	queries     *repository.Queries
@@ -98,6 +99,7 @@ func NewAuthService(
 	config model.Config,
 	runtime model.RuntimeConfig,
 	context context.Context,
+	wg *sync.WaitGroup,
 	ldap *LdapService,
 	queries *repository.Queries,
 	oauthBroker *OAuthBrokerService,
@@ -106,6 +108,7 @@ func NewAuthService(
 		log:                  log,
 		runtime:              runtime,
 		context:              context,
+		wg:                   wg,
 		config:               config,
 		loginAttempts:        make(map[string]*LoginAttempt),
 		ldapGroupsCache:      make(map[string]*LdapGroupsCache),
@@ -117,7 +120,7 @@ func NewAuthService(
 }
 
 func (auth *AuthService) Init() error {
-	go auth.CleanupOAuthSessionsRoutine()
+	auth.wg.Go(auth.CleanupOAuthSessionsRoutine)
 	return nil
 }
 

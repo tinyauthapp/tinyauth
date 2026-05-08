@@ -17,6 +17,7 @@ type LdapService struct {
 	log     *logger.Logger
 	config  model.Config
 	context context.Context
+	wg      *sync.WaitGroup
 
 	conn         *ldapgo.Conn
 	mutex        sync.RWMutex
@@ -28,11 +29,13 @@ func NewLdapService(
 	log *logger.Logger,
 	config model.Config,
 	context context.Context,
+	wg *sync.WaitGroup,
 ) *LdapService {
 	return &LdapService{
 		log:     log,
 		config:  config,
 		context: context,
+		wg:      wg,
 	}
 }
 
@@ -88,7 +91,7 @@ func (ldap *LdapService) Init() error {
 		return fmt.Errorf("failed to connect to LDAP server: %w", err)
 	}
 
-	go func() {
+	ldap.wg.Go(func() {
 		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
 
 		ticker := time.NewTicker(5 * time.Minute)
@@ -111,7 +114,7 @@ func (ldap *LdapService) Init() error {
 				return
 			}
 		}
-	}()
+	})
 
 	return nil
 }

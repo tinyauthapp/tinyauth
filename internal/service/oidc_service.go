@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"slices"
@@ -117,6 +118,7 @@ type OIDCService struct {
 	runtime model.RuntimeConfig
 	queries *repository.Queries
 	context context.Context
+	wg      *sync.WaitGroup
 
 	clients      map[string]model.OIDCClientConfig
 	privateKey   *rsa.PrivateKey
@@ -130,13 +132,15 @@ func NewOIDCService(
 	config model.Config,
 	runtime model.RuntimeConfig,
 	queries *repository.Queries,
-	context context.Context) *OIDCService {
+	context context.Context,
+	wg *sync.WaitGroup) *OIDCService {
 	return &OIDCService{
 		log:     log,
 		config:  config,
 		runtime: runtime,
 		queries: queries,
 		context: context,
+		wg:      wg,
 	}
 }
 
@@ -281,7 +285,7 @@ func (service *OIDCService) Init() error {
 	}
 
 	// Start cleanup routine
-	go service.cleanupRoutine()
+	service.wg.Go(service.cleanupRoutine)
 
 	return nil
 }
@@ -811,7 +815,7 @@ func (service *OIDCService) cleanupRoutine() {
 
 			service.log.App.Debug().Msg("Finished OIDC cleanup routine")
 		case <-service.context.Done():
-			service.log.App.Debug().Msg("OIDC cleanup routine context cancelled, stopping")
+			service.log.App.Debug().Msg("Stopping OIDC cleanup routine")
 			return
 		}
 	}

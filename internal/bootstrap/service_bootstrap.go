@@ -8,7 +8,7 @@ import (
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService := service.NewLdapService(app.log, app.config, app.ctx)
+	ldapService := service.NewLdapService(app.log, app.config, app.ctx, &app.wg)
 
 	err := ldapService.Init()
 
@@ -27,7 +27,7 @@ func (app *BootstrapApp) setupServices() error {
 	if useKubernetes {
 		app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-		kubernetesService := service.NewKubernetesService(app.log, app.ctx)
+		kubernetesService := service.NewKubernetesService(app.log, app.ctx, &app.wg)
 
 		err = kubernetesService.Init()
 
@@ -40,7 +40,7 @@ func (app *BootstrapApp) setupServices() error {
 	} else {
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService := service.NewDockerService(app.log, app.ctx)
+		dockerService := service.NewDockerService(app.log, app.ctx, &app.wg)
 
 		err = dockerService.Init()
 
@@ -72,7 +72,7 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.oauthBrokerService = oauthBrokerService
 
-	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, app.services.ldapService, app.queries, app.services.oauthBrokerService)
+	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, &app.wg, app.services.ldapService, app.queries, app.services.oauthBrokerService)
 
 	err = authService.Init()
 
@@ -82,7 +82,7 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.authService = authService
 
-	oidcService := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx)
+	oidcService := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx, &app.wg)
 
 	err = oidcService.Init()
 

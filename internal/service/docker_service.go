@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
@@ -16,6 +17,7 @@ type DockerService struct {
 	log     *logger.Logger
 	client  *client.Client
 	context context.Context
+	wg      *sync.WaitGroup
 
 	isConnected bool
 }
@@ -23,10 +25,12 @@ type DockerService struct {
 func NewDockerService(
 	log *logger.Logger,
 	context context.Context,
+	wg *sync.WaitGroup,
 ) *DockerService {
 	return &DockerService{
 		log:     log,
 		context: context,
+		wg:      wg,
 	}
 }
 
@@ -53,7 +57,7 @@ func (docker *DockerService) Init() error {
 	docker.isConnected = true
 	docker.log.App.Debug().Msg("Docker connected successfully")
 
-	go docker.watchAndClose()
+	docker.wg.Go(docker.watchAndClose)
 
 	return nil
 }
