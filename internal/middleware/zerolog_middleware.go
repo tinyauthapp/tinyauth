@@ -27,10 +27,6 @@ func NewZerologMiddleware(log *logger.Logger) *ZerologMiddleware {
 	}
 }
 
-func (m *ZerologMiddleware) Init() error {
-	return nil
-}
-
 func (m *ZerologMiddleware) logPath(path string) bool {
 	for _, prefix := range loggerSkipPathsPrefix {
 		if strings.HasPrefix(path, prefix) {

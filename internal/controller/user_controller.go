@@ -28,7 +28,6 @@ type TotpRequest struct {
 type UserController struct {
 	log     *logger.Logger
 	runtime model.RuntimeConfig
-	router  *gin.RouterGroup
 	auth    *service.AuthService
 }
 
@@ -38,19 +37,18 @@ func NewUserController(
 	router *gin.RouterGroup,
 	auth *service.AuthService,
 ) *UserController {
-	return &UserController{
+	controller := &UserController{
 		log:     log,
 		runtime: runtimeConfig,
-		router:  router,
 		auth:    auth,
 	}
-}
 
-func (controller *UserController) SetupRoutes() {
-	userGroup := controller.router.Group("/user")
+	userGroup := router.Group("/user")
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
 	userGroup.POST("/totp", controller.totpHandler)
+
+	return controller
 }
 
 func (controller *UserController) loginHandler(c *gin.Context) {

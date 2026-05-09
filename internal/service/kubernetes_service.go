@@ -38,7 +38,6 @@ type ingressApp struct {
 type KubernetesService struct {
 	log *logger.Logger
 	ctx context.Context
-	wg  *sync.WaitGroup
 
 	client       dynamic.Interface
 	started      bool
@@ -50,17 +49,53 @@ type KubernetesService struct {
 
 func NewKubernetesService(
 	log *logger.Logger,
-	context context.Context,
+	ctx context.Context,
 	wg *sync.WaitGroup,
-) *KubernetesService {
-	return &KubernetesService{
+) (*KubernetesService, error) {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get in-cluster kubernetes config: %w", err)
+	}
+
+	client, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    "networking.k8s.io",
+		Version:  "v1",
+		Resource: "ingresses",
+	}
+
+	accessCtx, accessCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer accessCancel()
+
+	_, err = client.Resource(gvr).List(accessCtx, metav1.ListOptions{Limit: 1})
+	if err != nil {
+		log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
+		return nil, fmt.Errorf("failed to access ingress api: %w", err)
+	}
+
+	log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
+
+	service := &KubernetesService{
 		log:          log,
-		ctx:          context,
-		wg:           wg,
+		ctx:          ctx,
+		client:       client,
 		ingressApps:  make(map[ingressKey][]ingressApp),
 		domainIndex:  make(map[string]ingressAppKey),
 		appNameIndex: make(map[string]ingressAppKey),
 	}
+
+	wg.Go(func() {
+		service.watchGVR(gvr)
+	})
+
+	service.started = true
+	log.App.Debug().Msg("Kubernetes label provider started successfully")
+
+	return service, nil
 }
 
 func (k *KubernetesService) addIngressApps(namespace, name string, apps []ingressApp) {
@@ -226,7 +261,7 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 	for {
 		select {
 		case <-k.ctx.Done():
-			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Context cancelled, stopping watcher")
+			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Shutting down kubernetes watcher")
 			return
 		case <-resyncTicker.C:
 			if err := k.resyncGVR(gvr); err != nil {
@@ -249,47 +284,6 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 			cancel()
 		}
 	}
-}
-
-func (k *KubernetesService) Init() error {
-	var cfg *rest.Config
-	var err error
-
-	cfg, err = rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get in-cluster Kubernetes config: %w", err)
-	}
-
-	client, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %w", err)
-	}
-
-	k.client = client
-	gvr := schema.GroupVersionResource{
-		Group:    "networking.k8s.io",
-		Version:  "v1",
-		Resource: "ingresses",
-	}
-
-	accessCtx, accessCancel := context.WithTimeout(k.ctx, 5*time.Second)
-	defer accessCancel()
-
-	_, err = k.client.Resource(gvr).List(accessCtx, metav1.ListOptions{Limit: 1})
-	if err != nil {
-		k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
-		k.started = false
-		return nil
-	}
-
-	k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
-	k.wg.Go(func() {
-		k.watchGVR(gvr)
-	})
-
-	k.started = true
-	k.log.App.Debug().Msg("Kubernetes label provider started successfully")
-	return nil
 }
 
 func (k *KubernetesService) GetLabels(appDomain string) (*model.App, error) {

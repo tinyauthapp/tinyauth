@@ -56,10 +56,6 @@ func NewContextMiddleware(
 	}
 }
 
-func (m *ContextMiddleware) Init() error {
-	return nil
-}
-
 func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if m.isIgnorePath(c.Request.Method + " " + c.Request.URL.Path) {
@@ -82,7 +78,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				c.Next()
 				return
 			} else {
-				m.log.App.Error().Msgf("Error authenticating session cookie: %v", err)
+				m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 			}
 		}
 

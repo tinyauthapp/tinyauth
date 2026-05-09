@@ -40,7 +40,6 @@ type ContextController struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
-	router  *gin.RouterGroup
 }
 
 func NewContextController(
@@ -49,22 +48,21 @@ func NewContextController(
 	runtimeConfig model.RuntimeConfig,
 	router *gin.RouterGroup,
 ) *ContextController {
+	controller := &ContextController{
+		log:     log,
+		config:  config,
+		runtime: runtimeConfig,
+	}
+
 	if !config.UI.WarningsEnabled {
 		log.App.Warn().Msg("UI warnings are disabled. This may lead to security issues if you are not careful. Make sure to enable warnings in production environments.")
 	}
 
-	return &ContextController{
-		log:     log,
-		config:  config,
-		runtime: runtimeConfig,
-		router:  router,
-	}
-}
-
-func (controller *ContextController) SetupRoutes() {
-	contextGroup := controller.router.Group("/context")
+	contextGroup := router.Group("/context")
 	contextGroup.GET("/user", controller.userContextHandler)
 	contextGroup.GET("/app", controller.appContextHandler)
+
+	return controller
 }
 
 func (controller *ContextController) userContextHandler(c *gin.Context) {

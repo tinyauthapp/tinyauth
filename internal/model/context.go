@@ -8,6 +8,10 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 )
 
+var (
+	ErrUserContextNotFound = errors.New("user context not found")
+)
+
 type ProviderType int
 
 const (
@@ -74,7 +78,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 	userContextValue, exists := ginctx.Get("context")
 
 	if !exists {
-		return nil, errors.New("failed to get user context")
+		return nil, ErrUserContextNotFound
 	}
 
 	userContext, ok := userContextValue.(*UserContext)

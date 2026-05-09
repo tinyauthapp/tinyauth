@@ -24,7 +24,6 @@ type OAuthController struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
-	router  *gin.RouterGroup
 	auth    *service.AuthService
 }
 
@@ -35,19 +34,18 @@ func NewOAuthController(
 	router *gin.RouterGroup,
 	auth *service.AuthService,
 ) *OAuthController {
-	return &OAuthController{
+	controller := &OAuthController{
 		log:     log,
 		config:  config,
 		runtime: runtimeConfig,
-		router:  router,
 		auth:    auth,
 	}
-}
 
-func (controller *OAuthController) SetupRoutes() {
-	oauthGroup := controller.router.Group("/oauth")
+	oauthGroup := router.Group("/oauth")
 	oauthGroup.GET("/url/:provider", controller.oauthURLHandler)
 	oauthGroup.GET("/callback/:provider", controller.oauthCallbackHandler)
+
+	return controller
 }
 
 func (controller *OAuthController) oauthURLHandler(c *gin.Context) {

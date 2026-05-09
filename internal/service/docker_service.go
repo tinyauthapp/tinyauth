@@ -17,49 +17,42 @@ type DockerService struct {
 	log     *logger.Logger
 	client  *client.Client
 	context context.Context
-	wg      *sync.WaitGroup
 
 	isConnected bool
 }
 
 func NewDockerService(
 	log *logger.Logger,
-	context context.Context,
+	ctx context.Context,
 	wg *sync.WaitGroup,
-) *DockerService {
-	return &DockerService{
-		log:     log,
-		context: context,
-		wg:      wg,
-	}
-}
+) (*DockerService, error) {
 
-func (docker *DockerService) Init() error {
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	client.NegotiateAPIVersion(docker.context)
+	client.NegotiateAPIVersion(ctx)
 
-	docker.client = client
-
-	_, err = docker.client.Ping(docker.context)
+	_, err = client.Ping(ctx)
 
 	if err != nil {
-		docker.log.App.Debug().Err(err).Msg("Docker not connected")
-		docker.isConnected = false
-		docker.client = nil
-		docker.context = nil
-		return nil
+		log.App.Debug().Err(err).Msg("Docker not connected")
+		return nil, nil
 	}
 
-	docker.isConnected = true
-	docker.log.App.Debug().Msg("Docker connected successfully")
+	service := &DockerService{
+		log:     log,
+		client:  client,
+		context: ctx,
+	}
 
-	docker.wg.Go(docker.watchAndClose)
+	service.isConnected = true
+	service.log.App.Debug().Msg("Docker connected successfully")
 
-	return nil
+	wg.Go(service.watchAndClose)
+
+	return service, nil
 }
 
 func (docker *DockerService) getContainers() ([]container.Summary, error) {

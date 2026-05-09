@@ -17,63 +17,39 @@ type LdapService struct {
 	log     *logger.Logger
 	config  model.Config
 	context context.Context
-	wg      *sync.WaitGroup
 
-	conn         *ldapgo.Conn
-	mutex        sync.RWMutex
-	cert         *tls.Certificate
-	isConfigured bool
+	conn  *ldapgo.Conn
+	mutex sync.RWMutex
+	cert  *tls.Certificate
 }
 
 func NewLdapService(
 	log *logger.Logger,
 	config model.Config,
-	context context.Context,
+	ctx context.Context,
 	wg *sync.WaitGroup,
-) *LdapService {
-	return &LdapService{
+) (*LdapService, error) {
+	if config.LDAP.Address == "" {
+		return nil, nil
+	}
+
+	ldap := &LdapService{
 		log:     log,
 		config:  config,
-		context: context,
-		wg:      wg,
+		context: ctx,
 	}
-}
-
-func (ldap *LdapService) IsConfigured() bool {
-	return ldap.isConfigured
-}
-
-func (ldap *LdapService) Unconfigure() error {
-	if !ldap.isConfigured {
-		return nil
-	}
-
-	if ldap.conn != nil {
-		if err := ldap.conn.Close(); err != nil {
-			return fmt.Errorf("failed to close LDAP connection: %w", err)
-		}
-	}
-
-	ldap.isConfigured = false
-	return nil
-}
-
-func (ldap *LdapService) Init() error {
-	if ldap.config.LDAP.Address == "" {
-		ldap.isConfigured = false
-		return nil
-	}
-
-	ldap.isConfigured = true
 
 	// Check whether authentication with client certificate is possible
-	if ldap.config.LDAP.AuthCert != "" && ldap.config.LDAP.AuthKey != "" {
-		cert, err := tls.LoadX509KeyPair(ldap.config.LDAP.AuthCert, ldap.config.LDAP.AuthKey)
+	if config.LDAP.AuthCert != "" && config.LDAP.AuthKey != "" {
+		cert, err := tls.LoadX509KeyPair(config.LDAP.AuthCert, config.LDAP.AuthKey)
+
 		if err != nil {
-			return fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
+			return nil, fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
 		}
+
+		log.App.Info().Msg("LDAP mTLS authentication configured successfully")
+
 		ldap.cert = &cert
-		ldap.log.App.Info().Msg("LDAP mTLS authentication configured successfully")
 
 		// TODO: Add optional extra CA certificates, instead of `InsecureSkipVerify`
 		/*
@@ -86,12 +62,14 @@ func (ldap *LdapService) Init() error {
 			}
 		*/
 	}
+
 	_, err := ldap.connect()
+
 	if err != nil {
-		return fmt.Errorf("failed to connect to LDAP server: %w", err)
+		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
-	ldap.wg.Go(func() {
+	wg.Go(func() {
 		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
 
 		ticker := time.NewTicker(5 * time.Minute)
@@ -116,7 +94,7 @@ func (ldap *LdapService) Init() error {
 		}
 	})
 
-	return nil
+	return ldap, nil
 }
 
 func (ldap *LdapService) connect() (*ldapgo.Conn, error) {

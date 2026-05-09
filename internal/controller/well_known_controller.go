@@ -27,23 +27,29 @@ type OpenIDConnectConfiguration struct {
 }
 
 type WellKnownController struct {
-	router *gin.RouterGroup
-	oidc   *service.OIDCService
+	oidc *service.OIDCService
 }
 
 func NewWellKnownController(oidc *service.OIDCService, router *gin.RouterGroup) *WellKnownController {
-	return &WellKnownController{
-		oidc:   oidc,
-		router: router,
+	controller := &WellKnownController{
+		oidc: oidc,
 	}
-}
 
-func (controller *WellKnownController) SetupRoutes() {
-	controller.router.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
-	controller.router.GET("/.well-known/jwks.json", controller.JWKS)
+	router.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
+	router.GET("/.well-known/jwks.json", controller.JWKS)
+
+	return controller
 }
 
 func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context) {
+	if controller.oidc == nil {
+		c.JSON(500, gin.H{
+			"status":  "500",
+			"message": "OIDC service not configured",
+		})
+		return
+	}
+
 	issuer := controller.oidc.GetIssuer()
 	c.JSON(200, OpenIDConnectConfiguration{
 		Issuer:                                 issuer,
@@ -65,6 +71,14 @@ func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context
 }
 
 func (controller *WellKnownController) JWKS(c *gin.Context) {
+	if controller.oidc == nil {
+		c.JSON(500, gin.H{
+			"status":  "500",
+			"message": "OIDC service not configured",
+		})
+		return
+	}
+
 	jwks, err := controller.oidc.GetJWK()
 
 	if err != nil {

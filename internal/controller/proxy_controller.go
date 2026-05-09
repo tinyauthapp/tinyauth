@@ -53,7 +53,6 @@ type ProxyContext struct {
 type ProxyController struct {
 	log     *logger.Logger
 	runtime model.RuntimeConfig
-	router  *gin.RouterGroup
 	acls    *service.AccessControlsService
 	auth    *service.AuthService
 }
@@ -65,18 +64,17 @@ func NewProxyController(
 	acls *service.AccessControlsService,
 	auth *service.AuthService,
 ) *ProxyController {
-	return &ProxyController{
+	controller := &ProxyController{
 		log:     log,
 		runtime: runtime,
-		router:  router,
 		acls:    acls,
 		auth:    auth,
 	}
-}
 
-func (controller *ProxyController) SetupRoutes() {
-	proxyGroup := controller.router.Group("/auth")
+	proxyGroup := router.Group("/auth")
 	proxyGroup.Any("/:proxy", controller.proxyHandler)
+
+	return controller
 }
 
 func (controller *ProxyController) proxyHandler(c *gin.Context) {
@@ -160,7 +158,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to create user context from request, treating as unauthenticated")
+		controller.log.App.Debug().Err(err).Msg("Failed to create user context from request, treating as unauthenticated")
 		userContext = &model.UserContext{
 			Authenticated: false,
 		}

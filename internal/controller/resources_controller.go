@@ -9,7 +9,6 @@ import (
 
 type ResourcesController struct {
 	config     model.Config
-	router     *gin.RouterGroup
 	fileServer http.Handler
 }
 
@@ -19,15 +18,14 @@ func NewResourcesController(
 ) *ResourcesController {
 	fileServer := http.StripPrefix("/resources", http.FileServer(http.Dir(config.Resources.Path)))
 
-	return &ResourcesController{
+	controller := &ResourcesController{
 		config:     config,
-		router:     router,
 		fileServer: fileServer,
 	}
-}
 
-func (controller *ResourcesController) SetupRoutes() {
-	controller.router.GET("/resources/*resource", controller.resourcesHandler)
+	router.GET("/resources/*resource", controller.resourcesHandler)
+
+	return controller
 }
 
 func (controller *ResourcesController) resourcesHandler(c *gin.Context) {

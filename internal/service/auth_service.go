@@ -77,7 +77,6 @@ type AuthService struct {
 	config  model.Config
 	runtime model.RuntimeConfig
 	context context.Context
-	wg      *sync.WaitGroup
 
 	ldap        *LdapService
 	queries     *repository.Queries
@@ -98,17 +97,16 @@ func NewAuthService(
 	log *logger.Logger,
 	config model.Config,
 	runtime model.RuntimeConfig,
-	context context.Context,
+	ctx context.Context,
 	wg *sync.WaitGroup,
 	ldap *LdapService,
 	queries *repository.Queries,
 	oauthBroker *OAuthBrokerService,
 ) *AuthService {
-	return &AuthService{
+	service := &AuthService{
 		log:                  log,
 		runtime:              runtime,
-		context:              context,
-		wg:                   wg,
+		context:              ctx,
 		config:               config,
 		loginAttempts:        make(map[string]*LoginAttempt),
 		ldapGroupsCache:      make(map[string]*LdapGroupsCache),
@@ -117,11 +115,10 @@ func NewAuthService(
 		queries:              queries,
 		oauthBroker:          oauthBroker,
 	}
-}
 
-func (auth *AuthService) Init() error {
-	auth.wg.Go(auth.CleanupOAuthSessionsRoutine)
-	return nil
+	wg.Go(service.CleanupOAuthSessionsRoutine)
+
+	return service
 }
 
 func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) {
@@ -132,7 +129,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 		}, nil
 	}
 
-	if auth.ldap.IsConfigured() {
+	if auth.ldap != nil {
 		userDN, err := auth.ldap.GetUserDN(username)
 
 		if err != nil {
@@ -157,7 +154,7 @@ func (auth *AuthService) CheckUserPassword(search model.UserSearch, password str
 		}
 		return bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	case model.UserLDAP:
-		if auth.ldap.IsConfigured() {
+		if auth.ldap != nil {
 			err := auth.ldap.Bind(search.Username, password)
 			if err != nil {
 				return fmt.Errorf("failed to bind to ldap user: %w", err)
@@ -189,7 +186,7 @@ func (auth *AuthService) GetLocalUser(username string) *model.LocalUser {
 }
 
 func (auth *AuthService) GetLDAPUser(userDN string) (*model.LDAPUser, error) {
-	if !auth.ldap.IsConfigured() {
+	if auth.ldap == nil {
 		return nil, errors.New("ldap service not configured")
 	}
 
@@ -459,7 +456,7 @@ func (auth *AuthService) LocalAuthConfigured() bool {
 }
 
 func (auth *AuthService) LDAPAuthConfigured() bool {
-	return auth.ldap.IsConfigured()
+	return auth.ldap != nil
 }
 
 func (auth *AuthService) IsUserAllowed(c *gin.Context, context model.UserContext, acls *model.App) bool {

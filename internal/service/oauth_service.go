@@ -20,7 +20,7 @@ type OAuthService struct {
 	id                string
 }
 
-func NewOAuthService(config model.OAuthServiceConfig, id string) *OAuthService {
+func NewOAuthService(config model.OAuthServiceConfig, id string, ctx context.Context) *OAuthService {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
@@ -29,8 +29,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string) *OAuthService {
 			},
 		},
 	}
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
+	vctx := context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 
 	return &OAuthService{
 		serviceCfg: config,
@@ -44,7 +43,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string) *OAuthService {
 				TokenURL: config.TokenURL,
 			},
 		},
-		ctx:               ctx,
+		ctx:               vctx,
 		userinfoExtractor: defaultExtractor,
 		id:                id,
 	}

@@ -13,23 +13,19 @@ type LabelProviderImpl interface {
 
 type AccessControlsService struct {
 	log           *logger.Logger
-	labelProvider LabelProviderImpl
+	labelProvider *LabelProviderImpl
 	static        map[string]model.App
 }
 
 func NewAccessControlsService(
 	log *logger.Logger,
-	labelProvider LabelProviderImpl,
+	labelProvider *LabelProviderImpl,
 	static map[string]model.App) *AccessControlsService {
 	return &AccessControlsService{
 		log:           log,
 		labelProvider: labelProvider,
 		static:        static,
 	}
-}
-
-func (acls *AccessControlsService) Init() error {
-	return nil // No initialization needed
 }
 
 func (acls *AccessControlsService) lookupStaticACLs(domain string) *model.App {
@@ -59,7 +55,11 @@ func (acls *AccessControlsService) GetAccessControls(domain string) (*model.App,
 		return app, nil
 	}
 
-	// Fallback to label provider
-	acls.log.App.Debug().Msg("Using label provider for app")
-	return acls.labelProvider.GetLabels(domain)
+	// If we have a label provider configured, try to get ACLs from it
+	if acls.labelProvider != nil {
+		return (*acls.labelProvider).GetLabels(domain)
+	}
+
+	// no labels
+	return nil, nil
 }

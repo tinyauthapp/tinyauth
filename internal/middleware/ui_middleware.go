@@ -18,21 +18,19 @@ type UIMiddleware struct {
 	uiFileServer http.Handler
 }
 
-func NewUIMiddleware() *UIMiddleware {
-	return &UIMiddleware{}
-}
+func NewUIMiddleware() (*UIMiddleware, error) {
+	m := &UIMiddleware{}
 
-func (m *UIMiddleware) Init() error {
 	ui, err := fs.Sub(assets.FrontendAssets, "dist")
 
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to load ui assets: %w", err)
 	}
 
 	m.uiFs = ui
 	m.uiFileServer = http.FileServerFS(ui)
 
-	return nil
+	return m, nil
 }
 
 func (m *UIMiddleware) Middleware() gin.HandlerFunc {

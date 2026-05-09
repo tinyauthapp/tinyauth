@@ -17,9 +17,8 @@ import (
 )
 
 type OIDCController struct {
-	log    *logger.Logger
-	router *gin.RouterGroup
-	oidc   *service.OIDCService
+	log  *logger.Logger
+	oidc *service.OIDCService
 }
 
 type AuthorizeCallback struct {
@@ -60,20 +59,19 @@ func NewOIDCController(
 	log *logger.Logger,
 	oidcService *service.OIDCService,
 	router *gin.RouterGroup) *OIDCController {
-	return &OIDCController{
-		log:    log,
-		oidc:   oidcService,
-		router: router,
+	controller := &OIDCController{
+		log:  log,
+		oidc: oidcService,
 	}
-}
 
-func (controller *OIDCController) SetupRoutes() {
-	oidcGroup := controller.router.Group("/oidc")
+	oidcGroup := router.Group("/oidc")
 	oidcGroup.GET("/clients/:id", controller.GetClientInfo)
 	oidcGroup.POST("/authorize", controller.Authorize)
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)
 	oidcGroup.POST("/userinfo", controller.Userinfo)
+
+	return controller
 }
 
 func (controller *OIDCController) GetClientInfo(c *gin.Context) {
@@ -108,7 +106,7 @@ func (controller *OIDCController) GetClientInfo(c *gin.Context) {
 }
 
 func (controller *OIDCController) Authorize(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
+	if controller.oidc == nil {
 		controller.authorizeError(c, errors.New("err_oidc_not_configured"), "OIDC not configured", "This instance is not configured for OIDC", "", "", "")
 		return
 	}
@@ -198,7 +196,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 }
 
 func (controller *OIDCController) Token(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
+	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC request but OIDC server is not configured")
 		c.JSON(404, gin.H{
 			"error": "not_found",
@@ -374,7 +372,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 }
 
 func (controller *OIDCController) Userinfo(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
+	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
 		c.JSON(404, gin.H{
 			"error": "not_found",

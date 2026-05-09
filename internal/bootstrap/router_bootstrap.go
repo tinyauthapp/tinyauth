@@ -25,18 +25,9 @@ func (app *BootstrapApp) setupRouter() error {
 	}
 
 	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService)
-
-	err := contextMiddleware.Init()
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize context middleware: %w", err)
-	}
-
 	engine.Use(contextMiddleware.Middleware())
 
-	uiMiddleware := middleware.NewUIMiddleware()
-
-	err = uiMiddleware.Init()
+	uiMiddleware, err := middleware.NewUIMiddleware()
 
 	if err != nil {
 		return fmt.Errorf("failed to initialize UI middleware: %w", err)
@@ -46,47 +37,18 @@ func (app *BootstrapApp) setupRouter() error {
 
 	zerologMiddleware := middleware.NewZerologMiddleware(app.log)
 
-	err = zerologMiddleware.Init()
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize zerolog middleware: %w", err)
-	}
-
 	engine.Use(zerologMiddleware.Middleware())
 
 	apiRouter := engine.Group("/api")
 
-	contextController := controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-
-	contextController.SetupRoutes()
-
-	oauthController := controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-
-	oauthController.SetupRoutes()
-
-	oidcController := controller.NewOIDCController(app.log, app.services.oidcService, apiRouter)
-
-	oidcController.SetupRoutes()
-
-	proxyController := controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService)
-
-	proxyController.SetupRoutes()
-
-	userController := controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
-
-	userController.SetupRoutes()
-
-	resourcesController := controller.NewResourcesController(app.config, &engine.RouterGroup)
-
-	resourcesController.SetupRoutes()
-
-	healthController := controller.NewHealthController(apiRouter)
-
-	healthController.SetupRoutes()
-
-	wellknownController := controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
-
-	wellknownController.SetupRoutes()
+	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
+	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
+	controller.NewOIDCController(app.log, app.services.oidcService, apiRouter)
+	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService)
+	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
+	controller.NewResourcesController(app.config, &engine.RouterGroup)
+	controller.NewHealthController(apiRouter)
+	controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
 
 	app.router = engine
 	return nil
