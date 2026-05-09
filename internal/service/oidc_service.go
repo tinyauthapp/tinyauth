@@ -230,11 +230,10 @@ func NewOIDCService(
 				return nil, fmt.Errorf("failed to parse public key: %w", err)
 			}
 		case "PUBLIC KEY":
-			publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+			publicKey, err = x509.ParsePKIXPublicKey(block.Bytes)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse public key: %w", err)
 			}
-			publicKey = publicKey.(crypto.PublicKey)
 		default:
 			return nil, fmt.Errorf("unsupported public key type: %s", block.Type)
 		}

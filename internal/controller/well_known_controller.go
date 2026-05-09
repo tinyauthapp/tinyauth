@@ -44,7 +44,7 @@ func NewWellKnownController(oidc *service.OIDCService, router *gin.RouterGroup) 
 func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context) {
 	if controller.oidc == nil {
 		c.JSON(500, gin.H{
-			"status":  "500",
+			"status":  500,
 			"message": "OIDC service not configured",
 		})
 		return
@@ -73,7 +73,7 @@ func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context
 func (controller *WellKnownController) JWKS(c *gin.Context) {
 	if controller.oidc == nil {
 		c.JSON(500, gin.H{
-			"status":  "500",
+			"status":  500,
 			"message": "OIDC service not configured",
 		})
 		return
@@ -83,7 +83,7 @@ func (controller *WellKnownController) JWKS(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(500, gin.H{
-			"status":  "500",
+			"status":  500,
 			"message": "failed to get JWK",
 		})
 		return
