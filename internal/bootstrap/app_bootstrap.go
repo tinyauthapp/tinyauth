@@ -238,21 +238,42 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// create err channel to listen for server errors
-	errChan := make(chan error, 2)
+	errChanLen := 0
+
+	runUnix := app.config.Server.SocketPath != ""
+	runHTTP := app.config.Server.SocketPath == "" || app.config.Server.ConcurrentListenersEnabled
+
+	if runUnix {
+		errChanLen++
+	}
+
+	if runHTTP {
+		errChanLen++
+	}
+
+	errChan := make(chan error, errChanLen)
+
+	if app.config.Server.ConcurrentListenersEnabled {
+		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
+	}
 
 	// serve unix
-	app.wg.Go(func() {
-		if err := app.serveUnix(); err != nil {
-			errChan <- err
-		}
-	})
+	if runUnix {
+		app.wg.Go(func() {
+			if err := app.serveUnix(); err != nil {
+				errChan <- err
+			}
+		})
+	}
 
 	// serve to http
-	app.wg.Go(func() {
-		if err := app.serveHTTP(); err != nil {
-			errChan <- err
-		}
-	})
+	if runHTTP {
+		app.wg.Go(func() {
+			if err := app.serveHTTP(); err != nil {
+				errChan <- err
+			}
+		})
+	}
 
 	// monitor cancellation and server errors
 	for {

@@ -14,8 +14,9 @@ func NewDefaultConfiguration() *Config {
 			Path:    "./resources",
 		},
 		Server: ServerConfig{
-			Port:    3000,
-			Address: "0.0.0.0",
+			Port:                       3000,
+			Address:                    "0.0.0.0",
+			ConcurrentListenersEnabled: false,
 		},
 		Auth: AuthConfig{
 			SubdomainsEnabled:  true,
@@ -95,9 +96,10 @@ type ResourcesConfig struct {
 }
 
 type ServerConfig struct {
-	Port       int    `description:"The port on which the server listens." yaml:"port"`
-	Address    string `description:"The address on which the server listens." yaml:"address"`
-	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath"`
+	Port                       int    `description:"The port on which the server listens." yaml:"port"`
+	Address                    string `description:"The address on which the server listens." yaml:"address"`
+	SocketPath                 string `description:"The path to the Unix socket." yaml:"socketPath"`
+	ConcurrentListenersEnabled bool   `description:"Enable listening on both TCP and Unix socket at the same time." yaml:"concurrentListenersEnabled"`
 }
 
 type AuthConfig struct {
@@ -147,10 +149,10 @@ type IPConfig struct {
 }
 
 type OAuthConfig struct {
-	Whitelist    []string                      `description:"Comma-separated list of allowed OAuth domains." yaml:"whitelist"`
-	WhitelistFile string                       `description:"Path to the OAuth whitelist file." yaml:"whitelistFile"`
-	AutoRedirect string                        `description:"The OAuth provider to use for automatic redirection." yaml:"autoRedirect"`
-	Providers    map[string]OAuthServiceConfig `description:"OAuth providers configuration." yaml:"providers"`
+	Whitelist     []string                      `description:"Comma-separated list of allowed OAuth domains." yaml:"whitelist"`
+	WhitelistFile string                        `description:"Path to the OAuth whitelist file." yaml:"whitelistFile"`
+	AutoRedirect  string                        `description:"The OAuth provider to use for automatic redirection." yaml:"autoRedirect"`
+	Providers     map[string]OAuthServiceConfig `description:"OAuth providers configuration." yaml:"providers"`
 }
 
 type OIDCConfig struct {
