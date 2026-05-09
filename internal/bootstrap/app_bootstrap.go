@@ -214,7 +214,7 @@ func (app *BootstrapApp) Setup() error {
 		return errors.New("no authentication providers configured")
 	}
 
-	for _, provider := range app.runtime.ConfiguredProviders {
+	for _, provider := range configuredProviders {
 		app.log.App.Debug().Str("provider", provider.Name).Msg("Configured authentication provider")
 	}
 
@@ -238,7 +238,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// create err channel to listen for server errors
-	errChan := make(chan error, 1)
+	errChan := make(chan error, 2)
 
 	// serve unix
 	app.wg.Go(func() {
@@ -317,7 +317,7 @@ func (app *BootstrapApp) serveUnix() error {
 	listener, err := net.Listen("unix", app.config.Server.SocketPath)
 
 	if err != nil {
-		return fmt.Errorf("failed to create unix socket listner: %w", err)
+		return fmt.Errorf("failed to create unix socket listener: %w", err)
 	}
 
 	server := &http.Server{
@@ -330,7 +330,7 @@ func (app *BootstrapApp) serveUnix() error {
 
 	go func() {
 		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down unix sokcet listener")
+		app.log.App.Debug().Msg("Shutting down unix socket listener")
 		server.Close()
 		listener.Close()
 		os.Remove(app.config.Server.SocketPath)
@@ -338,7 +338,7 @@ func (app *BootstrapApp) serveUnix() error {
 
 	err = server.Serve(listener)
 
-	if err != nil && (!errors.Is(err, net.ErrClosed) || !errors.Is(err, http.ErrServerClosed)) {
+	if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start unix socket listener: %w", err)
 	}
 

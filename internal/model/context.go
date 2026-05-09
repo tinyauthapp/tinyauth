@@ -121,7 +121,7 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 				Email:    session.Email,
 			},
 		}
-	// By default we assume an unkown name which is oauth
+	// By default we assume an unknown name which is oauth
 	default:
 		c.Provider = ProviderOAuth
 		c.OAuth = &OAuthContext{

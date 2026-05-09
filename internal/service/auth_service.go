@@ -399,12 +399,6 @@ func (auth *AuthService) DeleteSession(ctx context.Context, uuid string) (*http.
 		auth.log.App.Error().Err(err).Str("uuid", uuid).Msg("Failed to delete session from database")
 	}
 
-	err = auth.queries.DeleteSession(ctx, uuid)
-
-	if err != nil {
-		return nil, err
-	}
-
 	return &http.Cookie{
 		Name:     auth.runtime.SessionCookieName,
 		Value:    "",

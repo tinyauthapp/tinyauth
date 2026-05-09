@@ -19,7 +19,7 @@ func (app *BootstrapApp) setupServices() error {
 	useKubernetes := app.config.LabelProvider == "kubernetes" ||
 		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
 
-	var labelProvider service.LabelProviderImpl
+	var labelProvider service.LabelProvider
 
 	if useKubernetes {
 		app.log.App.Debug().Msg("Using Kubernetes label provider")

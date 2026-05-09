@@ -86,7 +86,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		if errors.Is(err, service.ErrUserNotFound) {
 			controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
 			controller.auth.RecordLoginAttempt(req.Username, false)
-			controller.log.AuditLoginFailure(req.Username, "unkown", c.ClientIP(), "user not found")
+			controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
 			c.JSON(401, gin.H{
 				"status":  401,
 				"message": "Unauthorized",

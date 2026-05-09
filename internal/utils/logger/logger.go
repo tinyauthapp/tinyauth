@@ -33,7 +33,7 @@ func NewLogger() *Logger {
 				App: model.LogStreamConfig{
 					Enabled: true,
 				},
-				// No reason to enabled audit by default since it will be surpressed by the log level
+				// No reason to enabled audit by default since it will be suppressed by the log level
 			},
 		},
 	}

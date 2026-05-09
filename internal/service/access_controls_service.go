@@ -7,19 +7,19 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-type LabelProviderImpl interface {
+type LabelProvider interface {
 	GetLabels(appDomain string) (*model.App, error)
 }
 
 type AccessControlsService struct {
 	log           *logger.Logger
-	labelProvider *LabelProviderImpl
+	labelProvider *LabelProvider
 	static        map[string]model.App
 }
 
 func NewAccessControlsService(
 	log *logger.Logger,
-	labelProvider *LabelProviderImpl,
+	labelProvider *LabelProvider,
 	static map[string]model.App) *AccessControlsService {
 	return &AccessControlsService{
 		log:           log,
