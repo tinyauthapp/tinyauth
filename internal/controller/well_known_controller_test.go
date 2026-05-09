@@ -15,6 +15,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
@@ -22,7 +23,7 @@ func TestWellKnownController(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	cfg, runtime := createTestConfigs(t)
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	type testCase struct {
 		description string
@@ -99,6 +100,7 @@ func TestWellKnownController(t *testing.T) {
 	queries := repository.New(app.GetDB())
 
 	oidcService, err := service.NewOIDCService(log, cfg, runtime, queries, ctx, wg)
+	require.NoError(t, err)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

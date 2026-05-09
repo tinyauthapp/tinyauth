@@ -162,7 +162,7 @@ func TestLogger(t *testing.T) {
 				l.AuditLoginFailure("test_nop", "test_nop", "test_nop", "test_nop")
 
 				assert.NotEmpty(t, buf.String())
-				assert.NotContains(t, "test_nop", buf.String())
+				assert.NotContains(t, buf.String(), "test_nop")
 			},
 		},
 	}

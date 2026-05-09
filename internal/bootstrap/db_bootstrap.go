@@ -27,6 +27,13 @@ func (app *BootstrapApp) SetupDatabase() error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Close the database if there is an error during migration
+	defer func() {
+		if err != nil {
+			db.Close()
+		}
+	}()
+
 	// Limit to 1 connection to sequence writes, this may need to be revisited in the future
 	// if the sqlite connection starts being a bottleneck
 	db.SetMaxOpenConns(1)

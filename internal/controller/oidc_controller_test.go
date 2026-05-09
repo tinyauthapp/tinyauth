@@ -20,6 +20,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
@@ -27,7 +28,7 @@ func TestOIDCController(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	cfg, runtime := createTestConfigs(t)
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	simpleCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
@@ -861,7 +862,7 @@ func TestOIDCController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewOIDCController(log, oidcService, group)
+			controller.NewOIDCController(log, oidcService, runtime, group)
 
 			recorder := httptest.NewRecorder()
 

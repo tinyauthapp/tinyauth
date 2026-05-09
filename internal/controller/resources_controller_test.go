@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 )
 
 func TestResourcesController(t *testing.T) {
-	cfg, _ := createTestConfigs(t)
+	cfg, _ := test.CreateTestConfigs(t)
 
 	err := os.MkdirAll(cfg.Resources.Path, 0777)
 	require.NoError(t, err)

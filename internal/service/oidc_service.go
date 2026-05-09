@@ -790,10 +790,8 @@ func (service *OIDCService) cleanupRoutine() {
 				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
 
 				if err != nil {
-					if errors.Is(err, sql.ErrNoRows) {
-						continue
-					}
 					service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+					continue
 				}
 
 				if token.TokenExpiresAt < currentTime && token.RefreshTokenExpiresAt < currentTime {

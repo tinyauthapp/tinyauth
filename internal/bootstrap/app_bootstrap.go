@@ -102,7 +102,7 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.OAuthWhitelist = oauthWhitelist
 
-	// Setup oauth providers
+	// setup oauth providers
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
 	for id, provider := range app.runtime.OAuthProviders {
@@ -167,6 +167,14 @@ func (app *BootstrapApp) Setup() error {
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
 	}
+
+	// after this point, we start initializing dependencies so it's a good time to setup a defer
+	// to ensure that resources are cleaned up properly in case of an error during initialization
+	defer func() {
+		app.cancel()
+		app.wg.Wait()
+		app.db.Close()
+	}()
 
 	// queries
 	queries := repository.New(app.db)
@@ -279,9 +287,6 @@ func (app *BootstrapApp) Setup() error {
 	for {
 		select {
 		case <-app.ctx.Done():
-			app.wg.Wait()
-			app.log.App.Debug().Msg("Closing database")
-			app.db.Close()
 			app.log.App.Info().Msg("Oh, it's time for me to go, bye!")
 			return nil
 		case err := <-errChan:
@@ -305,7 +310,7 @@ func (app *BootstrapApp) serveHTTP() error {
 	go func() {
 		<-app.ctx.Done()
 		app.log.App.Debug().Msg("Shutting down http listener")
-		server.Close()
+		server.Shutdown(app.ctx)
 	}()
 
 	err := server.ListenAndServe()
@@ -345,21 +350,23 @@ func (app *BootstrapApp) serveUnix() error {
 		Handler: app.router.Handler(),
 	}
 
-	defer server.Close()
-	defer listener.Close()
-	defer os.Remove(app.config.Server.SocketPath)
+	shutdown := func() {
+		server.Shutdown(app.ctx)
+		listener.Close()
+		os.Remove(app.config.Server.SocketPath)
+	}
+
+	defer shutdown()
 
 	go func() {
 		<-app.ctx.Done()
 		app.log.App.Debug().Msg("Shutting down unix socket listener")
-		server.Close()
-		listener.Close()
-		os.Remove(app.config.Server.SocketPath)
+		shutdown()
 	}()
 
 	err = server.Serve(listener)
 
-	if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, http.ErrServerClosed) {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start unix socket listener: %w", err)
 	}
 

@@ -17,8 +17,9 @@ import (
 )
 
 type OIDCController struct {
-	log  *logger.Logger
-	oidc *service.OIDCService
+	log     *logger.Logger
+	oidc    *service.OIDCService
+	runtime model.RuntimeConfig
 }
 
 type AuthorizeCallback struct {
@@ -58,10 +59,12 @@ type ClientCredentials struct {
 func NewOIDCController(
 	log *logger.Logger,
 	oidcService *service.OIDCService,
+	runtimeConfig model.RuntimeConfig,
 	router *gin.RouterGroup) *OIDCController {
 	controller := &OIDCController{
-		log:  log,
-		oidc: oidcService,
+		log:     log,
+		oidc:    oidcService,
+		runtime: runtimeConfig,
 	}
 
 	oidcGroup := router.Group("/oidc")
@@ -75,6 +78,15 @@ func NewOIDCController(
 }
 
 func (controller *OIDCController) GetClientInfo(c *gin.Context) {
+	if controller.oidc == nil {
+		controller.log.App.Warn().Msg("Received OIDC client info request but OIDC server is not configured")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "OIDC not configured",
+		})
+		return
+	}
+
 	var req ClientRequest
 
 	err := c.BindUri(&req)
@@ -198,8 +210,8 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 func (controller *OIDCController) Token(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC request but OIDC server is not configured")
-		c.JSON(404, gin.H{
-			"error": "not_found",
+		c.JSON(500, gin.H{
+			"error": "server_error",
 		})
 		return
 	}
@@ -374,8 +386,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 func (controller *OIDCController) Userinfo(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
-		c.JSON(404, gin.H{
-			"error": "not_found",
+		c.JSON(500, gin.H{
+			"error": "server_error",
 		})
 		return
 	}
@@ -507,8 +519,16 @@ func (controller *OIDCController) authorizeError(c *gin.Context, err error, reas
 		return
 	}
 
+	redirectUrl := ""
+
+	if controller.oidc != nil {
+		redirectUrl = fmt.Sprintf("%s/error?%s", controller.oidc.GetIssuer(), queries.Encode())
+	} else {
+		redirectUrl = fmt.Sprintf("%s/error?%s", controller.runtime.AppURL, queries.Encode())
+	}
+
 	c.JSON(200, gin.H{
 		"status":       200,
-		"redirect_uri": fmt.Sprintf("%s/error?%s", controller.oidc.GetIssuer(), queries.Encode()),
+		"redirect_uri": redirectUrl,
 	})
 }

@@ -1,4 +1,4 @@
-package controller_test
+package test
 
 import (
 	"path"
@@ -9,9 +9,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var testingTOTPSecret = "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK"
+var TestingTOTPSecret = "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK"
 
-func createTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
+func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 	tempDir := t.TempDir()
 
 	config := model.Config{
@@ -69,7 +69,7 @@ func createTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			{
 				Username:   "totpuser",
 				Password:   string(passwd),
-				TOTPSecret: testingTOTPSecret,
+				TOTPSecret: TestingTOTPSecret,
 			},
 			{
 				Username: "attruser",
@@ -82,7 +82,7 @@ func createTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			{
 				Username:   "attrtotpuser",
 				Password:   string(passwd),
-				TOTPSecret: testingTOTPSecret,
+				TOTPSecret: TestingTOTPSecret,
 				Attributes: model.UserAttributes{
 					Name:  "Bob Jones",
 					Email: "bob@example.com",

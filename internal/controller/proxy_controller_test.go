@@ -14,6 +14,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
@@ -21,7 +22,7 @@ func TestProxyController(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	cfg, runtime := createTestConfigs(t)
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	acls := map[string]model.App{
 		"app_path_allow": {

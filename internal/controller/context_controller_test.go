@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
@@ -19,7 +20,7 @@ func TestContextController(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	cfg, runtime := createTestConfigs(t)
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	tests := []struct {
 		description string
