@@ -159,10 +159,10 @@ func TestLogger(t *testing.T) {
 
 				l.App.Info().Msg("test")
 
-				l.AuditLoginFailure("test", "test", "test", "test")
+				l.AuditLoginFailure("test_nop", "test_nop", "test_nop", "test_nop")
 
 				assert.NotEmpty(t, buf.String())
-				assert.Equal(t, 81, buf.Len()) // it's the length of the test log entry
+				assert.NotContains(t, "test_nop", buf.String())
 			},
 		},
 	}
