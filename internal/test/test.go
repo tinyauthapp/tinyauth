@@ -1,7 +1,7 @@
 package test
 
 import (
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,8 +33,8 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					Name:                "Test Client",
 				},
 			},
-			PrivateKeyPath: path.Join(tempDir, "key.pem"),
-			PublicKeyPath:  path.Join(tempDir, "key.pub"),
+			PrivateKeyPath: filepath.Join(tempDir, "key.pem"),
+			PublicKeyPath:  filepath.Join(tempDir, "key.pub"),
 		},
 		Auth: model.AuthConfig{
 			SessionExpiry:   10,
@@ -42,11 +42,11 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			LoginMaxRetries: 3,
 		},
 		Database: model.DatabaseConfig{
-			Path: path.Join(tempDir, "test.db"),
+			Path: filepath.Join(tempDir, "test.db"),
 		},
 		Resources: model.ResourcesConfig{
 			Enabled: true,
-			Path:    path.Join(tempDir, "resources"),
+			Path:    filepath.Join(tempDir, "resources"),
 		},
 	}
 
