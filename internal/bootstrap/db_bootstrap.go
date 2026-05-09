@@ -56,3 +56,7 @@ func (app *BootstrapApp) SetupDatabase() error {
 	app.db = db
 	return nil
 }
+
+func (app *BootstrapApp) GetDB() *sql.DB {
+	return app.db
+}

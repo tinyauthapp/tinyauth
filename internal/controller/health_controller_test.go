@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
 )
 
 func TestHealthController(t *testing.T) {
-	tlog.NewTestLogger().Init()
 	tests := []struct {
 		description string
 		path        string
@@ -56,8 +54,7 @@ func TestHealthController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			healthController := controller.NewHealthController(group)
-			healthController.SetupRoutes()
+			controller.NewHealthController(group)
 
 			recorder := httptest.NewRecorder()
 

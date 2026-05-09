@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,53 +19,14 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestUserController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	authServiceCfg := service.AuthServiceConfig{
-		LocalUsers: &[]model.LocalUser{
-			{
-				Username: "testuser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-			},
-			{
-				Username:   "totpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TOTPSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-			},
-			{
-				Username: "attruser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				Attributes: model.UserAttributes{
-					Name:  "Alice Smith",
-					Email: "alice@example.com",
-				},
-			},
-			{
-				Username:   "attrtotpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TOTPSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-				Attributes: model.UserAttributes{
-					Name:  "Bob Jones",
-					Email: "bob@example.com",
-				},
-			},
-		},
-		SessionExpiry:     10, // 10 seconds, useful for testing
-		CookieDomain:      "example.com",
-		LoginTimeout:      10, // 10 seconds, useful for testing
-		LoginMaxRetries:   3,
-		SessionCookieName: "tinyauth-session",
-	}
-
-	userControllerCfg := controller.UserControllerConfig{
-		CookieDomain:      "example.com",
-		SessionCookieName: "tinyauth-session",
-	}
+	cfg, runtime := createTestConfigs(t)
 
 	totpCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
@@ -111,14 +72,12 @@ func TestUserController(t *testing.T) {
 		})
 	}
 
-	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	app := bootstrap.NewBootstrapApp(model.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
+	queries := repository.New(app.GetDB())
 
 	type testCase struct {
 		description string
@@ -456,21 +415,11 @@ func TestUserController(t *testing.T) {
 		},
 	}
 
-	docker := service.NewDockerService()
-	err = docker.Init()
-	require.NoError(t, err)
+	ctx := context.TODO()
+	wg := &sync.WaitGroup{}
 
-	ldap := service.NewLdapService(service.LdapServiceConfig{})
-	err = ldap.Init()
-	require.NoError(t, err)
-
-	broker := service.NewOAuthBrokerService(oauthBrokerCfgs)
-	err = broker.Init()
-	require.NoError(t, err)
-
-	authService := service.NewAuthService(authServiceCfg, ldap, queries, broker)
-	err = authService.Init()
-	require.NoError(t, err)
+	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
@@ -489,8 +438,7 @@ func TestUserController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			userController := controller.NewUserController(userControllerCfg, group, authService)
-			userController.SetupRoutes()
+			controller.NewUserController(log, runtime, group, authService)
 
 			recorder := httptest.NewRecorder()
 
@@ -499,7 +447,6 @@ func TestUserController(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

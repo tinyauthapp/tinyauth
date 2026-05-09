@@ -1,13 +1,14 @@
 package controller_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"net/http/httptest"
 	"net/url"
-	"path"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -19,29 +20,14 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestOIDCController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	oidcServiceCfg := service.OIDCServiceConfig{
-		Clients: map[string]model.OIDCClientConfig{
-			"test": {
-				ClientID:            "some-client-id",
-				ClientSecret:        "some-client-secret",
-				TrustedRedirectURIs: []string{"https://test.example.com/callback"},
-				Name:                "Test Client",
-			},
-		},
-		PrivateKeyPath: path.Join(tempDir, "key.pem"),
-		PublicKeyPath:  path.Join(tempDir, "key.pub"),
-		Issuer:         "https://tinyauth.example.com",
-		SessionExpiry:  500,
-	}
-
-	controllerCfg := controller.OIDCControllerConfig{}
+	cfg, runtime := createTestConfigs(t)
 
 	simpleCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
@@ -852,14 +838,16 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(model.Config{})
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
-	oidcService := service.NewOIDCService(oidcServiceCfg, queries)
-	err = oidcService.Init()
+	queries := repository.New(app.GetDB())
+
+	wg := &sync.WaitGroup{}
+
+	oidcService, err := service.NewOIDCService(log, cfg, runtime, queries, context.TODO(), wg)
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -873,8 +861,7 @@ func TestOIDCController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			oidcController := controller.NewOIDCController(controllerCfg, oidcService, group)
-			oidcController.SetupRoutes()
+			controller.NewOIDCController(log, oidcService, group)
 
 			recorder := httptest.NewRecorder()
 
@@ -883,7 +870,6 @@ func TestOIDCController(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

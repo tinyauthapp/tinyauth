@@ -95,7 +95,7 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 }
 
 func (controller *ContextController) appContextHandler(c *gin.Context) {
-	appUrl, err := url.Parse(controller.config.AppURL)
+	appUrl, err := url.Parse(controller.runtime.AppURL)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to parse app URL")
