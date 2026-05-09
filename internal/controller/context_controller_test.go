@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -44,7 +45,7 @@ func TestContextController(t *testing.T) {
 					WarningsEnabled:       cfg.UI.WarningsEnabled,
 				}
 				bytes, err := json.Marshal(expectedAppContextResponse)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return string(bytes)
 			}(),
 		},
@@ -58,7 +59,7 @@ func TestContextController(t *testing.T) {
 					Message: "Unauthorized",
 				}
 				bytes, err := json.Marshal(expectedUserContextResponse)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return string(bytes)
 			}(),
 		},
@@ -91,7 +92,7 @@ func TestContextController(t *testing.T) {
 					Provider:   "local",
 				}
 				bytes, err := json.Marshal(expectedUserContextResponse)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return string(bytes)
 			}(),
 		},
@@ -113,7 +114,7 @@ func TestContextController(t *testing.T) {
 			recorder := httptest.NewRecorder()
 
 			request, err := http.NewRequest("GET", test.path, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			router.ServeHTTP(recorder, request)
 

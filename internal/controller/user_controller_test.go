@@ -95,7 +95,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -103,7 +103,7 @@ func TestUserController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 
 				cookie := recorder.Result().Cookies()[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
@@ -123,7 +123,7 @@ func TestUserController(t *testing.T) {
 					Password: "wrongpassword",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -144,7 +144,7 @@ func TestUserController(t *testing.T) {
 					Password: "wrongpassword",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				for range 3 {
 					recorder := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -190,12 +190,12 @@ func TestUserController(t *testing.T) {
 
 				decodedBody := make(map[string]any)
 				err = json.Unmarshal(recorder.Body.Bytes(), &decodedBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, decodedBody["totpPending"], true)
 
 				// should set the session cookie
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 				cookie := recorder.Result().Cookies()[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
@@ -216,7 +216,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -225,7 +225,7 @@ func TestUserController(t *testing.T) {
 
 				assert.Equal(t, 200, recorder.Code)
 				cookies := recorder.Result().Cookies()
-				assert.Len(t, cookies, 1)
+				require.Len(t, cookies, 1)
 
 				cookie := cookies[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
@@ -239,7 +239,7 @@ func TestUserController(t *testing.T) {
 
 				assert.Equal(t, 200, recorder.Code)
 				cookies = recorder.Result().Cookies()
-				assert.Len(t, cookies, 1)
+				require.Len(t, cookies, 1)
 
 				cookie = cookies[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
@@ -266,14 +266,14 @@ func TestUserController(t *testing.T) {
 				require.NoError(t, err)
 
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				totpReq := controller.TotpRequest{
 					Code: code,
 				}
 
 				totpReqBody, err := json.Marshal(totpReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				recorder = httptest.NewRecorder()
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
@@ -288,7 +288,7 @@ func TestUserController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 
 				// should set a new session cookie with totp pending removed
 				totpCookie := recorder.Result().Cookies()[0]
@@ -311,7 +311,7 @@ func TestUserController(t *testing.T) {
 					}
 
 					totpReqBody, err := json.Marshal(totpReq)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					recorder = httptest.NewRecorder()
 					req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))

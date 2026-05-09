@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 )
 
@@ -28,7 +29,7 @@ func TestHealthController(t *testing.T) {
 					"message": "Healthy",
 				}
 				bytes, err := json.Marshal(expectedHealthResponse)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return string(bytes)
 			}(),
 		},
@@ -42,7 +43,7 @@ func TestHealthController(t *testing.T) {
 					"message": "Healthy",
 				}
 				bytes, err := json.Marshal(expectedHealthResponse)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				return string(bytes)
 			}(),
 		},
@@ -59,7 +60,7 @@ func TestHealthController(t *testing.T) {
 			recorder := httptest.NewRecorder()
 
 			request, err := http.NewRequest(test.method, test.path, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			router.ServeHTTP(recorder, request)
 
