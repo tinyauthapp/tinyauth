@@ -8,6 +8,10 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 )
 
+var (
+	ErrUserContextNotFound = errors.New("user context not found")
+)
+
 type ProviderType int
 
 const (
@@ -74,7 +78,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 	userContextValue, exists := ginctx.Get("context")
 
 	if !exists {
-		return nil, errors.New("failed to get user context")
+		return nil, ErrUserContextNotFound
 	}
 
 	userContext, ok := userContextValue.(*UserContext)
@@ -117,7 +121,7 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 				Email:    session.Email,
 			},
 		}
-	// By default we assume an unkown name which is oauth
+	// By default we assume an unknown name which is oauth
 	default:
 		c.Provider = ProviderOAuth
 		c.OAuth = &OAuthContext{

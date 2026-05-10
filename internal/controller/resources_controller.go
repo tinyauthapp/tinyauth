@@ -4,42 +4,39 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 )
 
-type ResourcesControllerConfig struct {
-	Path    string
-	Enabled bool
-}
-
 type ResourcesController struct {
-	config     ResourcesControllerConfig
-	router     *gin.RouterGroup
+	config     model.Config
 	fileServer http.Handler
 }
 
-func NewResourcesController(config ResourcesControllerConfig, router *gin.RouterGroup) *ResourcesController {
-	fileServer := http.StripPrefix("/resources", http.FileServer(http.Dir(config.Path)))
+func NewResourcesController(
+	config model.Config,
+	router *gin.RouterGroup,
+) *ResourcesController {
+	fileServer := http.StripPrefix("/resources", http.FileServer(http.Dir(config.Resources.Path)))
 
-	return &ResourcesController{
+	controller := &ResourcesController{
 		config:     config,
-		router:     router,
 		fileServer: fileServer,
 	}
-}
 
-func (controller *ResourcesController) SetupRoutes() {
-	controller.router.GET("/resources/*resource", controller.resourcesHandler)
+	router.GET("/resources/*resource", controller.resourcesHandler)
+
+	return controller
 }
 
 func (controller *ResourcesController) resourcesHandler(c *gin.Context) {
-	if controller.config.Path == "" {
+	if controller.config.Resources.Path == "" {
 		c.JSON(404, gin.H{
 			"status":  404,
 			"message": "Resources not found",
 		})
 		return
 	}
-	if !controller.config.Enabled {
+	if !controller.config.Resources.Enabled {
 		c.JSON(403, gin.H{
 			"status":  403,
 			"message": "Resources are disabled",

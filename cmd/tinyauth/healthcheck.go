@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/tinyauthapp/paerser/cli"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 type healthzResponse struct {
@@ -26,7 +26,8 @@ func healthcheckCmd() *cli.Command {
 		Resources:     nil,
 		AllowArg:      true,
 		Run: func(args []string) error {
-			tlog.NewSimpleLogger().Init()
+			log := logger.NewLogger().WithSimpleConfig()
+			log.Init()
 
 			srvAddr := os.Getenv("TINYAUTH_SERVER_ADDRESS")
 			if srvAddr == "" {
@@ -48,7 +49,7 @@ func healthcheckCmd() *cli.Command {
 				return errors.New("Could not determine app URL")
 			}
 
-			tlog.App.Info().Str("app_url", appUrl).Msg("Performing health check")
+			log.App.Info().Str("app_url", appUrl).Msg("Performing health check")
 
 			client := http.Client{
 				Timeout: 30 * time.Second,
@@ -86,7 +87,7 @@ func healthcheckCmd() *cli.Command {
 				return fmt.Errorf("failed to decode response: %w", err)
 			}
 
-			tlog.App.Info().Interface("response", healthResp).Msg("Tinyauth is healthy")
+			log.App.Info().Interface("response", healthResp).Msg("Tinyauth is healthy")
 
 			return nil
 		},

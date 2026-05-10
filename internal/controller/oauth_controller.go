@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
@@ -19,34 +20,32 @@ type OAuthRequest struct {
 	Provider string `uri:"provider" binding:"required"`
 }
 
-type OAuthControllerConfig struct {
-	CSRFCookieName         string
-	OAuthSessionCookieName string
-	RedirectCookieName     string
-	SecureCookie           bool
-	AppURL                 string
-	CookieDomain           string
-	SubdomainsEnabled      bool
-}
-
 type OAuthController struct {
-	config OAuthControllerConfig
-	router *gin.RouterGroup
-	auth   *service.AuthService
+	log     *logger.Logger
+	config  model.Config
+	runtime model.RuntimeConfig
+	auth    *service.AuthService
 }
 
-func NewOAuthController(config OAuthControllerConfig, router *gin.RouterGroup, auth *service.AuthService) *OAuthController {
-	return &OAuthController{
-		config: config,
-		router: router,
-		auth:   auth,
+func NewOAuthController(
+	log *logger.Logger,
+	config model.Config,
+	runtimeConfig model.RuntimeConfig,
+	router *gin.RouterGroup,
+	auth *service.AuthService,
+) *OAuthController {
+	controller := &OAuthController{
+		log:     log,
+		config:  config,
+		runtime: runtimeConfig,
+		auth:    auth,
 	}
-}
 
-func (controller *OAuthController) SetupRoutes() {
-	oauthGroup := controller.router.Group("/oauth")
+	oauthGroup := router.Group("/oauth")
 	oauthGroup.GET("/url/:provider", controller.oauthURLHandler)
 	oauthGroup.GET("/callback/:provider", controller.oauthCallbackHandler)
+
+	return controller
 }
 
 func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
@@ -54,7 +53,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 
 	err := c.BindUri(&req)
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to bind URI")
+		controller.log.App.Error().Err(err).Msg("Failed to bind URI")
 		c.JSON(400, gin.H{
 			"status":  400,
 			"message": "Bad Request",
@@ -67,7 +66,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	err = c.BindQuery(&reqParams)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to bind query parameters")
+		controller.log.App.Error().Err(err).Msg("Failed to bind query parameters")
 		c.JSON(400, gin.H{
 			"status":  400,
 			"message": "Bad Request",
@@ -76,10 +75,10 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	}
 
 	if !controller.isOidcRequest(reqParams) {
-		isRedirectSafe := utils.IsRedirectSafe(reqParams.RedirectURI, controller.config.CookieDomain)
+		isRedirectSafe := utils.IsRedirectSafe(reqParams.RedirectURI, controller.runtime.CookieDomain)
 
 		if !isRedirectSafe {
-			tlog.App.Warn().Str("redirect_uri", reqParams.RedirectURI).Msg("Unsafe redirect URI detected, ignoring")
+			controller.log.App.Warn().Str("redirectUri", reqParams.RedirectURI).Msg("Unsafe redirect URI, ignoring")
 			reqParams.RedirectURI = ""
 		}
 	}
@@ -87,7 +86,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	sessionId, _, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to create OAuth session")
+		controller.log.App.Error().Err(err).Msg("Failed to create new OAuth session")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
@@ -98,7 +97,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	authUrl, err := controller.auth.GetOAuthURL(sessionId)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to get OAuth URL")
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth URL for session")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
@@ -106,7 +105,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
+	c.SetCookie(controller.runtime.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -120,7 +119,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	err := c.BindUri(&req)
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to bind URI")
+		controller.log.App.Error().Err(err).Msg("Failed to bind URI")
 		c.JSON(400, gin.H{
 			"status":  400,
 			"message": "Bad Request",
@@ -128,21 +127,21 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	sessionIdCookie, err := c.Cookie(controller.config.OAuthSessionCookieName)
+	sessionIdCookie, err := c.Cookie(controller.runtime.OAuthSessionCookieName)
 
 	if err != nil {
-		tlog.App.Warn().Err(err).Msg("OAuth session cookie missing")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth session cookie")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
-	c.SetCookie(controller.config.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.SecureCookie, true)
+	c.SetCookie(controller.runtime.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
 
 	oauthPendingSession, err := controller.auth.GetOAuthPendingSession(sessionIdCookie)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to get OAuth pending session")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Error().Err(err).Msg("Failed to get pending OAuth session")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -150,8 +149,8 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	state := c.Query("state")
 	if state != oauthPendingSession.State {
-		tlog.App.Warn().Err(err).Msg("CSRF token mismatch")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Warn().Msg("OAuth state mismatch")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -159,68 +158,80 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	_, err = controller.auth.GetOAuthToken(sessionIdCookie, code)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to exchange code for token")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Error().Err(err).Msg("Failed to exchange code for token")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	user, err := controller.auth.GetOAuthUserinfo(sessionIdCookie)
 
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to get user info from OAuth provider")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
+	if user == nil {
+		controller.log.App.Warn().Msg("OAuth provider did not return user info")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
 	if user.Email == "" {
-		tlog.App.Error().Msg("OAuth provider did not return an email")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Warn().Msg("OAuth provider did not return an email")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	if !controller.auth.IsEmailWhitelisted(user.Email) {
-		tlog.App.Warn().Str("email", user.Email).Msg("Email not whitelisted")
-		tlog.AuditLoginFailure(c, user.Email, req.Provider, "email not whitelisted")
+		controller.log.App.Warn().Str("email", user.Email).Msg("Email not whitelisted, denying access")
+		controller.log.AuditLoginFailure(user.Email, req.Provider, c.ClientIP(), "email not whitelisted")
 
 		queries, err := query.Values(UnauthorizedQuery{
 			Username: user.Email,
 		})
 
 		if err != nil {
-			tlog.App.Error().Err(err).Msg("Failed to encode unauthorized query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+			controller.log.App.Error().Err(err).Msg("Failed to encode unauthorized query")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/unauthorized?%s", controller.config.AppURL, queries.Encode()))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/unauthorized?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
 	var name string
 
 	if strings.TrimSpace(user.Name) != "" {
-		tlog.App.Debug().Msg("Using name from OAuth provider")
+		controller.log.App.Debug().Msg("Using name from OAuth provider")
 		name = user.Name
 	} else {
-		tlog.App.Debug().Msg("No name from OAuth provider, using pseudo name")
+		controller.log.App.Debug().Msg("No name from OAuth provider, generating from email")
 		name = fmt.Sprintf("%s (%s)", utils.Capitalize(strings.Split(user.Email, "@")[0]), strings.Split(user.Email, "@")[1])
 	}
 
 	var username string
 
 	if strings.TrimSpace(user.PreferredUsername) != "" {
-		tlog.App.Debug().Msg("Using preferred username from OAuth provider")
+		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
 		username = user.PreferredUsername
 	} else {
-		tlog.App.Debug().Msg("No preferred username from OAuth provider, using pseudo username")
+		controller.log.App.Debug().Msg("No preferred username from OAuth provider, generating from email")
 		username = strings.Replace(user.Email, "@", "_", 1)
 	}
 
 	svc, err := controller.auth.GetOAuthService(sessionIdCookie)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to get OAuth service for session")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth service for session")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	if svc.ID() != req.Provider {
-		tlog.App.Error().Msgf("OAuth service ID mismatch: expected %s, got %s", svc.ID(), req.Provider)
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, svc.ID())
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -234,29 +245,29 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		OAuthSub:    user.Sub,
 	}
 
-	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")
+	controller.log.App.Debug().Msg("Creating session cookie for user")
 
 	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+		controller.log.App.Error().Err(err).Msg("Failed to create session cookie")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	http.SetCookie(c.Writer, cookie)
 
-	tlog.AuditLoginSuccess(c, sessionCookie.Username, sessionCookie.Provider)
+	controller.log.AuditLoginSuccess(sessionCookie.Username, sessionCookie.Provider, c.ClientIP())
 
 	if controller.isOidcRequest(oauthPendingSession.CallbackParams) {
-		tlog.App.Debug().Msg("OIDC request, redirecting to authorize page")
+		controller.log.App.Debug().Msg("OIDC request detected, redirecting to authorization endpoint with callback params")
 		queries, err := query.Values(oauthPendingSession.CallbackParams)
 		if err != nil {
-			tlog.App.Error().Err(err).Msg("Failed to encode OIDC callback query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+			controller.log.App.Error().Err(err).Msg("Failed to encode OIDC callback query")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/authorize?%s", controller.config.AppURL, queries.Encode()))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/authorize?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
@@ -266,16 +277,16 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		})
 
 		if err != nil {
-			tlog.App.Error().Err(err).Msg("Failed to encode redirect URI query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.config.AppURL))
+			controller.log.App.Error().Err(err).Msg("Failed to encode redirect query")
+			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/continue?%s", controller.config.AppURL, queries.Encode()))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/continue?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, controller.config.AppURL)
+	c.Redirect(http.StatusTemporaryRedirect, controller.runtime.AppURL)
 }
 
 func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) bool {
@@ -286,8 +297,8 @@ func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) 
 }
 
 func (controller *OAuthController) getCookieDomain() string {
-	if controller.config.SubdomainsEnabled {
-		return "." + controller.config.CookieDomain
+	if controller.config.Auth.SubdomainsEnabled {
+		return "." + controller.runtime.CookieDomain
 	}
-	return controller.config.CookieDomain
+	return controller.runtime.CookieDomain
 }

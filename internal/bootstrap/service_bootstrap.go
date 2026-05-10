@@ -1,131 +1,66 @@
 package bootstrap
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 )
 
-type Services struct {
-	accessControlService *service.AccessControlsService
-	authService          *service.AuthService
-	dockerService        *service.DockerService
-	kubernetesService    *service.KubernetesService
-	ldapService          *service.LdapService
-	oauthBrokerService   *service.OAuthBrokerService
-	oidcService          *service.OIDCService
-}
-
-func (app *BootstrapApp) initServices(queries *repository.Queries) (Services, error) {
-	services := Services{}
-
-	ldapService := service.NewLdapService(service.LdapServiceConfig{
-		Address:      app.config.LDAP.Address,
-		BindDN:       app.config.LDAP.BindDN,
-		BindPassword: app.config.LDAP.BindPassword,
-		BaseDN:       app.config.LDAP.BaseDN,
-		Insecure:     app.config.LDAP.Insecure,
-		SearchFilter: app.config.LDAP.SearchFilter,
-		AuthCert:     app.config.LDAP.AuthCert,
-		AuthKey:      app.config.LDAP.AuthKey,
-	})
-
-	err := ldapService.Init()
+func (app *BootstrapApp) setupServices() error {
+	ldapService, err := service.NewLdapService(app.log, app.config, app.ctx, &app.wg)
 
 	if err != nil {
-		tlog.App.Warn().Err(err).Msg("Failed to setup LDAP service, starting without it")
-		ldapService.Unconfigure()
+		app.log.App.Warn().Err(err).Msg("Failed to initialize LDAP connection, will continue without it")
 	}
 
-	services.ldapService = ldapService
-
-	var labelProvider service.LabelProvider
-	var dockerService *service.DockerService
-	var kubernetesService *service.KubernetesService
+	app.services.ldapService = ldapService
 
 	useKubernetes := app.config.LabelProvider == "kubernetes" ||
 		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
 
+	var labelProvider service.LabelProvider
+
 	if useKubernetes {
-		tlog.App.Debug().Msg("Using Kubernetes label provider")
-		kubernetesService = service.NewKubernetesService()
-		err = kubernetesService.Init()
+		app.log.App.Debug().Msg("Using Kubernetes label provider")
+
+		kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
+
 		if err != nil {
-			return Services{}, err
+			return fmt.Errorf("failed to initialize kubernetes service: %w", err)
 		}
-		services.kubernetesService = kubernetesService
+
+		app.services.kubernetesService = kubernetesService
 		labelProvider = kubernetesService
 	} else {
-		tlog.App.Debug().Msg("Using Docker label provider")
-		dockerService = service.NewDockerService()
-		err = dockerService.Init()
+		app.log.App.Debug().Msg("Using Docker label provider")
+
+		dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
+
 		if err != nil {
-			return Services{}, err
+			return fmt.Errorf("failed to initialize docker service: %w", err)
 		}
-		services.dockerService = dockerService
+
+		app.services.dockerService = dockerService
 		labelProvider = dockerService
 	}
 
-	accessControlsService := service.NewAccessControlsService(labelProvider, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(app.log, &labelProvider, app.config.Apps)
+	app.services.accessControlService = accessControlsService
 
-	err = accessControlsService.Init()
+	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
+	app.services.oauthBrokerService = oauthBrokerService
 
-	if err != nil {
-		return Services{}, err
-	}
+	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, &app.wg, app.services.ldapService, app.queries, app.services.oauthBrokerService)
+	app.services.authService = authService
 
-	services.accessControlService = accessControlsService
-
-	oauthBrokerService := service.NewOAuthBrokerService(app.context.oauthProviders)
-
-	err = oauthBrokerService.Init()
+	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx, &app.wg)
 
 	if err != nil {
-		return Services{}, err
+		return fmt.Errorf("failed to initialize oidc service: %w", err)
 	}
 
-	services.oauthBrokerService = oauthBrokerService
+	app.services.oidcService = oidcService
 
-	authService := service.NewAuthService(service.AuthServiceConfig{
-		LocalUsers:         app.context.localUsers,
-		OauthWhitelist:     app.context.oauthWhitelist,
-		SessionExpiry:      app.config.Auth.SessionExpiry,
-		SessionMaxLifetime: app.config.Auth.SessionMaxLifetime,
-		SecureCookie:       app.config.Auth.SecureCookie,
-		CookieDomain:       app.context.cookieDomain,
-		LoginTimeout:       app.config.Auth.LoginTimeout,
-		LoginMaxRetries:    app.config.Auth.LoginMaxRetries,
-		SessionCookieName:  app.context.sessionCookieName,
-		IP:                 app.config.Auth.IP,
-		LDAPGroupsCacheTTL: app.config.LDAP.GroupCacheTTL,
-		SubdomainsEnabled:  app.config.Auth.SubdomainsEnabled,
-	}, services.ldapService, queries, services.oauthBrokerService)
-
-	err = authService.Init()
-
-	if err != nil {
-		return Services{}, err
-	}
-
-	services.authService = authService
-
-	oidcService := service.NewOIDCService(service.OIDCServiceConfig{
-		Clients:        app.config.OIDC.Clients,
-		PrivateKeyPath: app.config.OIDC.PrivateKeyPath,
-		PublicKeyPath:  app.config.OIDC.PublicKeyPath,
-		Issuer:         app.config.AppURL,
-		SessionExpiry:  app.config.Auth.SessionExpiry,
-	}, queries)
-
-	err = oidcService.Init()
-
-	if err != nil {
-		return Services{}, err
-	}
-
-	services.oidcService = oidcService
-
-	return services, nil
+	return nil
 }

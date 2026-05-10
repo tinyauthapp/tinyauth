@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"charm.land/huh/v2"
 	"github.com/mdp/qrterminal/v3"
@@ -40,7 +40,8 @@ func generateTotpCmd() *cli.Command {
 		Configuration: tCfg,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			tlog.NewSimpleLogger().Init()
+			log := logger.NewLogger().WithSimpleConfig()
+			log.Init()
 
 			if tCfg.Interactive {
 				form := huh.NewForm(
@@ -88,9 +89,9 @@ func generateTotpCmd() *cli.Command {
 
 			secret := key.Secret()
 
-			tlog.App.Info().Str("secret", secret).Msg("Generated TOTP secret")
+			log.App.Info().Str("secret", secret).Msg("Generated TOTP secret")
 
-			tlog.App.Info().Msg("Generated QR code")
+			log.App.Info().Msg("Generated QR code")
 
 			config := qrterminal.Config{
 				Level:     qrterminal.L,
@@ -109,7 +110,7 @@ func generateTotpCmd() *cli.Command {
 				user.Password = strings.ReplaceAll(user.Password, "$", "$$")
 			}
 
-			tlog.App.Info().Str("user", fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TOTPSecret)).Msg("Add the totp secret to your authenticator app then use the verify command to ensure everything is working correctly.")
+			log.App.Info().Str("user", fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TOTPSecret)).Msg("Add the totp secret to your authenticator app then use the verify command to ensure everything is working correctly.")
 
 			return nil
 		},

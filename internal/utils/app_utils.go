@@ -7,8 +7,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-
 	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
@@ -28,7 +26,6 @@ func GetCookieDomain(u string) (string, error) {
 	parts := strings.Split(host, ".")
 
 	if len(parts) == 2 {
-		tlog.App.Warn().Msgf("Running on the root domain, cookies will be set for .%v", host)
 		return host, nil
 	}
 

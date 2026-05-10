@@ -1,8 +1,9 @@
 package controller_test
 
 import (
+	"context"
 	"net/http/httptest"
-	"path"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -13,35 +14,15 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestProxyController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	authServiceCfg := service.AuthServiceConfig{
-		LocalUsers: &[]model.LocalUser{
-			{
-				Username: "testuser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-			},
-			{
-				Username:   "totpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TOTPSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-			},
-		},
-		SessionExpiry:     10, // 10 seconds, useful for testing
-		CookieDomain:      "example.com",
-		LoginTimeout:      10, // 10 seconds, useful for testing
-		LoginMaxRetries:   3,
-		SessionCookieName: "tinyauth-session",
-	}
-
-	controllerCfg := controller.ProxyControllerConfig{
-		AppURL: "https://tinyauth.example.com",
-	}
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	acls := map[string]model.App{
 		"app_path_allow": {
@@ -398,32 +379,19 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	app := bootstrap.NewBootstrapApp(model.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
+	queries := repository.New(app.GetDB())
 
-	docker := service.NewDockerService()
-	err = docker.Init()
-	require.NoError(t, err)
+	wg := &sync.WaitGroup{}
+	ctx := context.TODO()
 
-	ldap := service.NewLdapService(service.LdapServiceConfig{})
-	err = ldap.Init()
-	require.NoError(t, err)
-
-	broker := service.NewOAuthBrokerService(oauthBrokerCfgs)
-	err = broker.Init()
-	require.NoError(t, err)
-
-	authService := service.NewAuthService(authServiceCfg, ldap, queries, broker)
-	err = authService.Init()
-	require.NoError(t, err)
-
-	aclsService := service.NewAccessControlsService(docker, acls)
+	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	aclsService := service.NewAccessControlsService(log, nil, acls)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -438,15 +406,13 @@ func TestProxyController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			proxyController := controller.NewProxyController(controllerCfg, group, aclsService, authService)
-			proxyController.SetupRoutes()
+			controller.NewProxyController(log, runtime, group, aclsService, authService)
 
 			test.run(t, router, recorder)
 		})
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

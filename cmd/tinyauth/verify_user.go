@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"charm.land/huh/v2"
 	"github.com/pquerna/otp/totp"
@@ -44,7 +44,8 @@ func verifyUserCmd() *cli.Command {
 		Configuration: tCfg,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			tlog.NewSimpleLogger().Init()
+			log := logger.NewLogger().WithSimpleConfig()
+			log.Init()
 
 			if tCfg.Interactive {
 				form := huh.NewForm(
@@ -97,9 +98,9 @@ func verifyUserCmd() *cli.Command {
 
 			if user.TOTPSecret == "" {
 				if tCfg.Totp != "" {
-					tlog.App.Warn().Msg("User does not have TOTP secret")
+					log.App.Warn().Msg("User does not have TOTP secret")
 				}
-				tlog.App.Info().Msg("User verified")
+				log.App.Info().Msg("User verified")
 				return nil
 			}
 
@@ -109,7 +110,7 @@ func verifyUserCmd() *cli.Command {
 				return fmt.Errorf("TOTP code incorrect")
 			}
 
-			tlog.App.Info().Msg("User verified")
+			log.App.Info().Msg("User verified")
 
 			return nil
 		},

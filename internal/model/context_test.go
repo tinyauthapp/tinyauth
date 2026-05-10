@@ -238,7 +238,7 @@ func TestContext(t *testing.T) {
 				_, err := c.NewFromGin(newGinCtx(nil, false))
 				return err.Error()
 			},
-			expected: "failed to get user context",
+			expected: model.ErrUserContextNotFound.Error(),
 		},
 		{
 			description: "NewFromGin returns error when context value has wrong type",

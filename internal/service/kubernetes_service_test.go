@@ -8,9 +8,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestKubernetesService(t *testing.T) {
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+
 	type testCase struct {
 		description string
 		run         func(t *testing.T, svc *KubernetesService)
@@ -179,6 +183,7 @@ func TestKubernetesService(t *testing.T) {
 				ingressApps:  make(map[ingressKey][]ingressApp),
 				domainIndex:  make(map[string]ingressAppKey),
 				appNameIndex: make(map[string]ingressAppKey),
+				log:          log,
 			}
 			test.run(t, svc)
 		})

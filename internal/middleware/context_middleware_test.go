@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
-	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,36 +17,15 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestContextMiddleware(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	authServiceCfg := service.AuthServiceConfig{
-		LocalUsers: &[]model.LocalUser{
-			{
-				Username: "testuser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-			},
-			{
-				Username:   "totpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TOTPSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-			},
-		},
-		SessionExpiry:     10, // 10 seconds, useful for testing
-		CookieDomain:      "example.com",
-		LoginTimeout:      10, // 10 seconds, useful for testing
-		LoginMaxRetries:   3,
-		SessionCookieName: "tinyauth-session",
-	}
-
-	middlewareCfg := middleware.ContextMiddlewareConfig{
-		CookieDomain:      "example.com",
-		SessionCookieName: "tinyauth-session",
-	}
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	basicAuthHeader := func(username, password string) string {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
@@ -270,30 +249,20 @@ func TestContextMiddleware(t *testing.T) {
 		},
 	}
 
-	oauthBrokerCfgs := make(map[string]model.OAuthServiceConfig)
+	ctx := context.TODO()
+	wg := &sync.WaitGroup{}
 
-	app := bootstrap.NewBootstrapApp(model.Config{})
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
+	queries := repository.New(app.GetDB())
 
-	ldap := service.NewLdapService(service.LdapServiceConfig{})
-	err = ldap.Init()
-	require.NoError(t, err)
+	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
 
-	broker := service.NewOAuthBrokerService(oauthBrokerCfgs)
-	err = broker.Init()
-	require.NoError(t, err)
-
-	authService := service.NewAuthService(authServiceCfg, ldap, queries, broker)
-	err = authService.Init()
-	require.NoError(t, err)
-
-	contextMiddleware := middleware.NewContextMiddleware(middlewareCfg, authService, broker)
-	err = contextMiddleware.Init()
-	require.NoError(t, err)
+	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker)
 
 	for _, test := range tests {
 		authService.ClearRateLimitsTestingOnly()
@@ -322,7 +291,6 @@ func TestContextMiddleware(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

@@ -13,15 +13,13 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-type OIDCControllerConfig struct{}
-
 type OIDCController struct {
-	config OIDCControllerConfig
-	router *gin.RouterGroup
-	oidc   *service.OIDCService
+	log     *logger.Logger
+	oidc    *service.OIDCService
+	runtime model.RuntimeConfig
 }
 
 type AuthorizeCallback struct {
@@ -58,29 +56,42 @@ type ClientCredentials struct {
 	ClientSecret string
 }
 
-func NewOIDCController(config OIDCControllerConfig, oidcService *service.OIDCService, router *gin.RouterGroup) *OIDCController {
-	return &OIDCController{
-		config: config,
-		oidc:   oidcService,
-		router: router,
+func NewOIDCController(
+	log *logger.Logger,
+	oidcService *service.OIDCService,
+	runtimeConfig model.RuntimeConfig,
+	router *gin.RouterGroup) *OIDCController {
+	controller := &OIDCController{
+		log:     log,
+		oidc:    oidcService,
+		runtime: runtimeConfig,
 	}
-}
 
-func (controller *OIDCController) SetupRoutes() {
-	oidcGroup := controller.router.Group("/oidc")
+	oidcGroup := router.Group("/oidc")
 	oidcGroup.GET("/clients/:id", controller.GetClientInfo)
 	oidcGroup.POST("/authorize", controller.Authorize)
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)
 	oidcGroup.POST("/userinfo", controller.Userinfo)
+
+	return controller
 }
 
 func (controller *OIDCController) GetClientInfo(c *gin.Context) {
+	if controller.oidc == nil {
+		controller.log.App.Warn().Msg("Received OIDC client info request but OIDC server is not configured")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "OIDC not configured",
+		})
+		return
+	}
+
 	var req ClientRequest
 
 	err := c.BindUri(&req)
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to bind URI")
+		controller.log.App.Error().Err(err).Msg("Failed to bind URI")
 		c.JSON(400, gin.H{
 			"status":  400,
 			"message": "Bad Request",
@@ -91,7 +102,7 @@ func (controller *OIDCController) GetClientInfo(c *gin.Context) {
 	client, ok := controller.oidc.GetClient(req.ClientID)
 
 	if !ok {
-		tlog.App.Warn().Str("client_id", req.ClientID).Msg("Client not found")
+		controller.log.App.Warn().Str("clientId", req.ClientID).Msg("Client not found")
 		c.JSON(404, gin.H{
 			"status":  404,
 			"message": "Client not found",
@@ -107,7 +118,7 @@ func (controller *OIDCController) GetClientInfo(c *gin.Context) {
 }
 
 func (controller *OIDCController) Authorize(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
+	if controller.oidc == nil {
 		controller.authorizeError(c, errors.New("err_oidc_not_configured"), "OIDC not configured", "This instance is not configured for OIDC", "", "", "")
 		return
 	}
@@ -142,7 +153,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 	err = controller.oidc.ValidateAuthorizeParams(req)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to validate authorize params")
+		controller.log.App.Warn().Err(err).Msg("Failed to validate authorize params")
 		if err.Error() != "invalid_request_uri" {
 			controller.authorizeError(c, err, "Failed validate authorize params", "Invalid request parameters", req.RedirectURI, err.Error(), req.State)
 			return
@@ -174,7 +185,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 		err = controller.oidc.StoreUserinfo(c, sub, *userContext, req)
 
 		if err != nil {
-			tlog.App.Error().Err(err).Msg("Failed to insert user info into database")
+			controller.log.App.Error().Err(err).Msg("Failed to store user info")
 			controller.authorizeError(c, err, "Failed to store user info", "Failed to store user info", req.RedirectURI, "server_error", req.State)
 			return
 		}
@@ -197,10 +208,10 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 }
 
 func (controller *OIDCController) Token(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
-		tlog.App.Warn().Msg("OIDC not configured")
-		c.JSON(404, gin.H{
-			"error": "not_found",
+	if controller.oidc == nil {
+		controller.log.App.Warn().Msg("Received OIDC request but OIDC server is not configured")
+		c.JSON(500, gin.H{
+			"error": "server_error",
 		})
 		return
 	}
@@ -209,7 +220,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 	err := c.Bind(&req)
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to bind token request")
+		controller.log.App.Warn().Err(err).Msg("Failed to bind token request")
 		c.JSON(400, gin.H{
 			"error": "invalid_request",
 		})
@@ -218,7 +229,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 	err = controller.oidc.ValidateGrantType(req.GrantType)
 	if err != nil {
-		tlog.App.Warn().Str("grant_type", req.GrantType).Msg("Unsupported grant type")
+		controller.log.App.Warn().Err(err).Msg("Invalid grant type")
 		c.JSON(400, gin.H{
 			"error": err.Error(),
 		})
@@ -233,12 +244,12 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 	// If it fails, we try basic auth
 	if creds.ClientID == "" || creds.ClientSecret == "" {
-		tlog.App.Debug().Msg("Tried form values and they are empty, trying basic auth")
+		controller.log.App.Debug().Msg("Client credentials not found in form, trying basic auth")
 
 		clientId, clientSecret, ok := c.Request.BasicAuth()
 
 		if !ok {
-			tlog.App.Error().Msg("Missing authorization header")
+			controller.log.App.Warn().Msg("Client credentials not found in basic auth")
 			c.Header("www-authenticate", `Basic realm="Tinyauth OIDC Token Endpoint"`)
 			c.JSON(400, gin.H{
 				"error": "invalid_client",
@@ -255,7 +266,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	client, ok := controller.oidc.GetClient(creds.ClientID)
 
 	if !ok {
-		tlog.App.Warn().Str("client_id", creds.ClientID).Msg("Client not found")
+		controller.log.App.Warn().Str("clientId", creds.ClientID).Msg("Client not found")
 		c.JSON(400, gin.H{
 			"error": "invalid_client",
 		})
@@ -263,7 +274,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	}
 
 	if client.ClientSecret != creds.ClientSecret {
-		tlog.App.Warn().Str("client_id", creds.ClientID).Msg("Invalid client secret")
+		controller.log.App.Warn().Str("clientId", creds.ClientID).Msg("Invalid client secret")
 		c.JSON(400, gin.H{
 			"error": "invalid_client",
 		})
@@ -277,30 +288,30 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		entry, err := controller.oidc.GetCodeEntry(c, controller.oidc.Hash(req.Code), client.ClientID)
 		if err != nil {
 			if err := controller.oidc.DeleteTokenByCodeHash(c, controller.oidc.Hash(req.Code)); err != nil {
-				tlog.App.Error().Err(err).Msg("Failed to delete access token by code hash")
+				controller.log.App.Error().Err(err).Msg("Failed to delete code")
 			}
 			if errors.Is(err, service.ErrCodeNotFound) {
-				tlog.App.Warn().Msg("Code not found")
+				controller.log.App.Warn().Msg("Code not found")
 				c.JSON(400, gin.H{
 					"error": "invalid_grant",
 				})
 				return
 			}
 			if errors.Is(err, service.ErrCodeExpired) {
-				tlog.App.Warn().Msg("Code expired")
+				controller.log.App.Warn().Msg("Code expired")
 				c.JSON(400, gin.H{
 					"error": "invalid_grant",
 				})
 				return
 			}
 			if errors.Is(err, service.ErrInvalidClient) {
-				tlog.App.Warn().Msg("Invalid client ID")
+				controller.log.App.Warn().Msg("Code does not belong to client")
 				c.JSON(400, gin.H{
 					"error": "invalid_client",
 				})
 				return
 			}
-			tlog.App.Warn().Err(err).Msg("Failed to get OIDC code entry")
+			controller.log.App.Error().Err(err).Msg("Failed to get code entry")
 			c.JSON(400, gin.H{
 				"error": "server_error",
 			})
@@ -308,7 +319,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		}
 
 		if entry.RedirectURI != req.RedirectURI {
-			tlog.App.Warn().Str("redirect_uri", req.RedirectURI).Msg("Redirect URI mismatch")
+			controller.log.App.Warn().Msg("Redirect URI does not match")
 			c.JSON(400, gin.H{
 				"error": "invalid_grant",
 			})
@@ -318,7 +329,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		ok := controller.oidc.ValidatePKCE(entry.CodeChallenge, req.CodeVerifier)
 
 		if !ok {
-			tlog.App.Warn().Msg("PKCE validation failed")
+			controller.log.App.Warn().Msg("PKCE validation failed")
 			c.JSON(400, gin.H{
 				"error": "invalid_grant",
 			})
@@ -328,7 +339,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, entry)
 
 		if err != nil {
-			tlog.App.Error().Err(err).Msg("Failed to generate access token")
+			controller.log.App.Error().Err(err).Msg("Failed to generate access token")
 			c.JSON(400, gin.H{
 				"error": "server_error",
 			})
@@ -341,7 +352,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 		if err != nil {
 			if errors.Is(err, service.ErrTokenExpired) {
-				tlog.App.Error().Err(err).Msg("Refresh token expired")
+				controller.log.App.Warn().Msg("Refresh token expired")
 				c.JSON(400, gin.H{
 					"error": "invalid_grant",
 				})
@@ -349,14 +360,14 @@ func (controller *OIDCController) Token(c *gin.Context) {
 			}
 
 			if errors.Is(err, service.ErrInvalidClient) {
-				tlog.App.Error().Err(err).Msg("Invalid client")
+				controller.log.App.Warn().Msg("Refresh token does not belong to client")
 				c.JSON(400, gin.H{
 					"error": "invalid_grant",
 				})
 				return
 			}
 
-			tlog.App.Error().Err(err).Msg("Failed to refresh access token")
+			controller.log.App.Error().Err(err).Msg("Failed to refresh access token")
 			c.JSON(400, gin.H{
 				"error": "server_error",
 			})
@@ -373,10 +384,10 @@ func (controller *OIDCController) Token(c *gin.Context) {
 }
 
 func (controller *OIDCController) Userinfo(c *gin.Context) {
-	if !controller.oidc.IsConfigured() {
-		tlog.App.Warn().Msg("OIDC not configured")
-		c.JSON(404, gin.H{
-			"error": "not_found",
+	if controller.oidc == nil {
+		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
+		c.JSON(500, gin.H{
+			"error": "server_error",
 		})
 		return
 	}
@@ -387,7 +398,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	if authorization != "" {
 		tokenType, bearerToken, ok := strings.Cut(authorization, " ")
 		if !ok {
-			tlog.App.Warn().Msg("OIDC userinfo accessed with malformed authorization header")
+			controller.log.App.Warn().Msg("OIDC userinfo accessed with invalid authorization header")
 			c.JSON(401, gin.H{
 				"error": "invalid_request",
 			})
@@ -395,7 +406,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		}
 
 		if strings.ToLower(tokenType) != "bearer" {
-			tlog.App.Warn().Msg("OIDC userinfo accessed with invalid token type")
+			controller.log.App.Warn().Msg("OIDC userinfo accessed with non-bearer token")
 			c.JSON(401, gin.H{
 				"error": "invalid_request",
 			})
@@ -405,7 +416,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		token = bearerToken
 	} else if c.Request.Method == http.MethodPost {
 		if c.ContentType() != "application/x-www-form-urlencoded" {
-			tlog.App.Warn().Msg("OIDC userinfo POST accessed with invalid content type")
+			controller.log.App.Warn().Msg("OIDC userinfo POST accessed with invalid content type")
 			c.JSON(400, gin.H{
 				"error": "invalid_request",
 			})
@@ -413,14 +424,14 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		}
 		token = c.PostForm("access_token")
 		if token == "" {
-			tlog.App.Warn().Msg("OIDC userinfo POST accessed without access_token in body")
+			controller.log.App.Warn().Msg("OIDC userinfo POST accessed without access_token")
 			c.JSON(401, gin.H{
 				"error": "invalid_request",
 			})
 			return
 		}
 	} else {
-		tlog.App.Warn().Msg("OIDC userinfo accessed without authorization header")
+		controller.log.App.Warn().Msg("OIDC userinfo accessed without authorization header or POST body")
 		c.JSON(401, gin.H{
 			"error": "invalid_request",
 		})
@@ -431,14 +442,14 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, service.ErrTokenNotFound) {
-			tlog.App.Warn().Msg("OIDC userinfo accessed with invalid token")
+			controller.log.App.Warn().Msg("OIDC userinfo accessed with invalid token")
 			c.JSON(401, gin.H{
 				"error": "invalid_grant",
 			})
 			return
 		}
 
-		tlog.App.Err(err).Msg("Failed to get token entry")
+		controller.log.App.Error().Err(err).Msg("Failed to get access token")
 		c.JSON(401, gin.H{
 			"error": "server_error",
 		})
@@ -447,7 +458,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 
 	// If we don't have the openid scope, return an error
 	if !slices.Contains(strings.Split(entry.Scope, ","), "openid") {
-		tlog.App.Warn().Msg("OIDC userinfo accessed without openid scope")
+		controller.log.App.Warn().Msg("OIDC userinfo accessed with token missing openid scope")
 		c.JSON(401, gin.H{
 			"error": "invalid_scope",
 		})
@@ -457,7 +468,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	user, err := controller.oidc.GetUserinfo(c, entry.Sub)
 
 	if err != nil {
-		tlog.App.Err(err).Msg("Failed to get user entry")
+		controller.log.App.Error().Err(err).Msg("Failed to get user info")
 		c.JSON(401, gin.H{
 			"error": "server_error",
 		})
@@ -468,7 +479,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 }
 
 func (controller *OIDCController) authorizeError(c *gin.Context, err error, reason string, reasonUser string, callback string, callbackError string, state string) {
-	tlog.App.Error().Err(err).Msg(reason)
+	controller.log.App.Warn().Err(err).Str("reason", reason).Msg("Authorization error")
 
 	if callback != "" {
 		errorQueries := CallbackError{
@@ -508,8 +519,16 @@ func (controller *OIDCController) authorizeError(c *gin.Context, err error, reas
 		return
 	}
 
+	redirectUrl := ""
+
+	if controller.oidc != nil {
+		redirectUrl = fmt.Sprintf("%s/error?%s", controller.oidc.GetIssuer(), queries.Encode())
+	} else {
+		redirectUrl = fmt.Sprintf("%s/error?%s", controller.runtime.AppURL, queries.Encode())
+	}
+
 	c.JSON(200, gin.H{
 		"status":       200,
-		"redirect_uri": fmt.Sprintf("%s/error?%s", controller.oidc.GetIssuer(), queries.Encode()),
+		"redirect_uri": redirectUrl,
 	})
 }
