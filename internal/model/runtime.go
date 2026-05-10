@@ -13,6 +13,7 @@ type RuntimeConfig struct {
 	OAuthWhitelist         []string
 	ConfiguredProviders    []Provider
 	OIDCClients            []OIDCClientConfig
+	TrustedDomains         []string
 }
 
 type Provider struct {

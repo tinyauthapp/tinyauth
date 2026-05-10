@@ -67,6 +67,8 @@ func (app *BootstrapApp) Setup() error {
 	log.Init()
 	app.log = log
 
+	app.log.App.Info().Msgf("Starting Tinyauth version: %s", model.Version)
+
 	// get app url
 	if app.config.AppURL == "" {
 		return errors.New("app url cannot be empty, perhaps config loading failed")
@@ -79,6 +81,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, app.runtime.AppURL)
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -228,6 +231,11 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	app.runtime.ConfiguredProviders = configuredProviders
+
+	// throw in tailscale if it's configured just before setting up the controllers
+	if app.services.tailscaleService != nil {
+		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
+	}
 
 	// setup router
 	err = app.setupRouter()

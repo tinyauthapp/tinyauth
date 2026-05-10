@@ -34,16 +34,25 @@ func TestContextController(t *testing.T) {
 			path:        "/api/context/app",
 			expected: func() string {
 				expectedAppContextResponse := controller.AppContextResponse{
-					Status:                200,
-					Message:               "Success",
-					Providers:             runtime.ConfiguredProviders,
-					Title:                 cfg.UI.Title,
-					AppURL:                runtime.AppURL,
-					CookieDomain:          runtime.CookieDomain,
-					ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
-					BackgroundImage:       cfg.UI.BackgroundImage,
-					OAuthAutoRedirect:     cfg.OAuth.AutoRedirect,
-					WarningsEnabled:       cfg.UI.WarningsEnabled,
+					Status:  200,
+					Message: "Success",
+					Auth: controller.ACRAuth{
+						Providers: runtime.ConfiguredProviders,
+					},
+					OAuth: controller.ACROAuth{
+						AutoRedirect: cfg.OAuth.AutoRedirect,
+					},
+					UI: controller.ACRUI{
+						Title:                 cfg.UI.Title,
+						ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
+						BackgroundImage:       cfg.UI.BackgroundImage,
+						WarningsEnabled:       cfg.UI.WarningsEnabled,
+					},
+					App: controller.ACRApp{
+						AppURL:         runtime.AppURL,
+						CookieDomain:   runtime.CookieDomain,
+						TrustedDomains: runtime.TrustedDomains,
+					},
 				}
 				bytes, err := json.Marshal(expectedAppContextResponse)
 				require.NoError(t, err)
@@ -84,13 +93,15 @@ func TestContextController(t *testing.T) {
 			path: "/api/context/user",
 			expected: func() string {
 				expectedUserContextResponse := controller.UserContextResponse{
-					Status:     200,
-					Message:    "Success",
-					IsLoggedIn: true,
-					Username:   "johndoe",
-					Name:       "John Doe",
-					Email:      utils.CompileUserEmail("johndoe", runtime.CookieDomain),
-					Provider:   "local",
+					Status:  200,
+					Message: "Success",
+					Auth: controller.UCRAuth{
+						Authenticated: true,
+						Username:      "johndoe",
+						Name:          "John Doe",
+						Email:         utils.CompileUserEmail("johndoe", runtime.CookieDomain),
+						ProviderID:    "local",
+					},
 				}
 				bytes, err := json.Marshal(expectedUserContextResponse)
 				require.NoError(t, err)

@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -59,6 +60,15 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 		lc:     lc,
 	}
 
+	connectCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	err = service.waitForConn(connectCtx)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to tailscale network: %w", err)
+	}
+
 	wg.Go(service.watchAndClose)
 
 	return service, nil
@@ -89,7 +99,7 @@ func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*model.Tail
 		UserID:      who.UserProfile.ID.String(),
 		LoginName:   who.UserProfile.LoginName,
 		DisplayName: who.UserProfile.DisplayName,
-		NodeName:    who.Node.Name,
+		NodeName:    strings.TrimSuffix(who.Node.Name, "."),
 	}
 
 	return &res, nil
@@ -116,4 +126,20 @@ func (ts *TailscaleService) GetHostname() string {
 	}
 
 	return strings.TrimSuffix(status.Self.DNSName, ".")
+}
+
+func (ts *TailscaleService) waitForConn(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for tailscale connection")
+		default:
+			ip4, _ := ts.srv.TailscaleIPs()
+			if !ip4.IsValid() {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			return nil
+		}
+	}
 }

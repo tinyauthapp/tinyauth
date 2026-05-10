@@ -13,7 +13,7 @@ import Markdown from "react-markdown";
 import { useLocation } from "react-router";
 
 export const ForgotPasswordPage = () => {
-  const { forgotPasswordMessage } = useAppContext();
+  const { ui } = useAppContext();
   const { t } = useTranslation();
   const { search } = useLocation();
   const searchParams = new URLSearchParams(search);
@@ -26,8 +26,8 @@ export const ForgotPasswordPage = () => {
       <CardContent>
         <CardDescription>
           <Markdown>
-            {forgotPasswordMessage !== ""
-              ? forgotPasswordMessage
+            {ui.forgotPasswordMessage !== ""
+              ? ui.forgotPasswordMessage
               : t("forgotPasswordMessage")}
           </Markdown>
         </CardDescription>

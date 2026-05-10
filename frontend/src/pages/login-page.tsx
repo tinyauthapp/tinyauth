@@ -36,13 +36,13 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export const LoginPage = () => {
-  const { isLoggedIn, tailscaleNodeName } = useUserContext();
-  const { providers, title, oauthAutoRedirect } = useAppContext();
+  const { auth, tailscale } = useUserContext();
+  const { ui, oauth, auth: cauth } = useAppContext();
   const { search } = useLocation();
   const { t } = useTranslation();
 
   const [showRedirectButton, setShowRedirectButton] = useState(false);
-  const [useTailscale, setUseTailscale] = useState(tailscaleNodeName !== "");
+  const [useTailscale, setUseTailscale] = useState(tailscale.nodeName !== "");
 
   const hasAutoRedirectedRef = useRef(false);
 
@@ -56,15 +56,15 @@ export const LoginPage = () => {
   const oidcParams = useOIDCParams(searchParams);
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
-    providers.find((provider) => provider.id === oauthAutoRedirect) !==
+    cauth.providers.find((provider) => provider.id === oauth.autoRedirect) !==
       undefined && redirectUri !== undefined,
   );
 
-  const oauthProviders = providers.filter(
+  const oauthProviders = cauth.providers.filter(
     (provider) => provider.id !== "local" && provider.id !== "ldap",
   );
   const userAuthConfigured =
-    providers.find(
+    cauth.providers.find(
       (provider) => provider.id === "local" || provider.id === "ldap",
     ) !== undefined;
 
@@ -177,19 +177,19 @@ export const LoginPage = () => {
 
   useEffect(() => {
     if (
-      !isLoggedIn &&
+      !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
       redirectUri !== undefined
     ) {
       hasAutoRedirectedRef.current = true;
-      oauthMutate(oauthAutoRedirect);
+      oauthMutate(oauth.autoRedirect);
     }
   }, [
-    isLoggedIn,
+    auth.authenticated,
     oauthMutate,
     hasAutoRedirectedRef,
-    oauthAutoRedirect,
+    oauth.autoRedirect,
     isOauthAutoRedirect,
     redirectUri,
   ]);
@@ -206,11 +206,11 @@ export const LoginPage = () => {
     };
   }, [redirectTimer, redirectButtonTimer]);
 
-  if (isLoggedIn && oidcParams.isOidc) {
+  if (auth.authenticated && oidcParams.isOidc) {
     return <Navigate to={`/authorize?${oidcParams.compiled}`} replace />;
   }
 
-  if (isLoggedIn && redirectUri !== undefined) {
+  if (auth.authenticated && redirectUri !== undefined) {
     return (
       <Navigate
         to={`/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
@@ -219,7 +219,7 @@ export const LoginPage = () => {
     );
   }
 
-  if (isLoggedIn) {
+  if (auth.authenticated) {
     return <Navigate to="/logout" replace />;
   }
 
@@ -272,7 +272,7 @@ export const LoginPage = () => {
             credentials?
           </div>
           <div className="text-muted-foreground text-sm">
-            Machine Name: <code>{tailscaleNodeName}</code>
+            Machine Name: <code>{tailscale.nodeName}</code>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3">
@@ -299,8 +299,8 @@ export const LoginPage = () => {
   return (
     <Card>
       <CardHeader className="gap-1.5">
-        <CardTitle className="text-center text-xl">{title}</CardTitle>
-        {providers.length > 0 && (
+        <CardTitle className="text-center text-xl">{ui.title}</CardTitle>
+        {cauth.providers.length > 0 && (
           <CardDescription className="text-center">
             {oauthProviders.length !== 0
               ? t("loginTitle")
@@ -338,7 +338,7 @@ export const LoginPage = () => {
             })()}
           />
         )}
-        {providers.length == 0 && (
+        {cauth.providers.length == 0 && (
           <pre className="break-normal! text-sm text-red-600">
             {t("failedToFetchProvidersTitle")}
           </pre>

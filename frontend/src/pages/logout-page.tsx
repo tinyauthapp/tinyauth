@@ -13,9 +13,11 @@ import { useEffect, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Navigate } from "react-router";
 import { toast } from "sonner";
+import { type UseMutationResult } from "@tanstack/react-query";
+import { type AxiosResponse } from "axios";
 
 export const LogoutPage = () => {
-  const { provider, username, isLoggedIn, email, oauthName } = useUserContext();
+  const { auth, oauth, tailscale } = useUserContext();
   const { t } = useTranslation();
 
   const redirectTimer = useRef<number | null>(null);
@@ -47,42 +49,74 @@ export const LogoutPage = () => {
     };
   }, [redirectTimer]);
 
-  if (!isLoggedIn) {
+  if (!auth.authenticated) {
     return <Navigate to="/login" replace />;
   }
 
+  if (oauth.active) {
+    return (
+      <LogoutLayout logoutMutation={logoutMutation}>
+        <Trans
+          i18nKey="logoutOauthSubtitle"
+          t={t}
+          components={{
+            code: <code />,
+          }}
+          values={{
+            username: auth.email,
+            provider: oauth.displayName,
+          }}
+          shouldUnescape={true}
+        />
+      </LogoutLayout>
+    );
+  }
+
+  if (auth.providerId === "tailscale") {
+    return (
+      <LogoutLayout logoutMutation={logoutMutation}>
+        You are currently logged in with the Tailscale integration identified by
+        the <code>{tailscale.nodeName}</code> node. Click the button below to
+        log out.
+      </LogoutLayout>
+    );
+  }
+
+  return (
+    <LogoutLayout logoutMutation={logoutMutation}>
+      <Trans
+        i18nKey="logoutUsernameSubtitle"
+        t={t}
+        components={{
+          code: <code />,
+        }}
+        values={{
+          username: auth.username,
+        }}
+        shouldUnescape={true}
+      />
+    </LogoutLayout>
+  );
+};
+
+interface LogoutLayoutProps {
+  children: React.ReactNode;
+  logoutMutation: UseMutationResult<
+    //eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-empty-object-type
+    AxiosResponse<any, any, {}>,
+    Error,
+    void,
+    unknown
+  >;
+}
+
+function LogoutLayout({ children, logoutMutation }: LogoutLayoutProps) {
+  const { t } = useTranslation();
   return (
     <Card>
       <CardHeader className="gap-1.5">
         <CardTitle className="text-xl">{t("logoutTitle")}</CardTitle>
-        <CardDescription>
-          {provider !== "local" && provider !== "ldap" ? (
-            <Trans
-              i18nKey="logoutOauthSubtitle"
-              t={t}
-              components={{
-                code: <code />,
-              }}
-              values={{
-                username: email,
-                provider: oauthName,
-              }}
-              shouldUnescape={true}
-            />
-          ) : (
-            <Trans
-              i18nKey="logoutUsernameSubtitle"
-              t={t}
-              components={{
-                code: <code />,
-              }}
-              values={{
-                username,
-              }}
-              shouldUnescape={true}
-            />
-          )}
-        </CardDescription>
+        <CardDescription>{children}</CardDescription>
       </CardHeader>
       <CardFooter>
         <Button
@@ -96,4 +130,4 @@ export const LogoutPage = () => {
       </CardFooter>
     </Card>
   );
-};
+}

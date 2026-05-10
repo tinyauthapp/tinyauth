@@ -1,15 +1,31 @@
 import { z } from "zod";
 
-export const userContextSchema = z.object({
-  isLoggedIn: z.boolean(),
+const authSchema = z.object({
+  authenticated: z.boolean(),
   username: z.string(),
   name: z.string(),
   email: z.string(),
-  provider: z.string(),
-  oauth: z.boolean(),
-  totpPending: z.boolean(),
-  oauthName: z.string(),
-  tailscaleNodeName: z.string(),
+  providerId: z.string(),
+});
+
+const oauthSchema = z.object({
+  active: z.boolean(),
+  displayName: z.string(),
+});
+
+const totpSchema = z.object({
+  pending: z.boolean(),
+});
+
+const tailscaleSchema = z.object({
+  nodeName: z.string(),
+});
+
+export const userContextSchema = z.object({
+  auth: authSchema,
+  oauth: oauthSchema,
+  totp: totpSchema,
+  tailscale: tailscaleSchema,
 });
 
 export type UserContextSchema = z.infer<typeof userContextSchema>;

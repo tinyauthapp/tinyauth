@@ -306,12 +306,18 @@ func (m *ContextMiddleware) tailscaleWhois(ctx context.Context, ip string) (*mod
 		return nil, nil
 	}
 
-	return &model.TailscaleContext{
+	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
 			Username: whois.NodeName,
 			Email:    whois.LoginName,
 			Name:     whois.DisplayName,
 		},
 		UserID: whois.UserID,
-	}, nil
+	}
+
+	if !strings.ContainsAny(uctx.Email, "@") {
+		uctx.Email = utils.CompileUserEmail(uctx.Email+"-tailscale", m.runtime.CookieDomain)
+	}
+
+	return &uctx, nil
 }
