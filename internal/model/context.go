@@ -59,6 +59,8 @@ type LDAPContext struct {
 type TailscaleContext struct {
 	BaseContext
 	UserID string
+	// for future use
+	Tags []string
 }
 
 func (c *UserContext) IsAuthenticated() bool {

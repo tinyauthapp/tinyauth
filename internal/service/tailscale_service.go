@@ -100,6 +100,7 @@ func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*model.Tail
 		LoginName:   who.UserProfile.LoginName,
 		DisplayName: who.UserProfile.DisplayName,
 		NodeName:    strings.TrimSuffix(who.Node.Name, "."),
+		Tags:        who.Node.Tags,
 	}
 
 	return &res, nil

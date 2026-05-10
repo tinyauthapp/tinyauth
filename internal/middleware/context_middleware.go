@@ -160,7 +160,6 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 		if userContext.Local.Attributes.Email == "" {
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
-	// Ensures that the seesion is still coming from Tailscale
 	case model.ProviderTailscale:
 		tailscaleContext, err := m.tailscaleWhois(ctx, ip)
 
@@ -313,6 +312,7 @@ func (m *ContextMiddleware) tailscaleWhois(ctx context.Context, ip string) (*mod
 			Name:     whois.DisplayName,
 		},
 		UserID: whois.UserID,
+		Tags:   whois.Tags,
 	}
 
 	if !strings.ContainsAny(uctx.Email, "@") {

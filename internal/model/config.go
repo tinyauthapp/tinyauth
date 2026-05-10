@@ -241,6 +241,7 @@ type TailscaleWhoisResponse struct {
 	LoginName   string
 	DisplayName string
 	NodeName    string
+	Tags        []string
 }
 
 type Apps struct {
