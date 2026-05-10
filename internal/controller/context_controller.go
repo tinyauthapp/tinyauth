@@ -11,16 +11,17 @@ import (
 )
 
 type UserContextResponse struct {
-	Status      int    `json:"status"`
-	Message     string `json:"message"`
-	IsLoggedIn  bool   `json:"isLoggedIn"`
-	Username    string `json:"username"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Provider    string `json:"provider"`
-	OAuth       bool   `json:"oauth"`
-	TOTPPending bool   `json:"totpPending"`
-	OAuthName   string `json:"oauthName"`
+	Status            int    `json:"status"`
+	Message           string `json:"message"`
+	IsLoggedIn        bool   `json:"isLoggedIn"`
+	Username          string `json:"username"`
+	Name              string `json:"name"`
+	Email             string `json:"email"`
+	Provider          string `json:"provider"`
+	OAuth             bool   `json:"oauth"`
+	TOTPPending       bool   `json:"totpPending"`
+	OAuthName         string `json:"oauthName"`
+	TailscaleNodeName string `json:"tailscaleNodeName,omitempty"`
 }
 
 type AppContextResponse struct {
@@ -79,16 +80,17 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	}
 
 	userContext := UserContextResponse{
-		Status:      200,
-		Message:     "Success",
-		IsLoggedIn:  context.Authenticated,
-		Username:    context.GetUsername(),
-		Name:        context.GetName(),
-		Email:       context.GetEmail(),
-		Provider:    context.GetProviderID(),
-		OAuth:       context.IsOAuth(),
-		TOTPPending: context.TOTPPending(),
-		OAuthName:   context.OAuthName(),
+		Status:            200,
+		Message:           "Success",
+		IsLoggedIn:        context.Authenticated,
+		Username:          context.GetUsername(),
+		Name:              context.GetName(),
+		Email:             context.GetEmail(),
+		Provider:          context.GetProviderID(),
+		OAuth:             context.IsOAuth(),
+		TOTPPending:       context.TOTPPending(),
+		OAuthName:         context.OAuthName(),
+		TailscaleNodeName: context.TailscaleNodeName(),
 	}
 
 	c.JSON(200, userContext)

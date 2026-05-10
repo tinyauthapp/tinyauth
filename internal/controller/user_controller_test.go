@@ -420,7 +420,7 @@ func TestUserController(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker, nil)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test

@@ -390,7 +390,7 @@ func TestProxyController(t *testing.T) {
 	ctx := context.TODO()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker, nil)
 	aclsService := service.NewAccessControlsService(log, nil, acls)
 
 	for _, test := range tests {

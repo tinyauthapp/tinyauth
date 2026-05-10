@@ -69,20 +69,21 @@ func NewDefaultConfiguration() *Config {
 }
 
 type Config struct {
-	AppURL       string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
-	Database     DatabaseConfig     `description:"Database configuration." yaml:"database"`
-	Analytics    AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics"`
-	Resources    ResourcesConfig    `description:"Resources configuration." yaml:"resources"`
-	Server       ServerConfig       `description:"Server configuration." yaml:"server"`
-	Auth         AuthConfig         `description:"Authentication configuration." yaml:"auth"`
-	Apps         map[string]App     `description:"Application ACLs configuration." yaml:"apps"`
-	OAuth        OAuthConfig        `description:"OAuth configuration." yaml:"oauth"`
-	OIDC         OIDCConfig         `description:"OIDC configuration." yaml:"oidc"`
-	UI           UIConfig           `description:"UI customization." yaml:"ui"`
-	Ldap         LdapConfig         `description:"LDAP configuration." yaml:"ldap"`
-	Experimental ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
-	Log          LogConfig          `description:"Logging configuration." yaml:"log"`
-	Tailscale    TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
+	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
+	Database      DatabaseConfig     `description:"Database configuration." yaml:"database"`
+	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics"`
+	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources"`
+	Server        ServerConfig       `description:"Server configuration." yaml:"server"`
+	Auth          AuthConfig         `description:"Authentication configuration." yaml:"auth"`
+	Apps          map[string]App     `description:"Application ACLs configuration." yaml:"apps"`
+	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth"`
+	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc"`
+	UI            UIConfig           `description:"UI customization." yaml:"ui"`
+	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
+	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
+	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
+	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
+	LabelProvider string             `description:"Label provider to use (docker, kubernetes, auto)." yaml:"labelProvider"`
 }
 
 type DatabaseConfig struct {
@@ -204,7 +205,6 @@ type ExperimentalConfig struct {
 	ConfigFile string `description:"Path to config file." yaml:"-"`
 }
 
-<<<<<<< HEAD:internal/config/config.go
 type TailscaleConfig struct {
 	Dir       string `description:"Tailscale state directory." yaml:"dir"`
 	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
@@ -212,22 +212,8 @@ type TailscaleConfig struct {
 	Ephemeral bool   `description:"Use ephemeral Tailscale node." yaml:"ephemeral"`
 }
 
-// Config loader options
-
-const DefaultNamePrefix = "TINYAUTH_"
-
 // OAuth/OIDC config
 
-type Claims struct {
-	Sub               string `json:"sub"`
-	Name              string `json:"name"`
-	Email             string `json:"email"`
-	PreferredUsername string `json:"preferred_username"`
-	Groups            any    `json:"groups"`
-}
-
-=======
->>>>>>> main:internal/model/config.go
 type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`
 	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret"`
@@ -250,72 +236,12 @@ type OIDCClientConfig struct {
 	Name                string   `description:"Client name in UI." yaml:"name"`
 }
 
-<<<<<<< HEAD:internal/config/config.go
-var OverrideProviders = map[string]string{
-	"google": "Google",
-	"github": "GitHub",
-}
-
-// User/session related stuff
-
-type User struct {
-	Username   string
-	Password   string
-	TotpSecret string
-	Attributes UserAttributes
-}
-
-type LdapUser struct {
-	DN     string
-	Groups []string
-}
-
-type UserSearch struct {
-	Username string
-	Type     string // local, ldap or unknown
-}
-
 type TailscaleWhoisResponse struct {
 	UserID      string
 	LoginName   string
 	DisplayName string
 	NodeName    string
 }
-
-type UserContext struct {
-	Username    string
-	Name        string
-	Email       string
-	IsLoggedIn  bool
-	IsBasicAuth bool
-	OAuth       bool
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	TotpEnabled bool
-	OAuthName   string
-	OAuthSub    string
-	LdapGroups  string
-	Attributes  UserAttributes
-	Tailscale   *TailscaleWhoisResponse
-}
-
-// API responses and queries
-
-type UnauthorizedQuery struct {
-	Username string `url:"username"`
-	Resource string `url:"resource"`
-	GroupErr bool   `url:"groupErr"`
-	IP       string `url:"ip"`
-}
-
-type RedirectQuery struct {
-	RedirectURI string `url:"redirect_uri"`
-}
-
-=======
->>>>>>> main:internal/model/config.go
-// ACLs
 
 type Apps struct {
 	Apps map[string]App `description:"App ACLs configuration." yaml:"apps"`

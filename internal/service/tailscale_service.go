@@ -3,96 +3,96 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"strings"
+	"sync"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
 
-type TailscaleServiceConfig struct {
-	Dir       string
-	Hostname  string
-	AuthKey   string
-	Ephemeral bool
-}
-
 type TailscaleService struct {
-	config TailscaleServiceConfig
-	srv    *tsnet.Server
-	lc     *local.Client
-	ln     *net.Listener
+	log    *logger.Logger
+	wg     *sync.WaitGroup
+	config model.Config
+	ctx    context.Context
+
+	srv *tsnet.Server
+	lc  *local.Client
+	ln  *net.Listener
 }
 
-func NewTailscaleService(config TailscaleServiceConfig) *TailscaleService {
-	return &TailscaleService{
-		config: config,
-	}
-}
-
-func (ts *TailscaleService) Init() error {
+func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, wg *sync.WaitGroup) (*TailscaleService, error) {
 	srv := new(tsnet.Server)
 
 	// node options
-	srv.Dir = ts.config.Dir
-	srv.Hostname = ts.config.Hostname
-	srv.AuthKey = ts.config.AuthKey
-	srv.Ephemeral = ts.config.Ephemeral
+	srv.Dir = config.Tailscale.Dir
+	srv.Hostname = config.Tailscale.Hostname
+	srv.AuthKey = config.Tailscale.AuthKey
+	srv.Ephemeral = config.Tailscale.Ephemeral
 
 	// redirect logs to zerolog
-	srv.Logf = tlog.App.Printf
-	srv.UserLogf = tlog.App.Printf
+	srv.Logf = log.App.Printf
+	srv.UserLogf = log.App.Printf
 
 	err := srv.Start()
 
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to start tailscale server: %w", err)
 	}
-
-	ts.srv = srv
 
 	lc, err := srv.LocalClient()
 
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to get tailscale local client: %w", err)
 	}
 
-	ts.lc = lc
-	return nil
+	service := &TailscaleService{
+		log:    log,
+		wg:     wg,
+		config: config,
+		ctx:    ctx,
+		srv:    srv,
+		lc:     lc,
+	}
+
+	wg.Go(service.watchAndClose)
+
+	return service, nil
 }
 
-func (ts *TailscaleService) Destroy() error {
+func (ts *TailscaleService) watchAndClose() {
+	<-ts.ctx.Done()
+	ts.log.App.Debug().Msg("Shutting down Tailscale service")
 	if ts.ln != nil {
 		(*ts.ln).Close()
 	}
 	if ts.srv != nil {
-		return ts.srv.Close()
+		ts.srv.Close()
 	}
-	ts.ln = nil
-	ts.lc = nil
-	ts.srv = nil
-	return nil
 }
 
-func (ts *TailscaleService) Whois(ctx context.Context, addr string) (config.TailscaleWhoisResponse, error) {
+func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*model.TailscaleWhoisResponse, error) {
 	who, err := ts.lc.WhoIs(ctx, addr)
 
 	if err != nil {
 		if errors.Is(err, local.ErrPeerNotFound) {
-			return config.TailscaleWhoisResponse{}, nil
+			return nil, nil
 		}
-		return config.TailscaleWhoisResponse{}, err
+		return nil, fmt.Errorf("failed to get client whois: %w", err)
 	}
 
-	res := config.TailscaleWhoisResponse{
+	res := model.TailscaleWhoisResponse{
 		UserID:      who.UserProfile.ID.String(),
 		LoginName:   who.UserProfile.LoginName,
 		DisplayName: who.UserProfile.DisplayName,
 		NodeName:    who.Node.Name,
 	}
 
-	return res, nil
+	return &res, nil
 }
 
 func (ts *TailscaleService) CreateListener() (net.Listener, error) {
@@ -107,10 +107,13 @@ func (ts *TailscaleService) CreateListener() (net.Listener, error) {
 	return ln, nil
 }
 
-func (ts *TailscaleService) IsConnfigured() bool {
-	return ts.srv != nil
-}
-
 func (ts *TailscaleService) GetHostname() string {
-	return ts.srv.Hostname
+	status, err := ts.lc.Status(ts.ctx)
+
+	if err != nil {
+		ts.log.App.Error().Err(err).Msg("Failed to get Tailscale status")
+		return ""
+	}
+
+	return strings.TrimSuffix(status.Self.DNSName, ".")
 }

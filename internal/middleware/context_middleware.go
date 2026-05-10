@@ -36,10 +36,11 @@ var (
 )
 
 type ContextMiddleware struct {
-	log     *logger.Logger
-	runtime model.RuntimeConfig
-	auth    *service.AuthService
-	broker  *service.OAuthBrokerService
+	log       *logger.Logger
+	runtime   model.RuntimeConfig
+	auth      *service.AuthService
+	broker    *service.OAuthBrokerService
+	tailscale *service.TailscaleService
 }
 
 func NewContextMiddleware(
@@ -47,12 +48,14 @@ func NewContextMiddleware(
 	runtime model.RuntimeConfig,
 	auth *service.AuthService,
 	broker *service.OAuthBrokerService,
+	tailscale *service.TailscaleService,
 ) *ContextMiddleware {
 	return &ContextMiddleware{
-		log:     log,
-		runtime: runtime,
-		auth:    auth,
-		broker:  broker,
+		log:       log,
+		runtime:   runtime,
+		auth:      auth,
+		broker:    broker,
+		tailscale: tailscale,
 	}
 }
 
@@ -66,7 +69,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
 		if err == nil {
-			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid)
+			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.RemoteIP())
 
 			if err == nil {
 				if cookie != nil {
@@ -102,14 +105,27 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		// unreachable but just in case
-		ctx := m.addTailscaleContext(c, config.UserContext{})
-		c.Set("context", &ctx)
+		// Lastly check if we have a tailscale session to add
+		if m.tailscale != nil {
+			tailscaleContext, err := m.tailscaleWhois(c.Request.Context(), c.RemoteIP())
+
+			if err != nil {
+				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.RemoteIP(), err)
+			}
+
+			if tailscaleContext != nil {
+				c.Set("context", &model.UserContext{
+					Authenticated: false,
+					Tailscale:     tailscaleContext,
+				})
+			}
+		}
+
 		c.Next()
 	}
 }
 
-func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model.UserContext, *http.Cookie, error) {
+func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip string) (*model.UserContext, *http.Cookie, error) {
 	session, err := m.auth.GetSession(ctx, uuid)
 
 	if err != nil {
@@ -144,6 +160,19 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model
 		if userContext.Local.Attributes.Email == "" {
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
+	// Ensures that the seesion is still coming from Tailscale
+	case model.ProviderTailscale:
+		tailscaleContext, err := m.tailscaleWhois(ctx, ip)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error performing tailscale whois: %w", err)
+		}
+
+		if tailscaleContext == nil {
+			return nil, nil, fmt.Errorf("tailscale whois returned no result for IP: %s", ip)
+		}
+
+		userContext.Tailscale = tailscaleContext
 	case model.ProviderLDAP:
 		search, err := m.auth.SearchUser(userContext.LDAP.Username)
 
@@ -261,22 +290,28 @@ func (m *ContextMiddleware) isIgnorePath(path string) bool {
 	return false
 }
 
-func (m *ContextMiddleware) addTailscaleContext(c *gin.Context, ctx config.UserContext) config.UserContext {
-	if !m.tailscale.IsConnfigured() {
-		return ctx
+func (m *ContextMiddleware) tailscaleWhois(ctx context.Context, ip string) (*model.TailscaleContext, error) {
+	if m.tailscale == nil {
+		return nil, nil
 	}
 
-	ip := c.Request.RemoteAddr
-
-	whois, err := m.tailscale.Whois(c, ip)
+	whois, err := m.tailscale.Whois(ctx, ip)
 
 	if err != nil {
-		tlog.App.Warn().Err(err).Msg("Error performing Tailscale whois")
-		return ctx
+		m.log.App.Error().Err(err).Msgf("Error performing Tailscale whois for IP %s: %v", ip, err)
+		return nil, err
 	}
 
-	tlog.App.Trace().Interface("whois", whois).Msg("Tailscale whois result")
+	if whois == nil {
+		return nil, nil
+	}
 
-	ctx.Tailscale = &whois
-	return ctx
+	return &model.TailscaleContext{
+		BaseContext: model.BaseContext{
+			Username: whois.NodeName,
+			Email:    whois.LoginName,
+			Name:     whois.DisplayName,
+		},
+		UserID: whois.UserID,
+	}, nil
 }

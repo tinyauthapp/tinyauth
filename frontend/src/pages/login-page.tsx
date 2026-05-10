@@ -262,7 +262,7 @@ export const LoginPage = () => {
         <CardHeader className="gap-3">
           <TailscaleIcon className="mx-auto h-8 w-8" />
           <CardTitle className="text-center text-xl">
-            Tinyauth x Tailscale
+            Tinyauth · Tailscale
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

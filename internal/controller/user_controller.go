@@ -394,45 +394,48 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 }
 
 func (controller *UserController) tailscaleHandler(c *gin.Context) {
-	context, err := utils.GetContext(c)
+	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to get user context")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
+		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		c.JSON(401, gin.H{
+			"status":  401,
+			"message": "Unauthorized",
 		})
 		return
 	}
 
 	if context.Tailscale == nil {
-		tlog.App.Warn().Msg("Tailscale session requested but Tailscale device not found")
-		c.JSON(404, gin.H{
-			"status":  404,
-			"message": "Not Found",
+		controller.log.App.Warn().Msg("Tailscale login attempt without Tailscale context")
+		c.JSON(401, gin.H{
+			"status":  401,
+			"message": "Unauthorized",
 		})
 		return
 	}
 
 	sessionCookie := repository.Session{
-		Username: context.Tailscale.LoginName,
-		Name:     context.Tailscale.DisplayName,
-		Email:    context.Tailscale.LoginName,
+		Username: context.Tailscale.Username,
+		Name:     context.Tailscale.Name,
+		Email:    context.Tailscale.Email,
 		Provider: "tailscale",
 	}
 
-	tlog.App.Trace().Interface("session_cookie", sessionCookie).Msg("Creating session cookie")
-
-	err = controller.auth.CreateSessionCookie(c, &sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
-		tlog.App.Error().Err(err).Msg("Failed to create session cookie")
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful TOTP verification")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
 		})
 		return
 	}
+
+	http.SetCookie(c.Writer, cookie)
+
+	controller.log.App.Info().Str("username", context.GetUsername()).Msg("Tailscale login successful, login complete")
+	controller.log.AuditLoginSuccess(context.GetUsername(), "tailscale", c.ClientIP())
 
 	c.JSON(200, gin.H{
 		"status":  200,

@@ -19,6 +19,7 @@ const (
 	ProviderBasicAuth
 	ProviderOAuth
 	ProviderLDAP
+	ProviderTailscale
 )
 
 type UserContext struct {
@@ -27,6 +28,7 @@ type UserContext struct {
 	Local         *LocalContext
 	OAuth         *OAuthContext
 	LDAP          *LDAPContext
+	Tailscale     *TailscaleContext
 }
 
 type BaseContext struct {
@@ -54,6 +56,11 @@ type LDAPContext struct {
 	Groups []string
 }
 
+type TailscaleContext struct {
+	BaseContext
+	UserID string
+}
+
 func (c *UserContext) IsAuthenticated() bool {
 	return c.Authenticated
 }
@@ -74,6 +81,10 @@ func (c *UserContext) IsBasicAuth() bool {
 	return c.Provider == ProviderBasicAuth && c.Local != nil
 }
 
+func (c *UserContext) IsTailscale() bool {
+	return c.Provider == ProviderTailscale && c.Tailscale != nil
+}
+
 func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 	userContextValue, exists := ginctx.Get("context")
 
@@ -87,7 +98,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 		return nil, errors.New("invalid user context type")
 	}
 
-	if userContext.LDAP == nil && userContext.Local == nil && userContext.OAuth == nil {
+	if userContext.LDAP == nil && userContext.Local == nil && userContext.OAuth == nil && userContext.Tailscale == nil {
 		return nil, errors.New("incomplete user context")
 	}
 
@@ -115,6 +126,15 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 	case "ldap":
 		c.Provider = ProviderLDAP
 		c.LDAP = &LDAPContext{
+			BaseContext: BaseContext{
+				Username: session.Username,
+				Name:     session.Name,
+				Email:    session.Email,
+			},
+		}
+	case "tailscale":
+		c.Provider = ProviderTailscale
+		c.Tailscale = &TailscaleContext{
 			BaseContext: BaseContext{
 				Username: session.Username,
 				Name:     session.Name,
@@ -167,6 +187,11 @@ func (c *UserContext) GetUsername() string {
 			return ""
 		}
 		return c.OAuth.Username
+	case ProviderTailscale:
+		if c.Tailscale == nil {
+			return ""
+		}
+		return c.Tailscale.Username
 	default:
 		return ""
 	}
@@ -194,6 +219,11 @@ func (c *UserContext) GetEmail() string {
 			return ""
 		}
 		return c.OAuth.Email
+	case ProviderTailscale:
+		if c.Tailscale == nil {
+			return ""
+		}
+		return c.Tailscale.Email
 	default:
 		return ""
 	}
@@ -221,6 +251,11 @@ func (c *UserContext) GetName() string {
 			return ""
 		}
 		return c.OAuth.Name
+	case ProviderTailscale:
+		if c.Tailscale == nil {
+			return ""
+		}
+		return c.Tailscale.Name
 	default:
 		return ""
 	}
@@ -234,6 +269,8 @@ func (c *UserContext) GetProviderID() string {
 		return "ldap"
 	case ProviderOAuth:
 		return c.OAuth.ID
+	case ProviderTailscale:
+		return "tailscale"
 	default:
 		return "unknown"
 	}
@@ -249,6 +286,13 @@ func (c *UserContext) TOTPPending() bool {
 func (c *UserContext) OAuthName() string {
 	if c.Provider == ProviderOAuth && c.OAuth != nil {
 		return c.OAuth.DisplayName
+	}
+	return ""
+}
+
+func (c *UserContext) TailscaleNodeName() string {
+	if c.Tailscale != nil {
+		return c.Tailscale.Username
 	}
 	return ""
 }

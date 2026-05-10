@@ -260,9 +260,9 @@ func TestContextMiddleware(t *testing.T) {
 	queries := repository.New(app.GetDB())
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker, nil)
 
-	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker)
+	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
 
 	for _, test := range tests {
 		authService.ClearRateLimitsTestingOnly()

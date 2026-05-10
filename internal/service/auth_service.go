@@ -81,6 +81,7 @@ type AuthService struct {
 	ldap        *LdapService
 	queries     *repository.Queries
 	oauthBroker *OAuthBrokerService
+	tailscale   *TailscaleService
 
 	loginAttempts        map[string]*LoginAttempt
 	ldapGroupsCache      map[string]*LdapGroupsCache
@@ -102,6 +103,7 @@ func NewAuthService(
 	ldap *LdapService,
 	queries *repository.Queries,
 	oauthBroker *OAuthBrokerService,
+	tailscale *TailscaleService,
 ) *AuthService {
 	service := &AuthService{
 		log:                  log,
@@ -114,6 +116,7 @@ func NewAuthService(
 		ldap:                 ldap,
 		queries:              queries,
 		oauthBroker:          oauthBroker,
+		tailscale:            tailscale,
 	}
 
 	wg.Go(service.CleanupOAuthSessionsRoutine)
@@ -326,11 +329,18 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 	}
 
 	if data.Provider == "tailscale" {
-		// TODO: use domain from tailscale to set cookie, this is mostly a hack for now
-		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", c.Request.Host))
+		if auth.tailscale == nil {
+			return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
+		}
+
+		auth.log.App.Trace().Str("url", fmt.Sprintf("https://%s", auth.tailscale.GetHostname())).Msg("Extracting root domain from Tailscale hostname")
+
+		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", auth.tailscale.GetHostname()))
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cookie domain for tailscale user: %w", err)
 		}
+
 		return &http.Cookie{
 			Name:     auth.runtime.SessionCookieName,
 			Value:    session.UUID,

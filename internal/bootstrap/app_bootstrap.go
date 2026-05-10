@@ -34,6 +34,7 @@ type Services struct {
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
+	tailscaleService     *service.TailscaleService
 }
 
 type BootstrapApp struct {
@@ -250,12 +251,17 @@ func (app *BootstrapApp) Setup() error {
 
 	runUnix := app.config.Server.SocketPath != ""
 	runHTTP := app.config.Server.SocketPath == "" || app.config.Server.ConcurrentListenersEnabled
+	runTailscale := app.services.tailscaleService != nil
 
 	if runUnix {
 		errChanLen++
 	}
 
 	if runHTTP {
+		errChanLen++
+	}
+
+	if runTailscale {
 		errChanLen++
 	}
 
@@ -278,6 +284,15 @@ func (app *BootstrapApp) Setup() error {
 	if runHTTP {
 		app.wg.Go(func() {
 			if err := app.serveHTTP(); err != nil {
+				errChan <- err
+			}
+		})
+	}
+
+	// serve to tailscale
+	if runTailscale {
+		app.wg.Go(func() {
+			if err := app.serveTailscale(); err != nil {
 				errChan <- err
 			}
 		})
@@ -369,7 +384,41 @@ func (app *BootstrapApp) serveUnix() error {
 		return fmt.Errorf("failed to start unix socket listener: %w", err)
 	}
 
-	return <-errChan
+	return nil
+}
+
+func (app *BootstrapApp) serveTailscale() error {
+	app.log.App.Info().Msgf("Starting Tailscale server on %s", app.services.tailscaleService.GetHostname())
+
+	listener, err := app.services.tailscaleService.CreateListener()
+
+	if err != nil {
+		return fmt.Errorf("failed to create tailscale listener: %w", err)
+	}
+
+	server := &http.Server{
+		Handler: app.router.Handler(),
+	}
+
+	shutdown := func() {
+		server.Shutdown(app.ctx)
+		listener.Close()
+	}
+
+	go func() {
+		<-app.ctx.Done()
+		app.log.App.Debug().Msg("Shutting down Tailscale listener")
+		shutdown()
+	}()
+
+	err = server.Serve(listener)
+
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		shutdown()
+		return fmt.Errorf("failed to start tailscale listener: %w", err)
+	}
+
+	return nil
 }
 
 func (app *BootstrapApp) heartbeatRoutine() {
