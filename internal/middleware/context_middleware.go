@@ -1,13 +1,16 @@
 package middleware
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,28 +35,25 @@ var (
 	}
 )
 
-type ContextMiddlewareConfig struct {
-	CookieDomain string
-}
-
 type ContextMiddleware struct {
-	config    ContextMiddlewareConfig
-	auth      *service.AuthService
-	broker    *service.OAuthBrokerService
-	tailscale *service.TailscaleService
+	log     *logger.Logger
+	runtime model.RuntimeConfig
+	auth    *service.AuthService
+	broker  *service.OAuthBrokerService
 }
 
-func NewContextMiddleware(config ContextMiddlewareConfig, auth *service.AuthService, broker *service.OAuthBrokerService, tailscale *service.TailscaleService) *ContextMiddleware {
+func NewContextMiddleware(
+	log *logger.Logger,
+	runtime model.RuntimeConfig,
+	auth *service.AuthService,
+	broker *service.OAuthBrokerService,
+) *ContextMiddleware {
 	return &ContextMiddleware{
-		config:    config,
-		auth:      auth,
-		broker:    broker,
-		tailscale: tailscale,
+		log:     log,
+		runtime: runtime,
+		auth:    auth,
+		broker:  broker,
 	}
-}
-
-func (m *ContextMiddleware) Init() error {
-	return nil
 }
 
 func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
@@ -63,214 +63,41 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		tlog.App.Trace().Interface("cookies", c.Request.Cookies()).Msg("cookies")
+		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
-		cookie, err := m.auth.GetSessionCookie(c)
+		if err == nil {
+			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid)
 
-		if err != nil {
-			tlog.App.Debug().Err(err).Msg("No valid session cookie found")
-			goto basic
-		}
-
-		if cookie.TotpPending {
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:    cookie.Username,
-				Name:        cookie.Name,
-				Email:       cookie.Email,
-				Provider:    "local",
-				TotpPending: true,
-				TotpEnabled: true,
-			})
-			c.Set("context", &ctx)
-			c.Next()
-			return
-		}
-
-		switch cookie.Provider {
-		case "local", "ldap":
-			userSearch := m.auth.SearchUser(cookie.Username)
-
-			if userSearch.Type == "unknown" {
-				tlog.App.Debug().Msg("User from session cookie not found")
-				m.auth.DeleteSessionCookie(c)
-				goto basic
-			}
-
-			if userSearch.Type != cookie.Provider {
-				tlog.App.Warn().Msg("User type from session cookie does not match user search type")
-				m.auth.DeleteSessionCookie(c)
-				c.Next()
-				return
-			}
-
-			var ldapGroups []string
-			var localAttributes config.UserAttributes
-
-			if cookie.Provider == "ldap" {
-				ldapUser, err := m.auth.GetLdapUser(userSearch.Username)
-
-				if err != nil {
-					tlog.App.Error().Err(err).Msg("Error retrieving LDAP user details")
-					c.Next()
-					return
+			if err == nil {
+				if cookie != nil {
+					http.SetCookie(c.Writer, cookie)
 				}
 
-				ldapGroups = ldapUser.Groups
-			}
-
-			if cookie.Provider == "local" {
-				localUser := m.auth.GetLocalUser(cookie.Username)
-				localAttributes = localUser.Attributes
-			}
-
-			m.auth.RefreshSessionCookie(c)
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:   cookie.Username,
-				Name:       cookie.Name,
-				Email:      cookie.Email,
-				Provider:   cookie.Provider,
-				IsLoggedIn: true,
-				LdapGroups: strings.Join(ldapGroups, ","),
-				Attributes: localAttributes,
-			})
-			c.Set("context", &ctx)
-			c.Next()
-			return
-		case "tailscale":
-			m.auth.RefreshSessionCookie(c)
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:   cookie.Username,
-				Name:       cookie.Name,
-				Email:      cookie.Email,
-				Provider:   cookie.Provider,
-				IsLoggedIn: true,
-			})
-			c.Set("context", &ctx)
-			c.Next()
-			return
-		default:
-			_, exists := m.broker.GetService(cookie.Provider)
-
-			if !exists {
-				tlog.App.Debug().Msg("OAuth provider from session cookie not found")
-				m.auth.DeleteSessionCookie(c)
-				goto basic
-			}
-
-			if !m.auth.IsEmailWhitelisted(cookie.Email) {
-				tlog.App.Debug().Msg("Email from session cookie not whitelisted")
-				m.auth.DeleteSessionCookie(c)
-				goto basic
-			}
-
-			m.auth.RefreshSessionCookie(c)
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:    cookie.Username,
-				Name:        cookie.Name,
-				Email:       cookie.Email,
-				Provider:    cookie.Provider,
-				OAuthGroups: cookie.OAuthGroups,
-				OAuthName:   cookie.OAuthName,
-				OAuthSub:    cookie.OAuthSub,
-				IsLoggedIn:  true,
-				OAuth:       true,
-			})
-			c.Set("context", &ctx)
-			c.Next()
-			return
-		}
-
-	basic:
-		basic := m.auth.GetBasicAuth(c)
-
-		if basic == nil {
-			tlog.App.Debug().Msg("No basic auth provided")
-			ctx := m.addTailscaleContext(c, config.UserContext{})
-			c.Set("context", &ctx)
-			return
-		}
-
-		locked, remaining := m.auth.IsAccountLocked(basic.Username)
-
-		if locked {
-			tlog.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", basic.Username, remaining)
-			c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
-			c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
-			c.Next()
-			return
-		}
-
-		userSearch := m.auth.SearchUser(basic.Username)
-
-		if userSearch.Type == "unknown" || userSearch.Type == "error" {
-			m.auth.RecordLoginAttempt(basic.Username, false)
-			tlog.App.Debug().Msg("User from basic auth not found")
-			c.Next()
-			return
-		}
-
-		if !m.auth.VerifyUser(userSearch, basic.Password) {
-			m.auth.RecordLoginAttempt(basic.Username, false)
-			tlog.App.Debug().Msg("Invalid password for basic auth user")
-			c.Next()
-			return
-		}
-
-		m.auth.RecordLoginAttempt(basic.Username, true)
-
-		switch userSearch.Type {
-		case "local":
-			tlog.App.Debug().Msg("Basic auth user is local")
-
-			user := m.auth.GetLocalUser(basic.Username)
-
-			if user.TotpSecret != "" {
-				tlog.App.Debug().Msg("User with TOTP not allowed to login via basic auth")
+				m.log.App.Debug().Msgf("Authenticated user %s via session cookie", userContext.GetUsername())
+				c.Set("context", userContext)
+				c.Next()
 				return
+			} else {
+				m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 			}
+		}
 
-			name := utils.Capitalize(user.Username)
-			if user.Attributes.Name != "" {
-				name = user.Attributes.Name
-			}
-			email := utils.CompileUserEmail(user.Username, m.config.CookieDomain)
-			if user.Attributes.Email != "" {
-				email = user.Attributes.Email
-			}
+		username, password, ok := c.Request.BasicAuth()
 
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:    user.Username,
-				Name:        name,
-				Email:       email,
-				Provider:    "local",
-				IsLoggedIn:  true,
-				IsBasicAuth: true,
-				Attributes:  user.Attributes,
-			})
-			c.Set("context", &ctx)
-			c.Next()
-			return
-		case "ldap":
-			tlog.App.Debug().Msg("Basic auth user is LDAP")
-
-			ldapUser, err := m.auth.GetLdapUser(basic.Username)
+		if ok {
+			userContext, headers, err := m.basicAuth(username, password)
 
 			if err != nil {
-				tlog.App.Debug().Err(err).Msg("Error retrieving LDAP user details")
+				m.log.App.Error().Msgf("Error authenticating basic auth: %v", err)
 				c.Next()
 				return
 			}
 
-			ctx := m.addTailscaleContext(c, config.UserContext{
-				Username:    basic.Username,
-				Name:        utils.Capitalize(basic.Username),
-				Email:       utils.CompileUserEmail(basic.Username, m.config.CookieDomain),
-				Provider:    "ldap",
-				IsLoggedIn:  true,
-				LdapGroups:  strings.Join(ldapUser.Groups, ","),
-				IsBasicAuth: true,
-			})
-			c.Set("context", &ctx)
+			for k, v := range headers {
+				c.Header(k, v)
+			}
+
+			c.Set("context", userContext)
 			c.Next()
 			return
 		}
@@ -280,6 +107,149 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		c.Set("context", &ctx)
 		c.Next()
 	}
+}
+
+func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string) (*model.UserContext, *http.Cookie, error) {
+	session, err := m.auth.GetSession(ctx, uuid)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("error retrieving session: %w", err)
+	}
+
+	userContext, err := new(model.UserContext).NewFromSession(session)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating user context from session: %w", err)
+	}
+
+	if userContext.Provider == model.ProviderLocal &&
+		userContext.Local.TOTPPending {
+		return userContext, nil, nil
+	}
+
+	switch userContext.Provider {
+	case model.ProviderLocal:
+		user := m.auth.GetLocalUser(userContext.Local.Username)
+
+		if user == nil {
+			return nil, nil, fmt.Errorf("local user not found")
+		}
+
+		userContext.Local.Attributes = user.Attributes
+
+		if userContext.Local.Attributes.Name == "" {
+			userContext.Local.Attributes.Name = utils.Capitalize(user.Username)
+		}
+
+		if userContext.Local.Attributes.Email == "" {
+			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
+		}
+	case model.ProviderLDAP:
+		search, err := m.auth.SearchUser(userContext.LDAP.Username)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error searching for ldap user: %w", err)
+		}
+
+		if search.Type != model.UserLDAP {
+			return nil, nil, fmt.Errorf("user from session cookie is not ldap")
+		}
+
+		user, err := m.auth.GetLDAPUser(search.Username)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
+		}
+
+		userContext.LDAP.Groups = user.Groups
+		userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
+	case model.ProviderOAuth:
+		_, exists := m.broker.GetService(userContext.OAuth.ID)
+
+		if !exists {
+			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ID)
+		}
+
+		if !m.auth.IsEmailWhitelisted(userContext.OAuth.Email) {
+			m.auth.DeleteSession(ctx, uuid)
+			return nil, nil, fmt.Errorf("email from session cookie not whitelisted: %s", userContext.OAuth.Email)
+		}
+	}
+
+	cookie, err := m.auth.RefreshSession(ctx, uuid)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("error refreshing session: %w", err)
+	}
+
+	return userContext, cookie, nil
+}
+
+func (m *ContextMiddleware) basicAuth(username string, password string) (*model.UserContext, map[string]string, error) {
+	headers := make(map[string]string)
+	userContext := new(model.UserContext)
+	locked, remaining := m.auth.IsAccountLocked(username)
+
+	if locked {
+		m.log.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
+		headers["x-tinyauth-lock-locked"] = "true"
+		headers["x-tinyauth-lock-reset"] = time.Now().Add(time.Duration(remaining) * time.Second).Format(time.RFC3339)
+		return nil, headers, nil
+	}
+
+	search, err := m.auth.SearchUser(username)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("error searching for user: %w", err)
+	}
+
+	err = m.auth.CheckUserPassword(*search, password)
+
+	if err != nil {
+		m.auth.RecordLoginAttempt(username, false)
+		return nil, nil, fmt.Errorf("invalid password for basic auth user: %w", err)
+	}
+
+	m.auth.RecordLoginAttempt(username, true)
+
+	switch search.Type {
+	case model.UserLocal:
+		user := m.auth.GetLocalUser(username)
+
+		if user.TOTPSecret != "" {
+			return nil, nil, fmt.Errorf("user with totp not allowed to login via basic auth: %s", username)
+		}
+
+		userContext.Local = &model.LocalContext{
+			BaseContext: model.BaseContext{
+				Username: user.Username,
+				Name:     utils.Capitalize(user.Username),
+				Email:    utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
+			},
+			Attributes: user.Attributes,
+		}
+		userContext.Provider = model.ProviderLocal
+	case model.UserLDAP:
+		user, err := m.auth.GetLDAPUser(username)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
+		}
+
+		userContext.LDAP = &model.LDAPContext{
+			BaseContext: model.BaseContext{
+				Username: username,
+				Name:     utils.Capitalize(username),
+				Email:    utils.CompileUserEmail(username, m.runtime.CookieDomain),
+			},
+			Groups: user.Groups,
+		}
+		userContext.Provider = model.ProviderLDAP
+	}
+
+	userContext.Authenticated = true
+	return userContext, nil, nil
 }
 
 func (m *ContextMiddleware) isIgnorePath(path string) bool {

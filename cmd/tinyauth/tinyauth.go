@@ -5,16 +5,15 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/loaders"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tinyauthapp/paerser/cli"
 )
 
 func main() {
-	tConfig := config.NewDefaultConfiguration()
+	tConfig := model.NewDefaultConfiguration()
 
 	loaders := []cli.ResourceLoader{
 		&loaders.FileLoader{},
@@ -108,12 +107,7 @@ func main() {
 	}
 }
 
-func runCmd(cfg config.Config) error {
-	logger := tlog.NewLogger(cfg.Log)
-	logger.Init()
-
-	tlog.App.Info().Str("version", config.Version).Msg("Starting tinyauth")
-
+func runCmd(cfg model.Config) error {
 	app := bootstrap.NewBootstrapApp(cfg)
 
 	err := app.Setup()

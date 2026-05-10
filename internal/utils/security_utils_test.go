@@ -4,21 +4,21 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-
-	"gotest.tools/v3/assert"
 )
 
 func TestGetSecret(t *testing.T) {
 	// Setup
 	file, err := os.Create("/tmp/tinyauth_test_secret")
-	assert.NilError(t, err)
+	require.NoError(t, err)
 
 	_, err = file.WriteString("       secret       \n")
-	assert.NilError(t, err)
+	require.NoError(t, err)
 
 	err = file.Close()
-	assert.NilError(t, err)
+	require.NoError(t, err)
 	defer os.Remove("/tmp/tinyauth_test_secret")
 
 	// Get from config
@@ -55,50 +55,50 @@ func TestParseSecretFile(t *testing.T) {
 	assert.Equal(t, "", utils.ParseSecretFile(content))
 }
 
-func TestGetBasicAuth(t *testing.T) {
+func TestEncodeBasicAuth(t *testing.T) {
 	// Normal case
 	username := "user"
 	password := "pass"
 	expected := "dXNlcjpwYXNz" // base64 of "user:pass"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 
 	// Empty username
 	username = ""
 	password = "pass"
 	expected = "OnBhc3M=" // base64 of ":pass"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 
 	// Empty password
 	username = "user"
 	password = ""
 	expected = "dXNlcjo=" // base64 of "user:"
-	assert.Equal(t, expected, utils.GetBasicAuth(username, password))
+	assert.Equal(t, expected, utils.EncodeBasicAuth(username, password))
 }
 
 func TestFilterIP(t *testing.T) {
 	// Exact match IPv4
 	ok, err := utils.FilterIP("10.10.0.1", "10.10.0.1")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, true, ok)
 
 	// Non-match IPv4
 	ok, err = utils.FilterIP("10.10.0.1", "10.10.0.2")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, false, ok)
 
 	// CIDR match IPv4
 	ok, err = utils.FilterIP("10.10.0.0/24", "10.10.0.2")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, true, ok)
 
 	// CIDR match IPv4 with '-' instead of '/'
 	ok, err = utils.FilterIP("10.10.10.0-24", "10.10.10.5")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, true, ok)
 
 	// CIDR non-match IPv4
 	ok, err = utils.FilterIP("10.10.0.0/24", "10.5.0.1")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, false, ok)
 
 	// Invalid CIDR
@@ -145,5 +145,5 @@ func TestGenerateUUID(t *testing.T) {
 
 	// Different output for different input
 	id3 := utils.GenerateUUID("differentstring")
-	assert.Assert(t, id1 != id3)
+	assert.NotEqual(t, id2, id3)
 }

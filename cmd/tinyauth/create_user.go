@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/tinyauthapp/paerser/cli"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,7 +40,8 @@ func createUserCmd() *cli.Command {
 		Configuration: tCfg,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			tlog.NewSimpleLogger().Init()
+			log := logger.NewLogger().WithSimpleConfig()
+			log.Init()
 
 			if tCfg.Interactive {
 				form := huh.NewForm(
@@ -73,7 +74,7 @@ func createUserCmd() *cli.Command {
 				return errors.New("username and password cannot be empty")
 			}
 
-			tlog.App.Info().Str("username", tCfg.Username).Msg("Creating user")
+			log.App.Info().Str("username", tCfg.Username).Msg("Creating user")
 
 			passwd, err := bcrypt.GenerateFromPassword([]byte(tCfg.Password), bcrypt.DefaultCost)
 			if err != nil {
@@ -86,7 +87,7 @@ func createUserCmd() *cli.Command {
 				passwdStr = strings.ReplaceAll(passwdStr, "$", "$$")
 			}
 
-			tlog.App.Info().Str("user", fmt.Sprintf("%s:%s", tCfg.Username, passwdStr)).Msg("User created")
+			log.App.Info().Str("user", fmt.Sprintf("%s:%s", tCfg.Username, passwdStr)).Msg("User created")
 
 			return nil
 		},

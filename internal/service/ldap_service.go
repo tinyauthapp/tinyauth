@@ -9,69 +9,47 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	ldapgo "github.com/go-ldap/ldap/v3"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-type LdapServiceConfig struct {
-	Address      string
-	BindDN       string
-	BindPassword string
-	BaseDN       string
-	Insecure     bool
-	SearchFilter string
-	AuthCert     string
-	AuthKey      string
-}
-
 type LdapService struct {
-	config       LdapServiceConfig
-	conn         *ldapgo.Conn
-	mutex        sync.RWMutex
-	cert         *tls.Certificate
-	isConfigured bool
+	log     *logger.Logger
+	config  model.Config
+	context context.Context
+
+	conn  *ldapgo.Conn
+	mutex sync.RWMutex
+	cert  *tls.Certificate
 }
 
-func NewLdapService(config LdapServiceConfig) *LdapService {
-	return &LdapService{
-		config: config,
-	}
-}
-
-func (ldap *LdapService) IsConfigured() bool {
-	return ldap.isConfigured
-}
-
-func (ldap *LdapService) Unconfigure() error {
-	if !ldap.isConfigured {
-		return nil
+func NewLdapService(
+	log *logger.Logger,
+	config model.Config,
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) (*LdapService, error) {
+	if config.LDAP.Address == "" {
+		return nil, nil
 	}
 
-	if ldap.conn != nil {
-		if err := ldap.conn.Close(); err != nil {
-			return fmt.Errorf("failed to close LDAP connection: %w", err)
-		}
+	ldap := &LdapService{
+		log:     log,
+		config:  config,
+		context: ctx,
 	}
-
-	ldap.isConfigured = false
-	return nil
-}
-
-func (ldap *LdapService) Init() error {
-	if ldap.config.Address == "" {
-		ldap.isConfigured = false
-		return nil
-	}
-
-	ldap.isConfigured = true
 
 	// Check whether authentication with client certificate is possible
-	if ldap.config.AuthCert != "" && ldap.config.AuthKey != "" {
-		cert, err := tls.LoadX509KeyPair(ldap.config.AuthCert, ldap.config.AuthKey)
+	if config.LDAP.AuthCert != "" && config.LDAP.AuthKey != "" {
+		cert, err := tls.LoadX509KeyPair(config.LDAP.AuthCert, config.LDAP.AuthKey)
+
 		if err != nil {
-			return fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
+			return nil, fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
 		}
+
+		log.App.Info().Msg("LDAP mTLS authentication configured successfully")
+
 		ldap.cert = &cert
-		tlog.App.Info().Msg("Using LDAP with mTLS authentication")
 
 		// TODO: Add optional extra CA certificates, instead of `InsecureSkipVerify`
 		/*
@@ -84,26 +62,39 @@ func (ldap *LdapService) Init() error {
 			}
 		*/
 	}
+
 	_, err := ldap.connect()
+
 	if err != nil {
-		return fmt.Errorf("failed to connect to LDAP server: %w", err)
+		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
-	go func() {
-		for range time.Tick(time.Duration(5) * time.Minute) {
-			err := ldap.heartbeat()
-			if err != nil {
-				tlog.App.Error().Err(err).Msg("LDAP connection heartbeat failed")
-				if reconnectErr := ldap.reconnect(); reconnectErr != nil {
-					tlog.App.Error().Err(reconnectErr).Msg("Failed to reconnect to LDAP server")
-					continue
+	wg.Go(func() {
+		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
+
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				err := ldap.heartbeat()
+				if err != nil {
+					ldap.log.App.Warn().Err(err).Msg("LDAP connection heartbeat failed, attempting to reconnect")
+					if reconnectErr := ldap.reconnect(); reconnectErr != nil {
+						ldap.log.App.Error().Err(reconnectErr).Msg("Failed to reconnect to LDAP server")
+						continue
+					}
+					ldap.log.App.Info().Msg("Successfully reconnected to LDAP server")
 				}
-				tlog.App.Info().Msg("Successfully reconnected to LDAP server")
+			case <-ldap.context.Done():
+				ldap.log.App.Debug().Msg("LDAP service context cancelled, stopping heartbeat")
+				return
 			}
 		}
-	}()
+	})
 
-	return nil
+	return ldap, nil
 }
 
 func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
@@ -120,13 +111,13 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 	// 2. conn.StartTLS(tlsConfig)
 	// 3. conn.externalBind()
 	if ldap.cert != nil {
-		conn, err = ldapgo.DialURL(ldap.config.Address, ldapgo.DialWithTLSConfig(&tls.Config{
+		conn, err = ldapgo.DialURL(ldap.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
 			MinVersion:   tls.VersionTLS12,
 			Certificates: []tls.Certificate{*ldap.cert},
 		}))
 	} else {
-		conn, err = ldapgo.DialURL(ldap.config.Address, ldapgo.DialWithTLSConfig(&tls.Config{
-			InsecureSkipVerify: ldap.config.Insecure,
+		conn, err = ldapgo.DialURL(ldap.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
+			InsecureSkipVerify: ldap.config.LDAP.Insecure,
 			MinVersion:         tls.VersionTLS12,
 		}))
 	}
@@ -146,10 +137,10 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 func (ldap *LdapService) GetUserDN(username string) (string, error) {
 	// Escape the username to prevent LDAP injection
 	escapedUsername := ldapgo.EscapeFilter(username)
-	filter := fmt.Sprintf(ldap.config.SearchFilter, escapedUsername)
+	filter := fmt.Sprintf(ldap.config.LDAP.SearchFilter, escapedUsername)
 
 	searchRequest := ldapgo.NewSearchRequest(
-		ldap.config.BaseDN,
+		ldap.config.LDAP.BaseDN,
 		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
 		filter,
 		[]string{"dn"},
@@ -176,7 +167,7 @@ func (ldap *LdapService) GetUserGroups(userDN string) ([]string, error) {
 	escapedUserDN := ldapgo.EscapeFilter(userDN)
 
 	searchRequest := ldapgo.NewSearchRequest(
-		ldap.config.BaseDN,
+		ldap.config.LDAP.BaseDN,
 		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf("(&(objectclass=groupOfUniqueNames)(uniquemember=%s))", escapedUserDN),
 		[]string{"dn"},
@@ -224,7 +215,7 @@ func (ldap *LdapService) BindService(rebind bool) error {
 	if ldap.cert != nil {
 		return ldap.conn.ExternalBind()
 	}
-	return ldap.conn.Bind(ldap.config.BindDN, ldap.config.BindPassword)
+	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.config.LDAP.BindPassword)
 }
 
 func (ldap *LdapService) Bind(userDN string, password string) error {
@@ -238,7 +229,7 @@ func (ldap *LdapService) Bind(userDN string, password string) error {
 }
 
 func (ldap *LdapService) heartbeat() error {
-	tlog.App.Debug().Msg("Performing LDAP connection heartbeat")
+	ldap.log.App.Debug().Msg("Performing LDAP connection heartbeat")
 
 	searchRequest := ldapgo.NewSearchRequest(
 		"",
@@ -260,7 +251,7 @@ func (ldap *LdapService) heartbeat() error {
 }
 
 func (ldap *LdapService) reconnect() error {
-	tlog.App.Info().Msg("Reconnecting to LDAP server")
+	ldap.log.App.Info().Msg("Attempting to reconnect to LDAP server")
 
 	exp := backoff.NewExponentialBackOff()
 	exp.InitialInterval = 500 * time.Millisecond

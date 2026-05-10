@@ -3,26 +3,20 @@ package controller_test
 import (
 	"net/http/httptest"
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 )
 
 func TestResourcesController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	cfg, _ := test.CreateTestConfigs(t)
 
-	resourcesControllerCfg := controller.ResourcesControllerConfig{
-		Path:    path.Join(tempDir, "resources"),
-		Enabled: true,
-	}
-
-	err := os.Mkdir(resourcesControllerCfg.Path, 0777)
+	err := os.MkdirAll(cfg.Resources.Path, 0777)
 	require.NoError(t, err)
 
 	type testCase struct {
@@ -61,11 +55,11 @@ func TestResourcesController(t *testing.T) {
 		},
 	}
 
-	testFilePath := resourcesControllerCfg.Path + "/testfile.txt"
+	testFilePath := cfg.Resources.Path + "/testfile.txt"
 	err = os.WriteFile(testFilePath, []byte("This is a test file."), 0777)
 	require.NoError(t, err)
 
-	testFilePathParent := tempDir + "/somefile.txt"
+	testFilePathParent := filepath.Dir(cfg.Resources.Path) + "/somefile.txt"
 	err = os.WriteFile(testFilePathParent, []byte("This file should not be accessible."), 0777)
 	require.NoError(t, err)
 
@@ -75,8 +69,7 @@ func TestResourcesController(t *testing.T) {
 			group := router.Group("/")
 			gin.SetMode(gin.TestMode)
 
-			resourcesController := controller.NewResourcesController(resourcesControllerCfg, group)
-			resourcesController.SetupRoutes()
+			controller.NewResourcesController(cfg, group)
 
 			recorder := httptest.NewRecorder()
 			test.run(t, router, recorder)

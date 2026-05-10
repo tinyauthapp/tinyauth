@@ -7,10 +7,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
-
-	"github.com/gin-gonic/gin"
 	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
@@ -24,13 +20,12 @@ func GetCookieDomain(u string) (string, error) {
 	host := parsed.Hostname()
 
 	if netIP := net.ParseIP(host); netIP != nil {
-		return "", errors.New("IP addresses not allowed")
+		return "", errors.New("ip addresses not allowed")
 	}
 
 	parts := strings.Split(host, ".")
 
 	if len(parts) == 2 {
-		tlog.App.Warn().Msgf("Running on the root domain, cookies will be set for .%v", host)
 		return host, nil
 	}
 
@@ -47,6 +42,27 @@ func GetCookieDomain(u string) (string, error) {
 	}
 
 	return domain, nil
+}
+
+func GetStandaloneCookieDomain(u string) (string, error) {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return "", err
+	}
+
+	host := parsed.Hostname()
+
+	if netIP := net.ParseIP(host); netIP != nil {
+		return "", errors.New("ip addresses not allowed")
+	}
+
+	parts := strings.Split(host, ".")
+
+	if len(parts) < 2 {
+		return "", errors.New("invalid app url")
+	}
+
+	return host, nil
 }
 
 func ParseFileToLine(content string) string {
@@ -71,22 +87,6 @@ func Filter[T any](slice []T, test func(T) bool) (res []T) {
 		}
 	}
 	return res
-}
-
-func GetContext(c *gin.Context) (config.UserContext, error) {
-	userContextValue, exists := c.Get("context")
-
-	if !exists {
-		return config.UserContext{}, errors.New("no user context in request")
-	}
-
-	userContext, ok := userContextValue.(*config.UserContext)
-
-	if !ok {
-		return config.UserContext{}, errors.New("invalid user context in request")
-	}
-
-	return *userContext, nil
 }
 
 func IsRedirectSafe(redirectURL string, domain string) bool {

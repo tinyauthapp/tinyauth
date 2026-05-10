@@ -1,68 +1,84 @@
 package controller_test
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
-	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestUserController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	authServiceCfg := service.AuthServiceConfig{
-		Users: []config.User{
-			{
-				Username: "testuser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-			},
-			{
-				Username:   "totpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TotpSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-			},
-			{
-				Username: "attruser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				Attributes: config.UserAttributes{
-					Name:  "Alice Smith",
-					Email: "alice@example.com",
+	cfg, runtime := test.CreateTestConfigs(t)
+
+	totpCtx := func(c *gin.Context) {
+		c.Set("context", &model.UserContext{
+			Authenticated: false,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "totpuser",
+					Name:     "Totpuser",
+					Email:    "totpuser@example.com",
 				},
+				TOTPPending: true,
 			},
-			{
-				Username:   "attrtotpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TotpSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-				Attributes: config.UserAttributes{
-					Name:  "Bob Jones",
-					Email: "bob@example.com",
-				},
-			},
-		},
-		SessionExpiry:     10, // 10 seconds, useful for testing
-		CookieDomain:      "example.com",
-		LoginTimeout:      10, // 10 seconds, useful for testing
-		LoginMaxRetries:   3,
-		SessionCookieName: "tinyauth-session",
+		})
 	}
 
-	userControllerCfg := controller.UserControllerConfig{
-		CookieDomain: "example.com",
+	totpAttrCtx := func(c *gin.Context) {
+		c.Set("context", &model.UserContext{
+			Authenticated: false,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "attrtotpuser",
+					Name:     "Bob Jones",
+					Email:    "bob@example.com",
+				},
+				TOTPPending: true,
+			},
+		})
 	}
+
+	simpleCtx := func(c *gin.Context) {
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "testuser",
+					Name:     "Test User",
+					Email:    "testuser@example.com",
+				},
+			},
+		})
+	}
+
+	app := bootstrap.NewBootstrapApp(cfg)
+
+	err := app.SetupDatabase()
+	require.NoError(t, err)
+
+	queries := repository.New(app.GetDB())
 
 	type testCase struct {
 		description string
@@ -80,7 +96,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -88,13 +104,15 @@ func TestUserController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 
 				cookie := recorder.Result().Cookies()[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 10, cookie.MaxAge)
+				// 3 seconds should be more than enough for even slow test environments
+				assert.GreaterOrEqual(t, cookie.MaxAge, 7)
+				assert.LessOrEqual(t, cookie.MaxAge, 10)
 			},
 		},
 		{
@@ -106,7 +124,7 @@ func TestUserController(t *testing.T) {
 					Password: "wrongpassword",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -127,7 +145,7 @@ func TestUserController(t *testing.T) {
 					Password: "wrongpassword",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				for range 3 {
 					recorder := httptest.NewRecorder()
@@ -162,7 +180,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -173,22 +191,25 @@ func TestUserController(t *testing.T) {
 
 				decodedBody := make(map[string]any)
 				err = json.Unmarshal(recorder.Body.Bytes(), &decodedBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, decodedBody["totpPending"], true)
 
 				// should set the session cookie
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 				cookie := recorder.Result().Cookies()[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 				assert.True(t, cookie.HttpOnly)
 				assert.Equal(t, "example.com", cookie.Domain)
-				assert.Equal(t, 3600, cookie.MaxAge) // 1 hour, default for totp pending sessions
+				assert.GreaterOrEqual(t, cookie.MaxAge, 3597)
+				assert.LessOrEqual(t, cookie.MaxAge, 3600)
 			},
 		},
 		{
 			description: "Should be able to logout",
-			middlewares: []gin.HandlerFunc{},
+			middlewares: []gin.HandlerFunc{
+				simpleCtx,
+			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				// First login to get a session cookie
 				loginReq := controller.LoginRequest{
@@ -196,7 +217,7 @@ func TestUserController(t *testing.T) {
 					Password: "password",
 				}
 				loginReqBody, err := json.Marshal(loginReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
 				req.Header.Set("Content-Type", "application/json")
@@ -204,9 +225,10 @@ func TestUserController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				cookies := recorder.Result().Cookies()
+				require.Len(t, cookies, 1)
 
-				cookie := recorder.Result().Cookies()[0]
+				cookie := cookies[0]
 				assert.Equal(t, "tinyauth-session", cookie.Name)
 
 				// Now logout using the session cookie
@@ -217,48 +239,72 @@ func TestUserController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				cookies = recorder.Result().Cookies()
+				require.Len(t, cookies, 1)
 
-				logoutCookie := recorder.Result().Cookies()[0]
-				assert.Equal(t, "tinyauth-session", logoutCookie.Name)
-				assert.Equal(t, "", logoutCookie.Value)
-				assert.Equal(t, -1, logoutCookie.MaxAge) // MaxAge -1 means delete cookie
+				cookie = cookies[0]
+				assert.Equal(t, "tinyauth-session", cookie.Name)
+				assert.Equal(t, "", cookie.Value)
+				assert.Equal(t, -1, cookie.MaxAge) // MaxAge -1 means delete cookie
 			},
 		},
 		{
 			description: "Should be able to login with totp",
-			middlewares: []gin.HandlerFunc{},
+			middlewares: []gin.HandlerFunc{
+				totpCtx,
+			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+					UUID:        "test-totp-login-uuid",
+					Username:    "test",
+					Email:       "test@example.com",
+					Name:        "Test",
+					Provider:    "local",
+					TotpPending: true,
+					Expiry:      time.Now().Add(1 * time.Hour).Unix(),
+					CreatedAt:   time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				totpReq := controller.TotpRequest{
 					Code: code,
 				}
 
 				totpReqBody, err := json.Marshal(totpReq)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				recorder = httptest.NewRecorder()
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
 				req.Header.Set("Content-Type", "application/json")
-
+				req.AddCookie(&http.Cookie{
+					Name:     "tinyauth-session",
+					Value:    "test-totp-login-uuid",
+					HttpOnly: true,
+					MaxAge:   3600,
+					Expires:  time.Now().Add(1 * time.Hour),
+				})
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, 200, recorder.Code)
-				assert.Len(t, recorder.Result().Cookies(), 1)
+				require.Len(t, recorder.Result().Cookies(), 1)
 
 				// should set a new session cookie with totp pending removed
 				totpCookie := recorder.Result().Cookies()[0]
 				assert.Equal(t, "tinyauth-session", totpCookie.Name)
 				assert.True(t, totpCookie.HttpOnly)
 				assert.Equal(t, "example.com", totpCookie.Domain)
-				assert.Equal(t, 10, totpCookie.MaxAge) // should use the regular session expiry time
+				assert.GreaterOrEqual(t, totpCookie.MaxAge, 7)
+				assert.LessOrEqual(t, totpCookie.MaxAge, 10)
 			},
 		},
 		{
 			description: "Totp should rate limit on multiple invalid attempts",
-			middlewares: []gin.HandlerFunc{},
+			middlewares: []gin.HandlerFunc{
+				totpCtx,
+			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				for range 3 {
 					totpReq := controller.TotpRequest{
@@ -266,7 +312,7 @@ func TestUserController(t *testing.T) {
 					}
 
 					totpReqBody, err := json.Marshal(totpReq)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					recorder = httptest.NewRecorder()
 					req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
@@ -328,8 +374,22 @@ func TestUserController(t *testing.T) {
 		},
 		{
 			description: "TOTP completion uses name and email from user attributes",
-			middlewares: []gin.HandlerFunc{},
+			middlewares: []gin.HandlerFunc{
+				totpAttrCtx,
+			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := queries.CreateSession(context.TODO(), repository.CreateSessionParams{
+					UUID:        "test-totp-login-attributes-uuid",
+					Username:    "test",
+					Email:       "test@example.com",
+					Name:        "Test",
+					Provider:    "local",
+					TotpPending: true,
+					Expiry:      time.Now().Add(1 * time.Hour).Unix(),
+					CreatedAt:   time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
@@ -339,6 +399,13 @@ func TestUserController(t *testing.T) {
 
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(body)))
 				req.Header.Set("Content-Type", "application/json")
+				req.AddCookie(&http.Cookie{
+					Name:     "tinyauth-session",
+					Value:    "test-totp-login-attributes-uuid",
+					HttpOnly: true,
+					MaxAge:   3600,
+					Expires:  time.Now().Add(1 * time.Hour),
+				})
 				router.ServeHTTP(recorder, req)
 
 				require.Equal(t, 200, recorder.Code)
@@ -349,61 +416,15 @@ func TestUserController(t *testing.T) {
 		},
 	}
 
-	oauthBrokerCfgs := make(map[string]config.OAuthServiceConfig)
+	ctx := context.TODO()
+	wg := &sync.WaitGroup{}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
-	require.NoError(t, err)
-
-	queries := repository.New(db)
-
-	docker := service.NewDockerService()
-	err = docker.Init()
-	require.NoError(t, err)
-
-	ldap := service.NewLdapService(service.LdapServiceConfig{})
-	err = ldap.Init()
-	require.NoError(t, err)
-
-	broker := service.NewOAuthBrokerService(oauthBrokerCfgs)
-	err = broker.Init()
-	require.NoError(t, err)
-
-	authService := service.NewAuthService(authServiceCfg, docker, ldap, queries, broker)
-	err = authService.Init()
-	require.NoError(t, err)
+	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
 		authService.ClearRateLimitsTestingOnly()
-	}
-
-	setTotpMiddlewareOverrides := map[string]config.UserContext{
-		"Should be able to login with totp": {
-			Username:    "totpuser",
-			Name:        "Totpuser",
-			Email:       "totpuser@example.com",
-			Provider:    "local",
-			TotpPending: true,
-			TotpEnabled: true,
-		},
-		"Totp should rate limit on multiple invalid attempts": {
-			Username:    "totpuser",
-			Name:        "Totpuser",
-			Email:       "totpuser@example.com",
-			Provider:    "local",
-			TotpPending: true,
-			TotpEnabled: true,
-		},
-		"TOTP completion uses name and email from user attributes": {
-			Username:    "attrtotpuser",
-			Name:        "Bob Jones",
-			Email:       "bob@example.com",
-			Provider:    "local",
-			TotpPending: true,
-			TotpEnabled: true,
-		},
 	}
 
 	for _, test := range tests {
@@ -415,20 +436,10 @@ func TestUserController(t *testing.T) {
 				router.Use(middleware)
 			}
 
-			// Gin is stupid and doesn't allow setting a middleware after the groups
-			// so we need to do some stupid overrides here
-			if ctx, ok := setTotpMiddlewareOverrides[test.description]; ok {
-				ctx := ctx
-				router.Use(func(c *gin.Context) {
-					c.Set("context", &ctx)
-				})
-			}
-
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			userController := controller.NewUserController(userControllerCfg, group, authService)
-			userController.SetupRoutes()
+			controller.NewUserController(log, runtime, group, authService)
 
 			recorder := httptest.NewRecorder()
 
@@ -437,7 +448,6 @@ func TestUserController(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

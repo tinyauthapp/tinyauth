@@ -1,19 +1,22 @@
 package service_test
 
 import (
+	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tinyauthapp/tinyauth/internal/config"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func newTestUser() repository.OidcUserinfo {
-	addr := config.AddressClaim{
+	addr := model.AddressClaim{
 		Formatted:     "123 Main St",
 		StreetAddress: "123 Main St",
 		Locality:      "Springfield",
@@ -48,13 +51,29 @@ func newTestUser() repository.OidcUserinfo {
 
 func TestCompileUserinfo(t *testing.T) {
 	dir := t.TempDir()
-	svc := service.NewOIDCService(service.OIDCServiceConfig{
-		PrivateKeyPath: dir + "/key.pem",
-		PublicKeyPath:  dir + "/key.pub",
-		Issuer:         "https://tinyauth.example.com",
-		SessionExpiry:  3600,
-	}, nil)
-	require.NoError(t, svc.Init())
+
+	cfg := model.Config{
+		OIDC: model.OIDCConfig{
+			PrivateKeyPath: dir + "/key.pem",
+			PublicKeyPath:  dir + "/key.pub",
+		},
+		Auth: model.AuthConfig{
+			SessionExpiry: 3600,
+		},
+	}
+
+	runtime := model.RuntimeConfig{
+		AppURL: "https://tinyauth.example.com",
+	}
+
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+
+	ctx := context.TODO()
+	wg := &sync.WaitGroup{}
+
+	svc, err := service.NewOIDCService(log, cfg, runtime, nil, ctx, wg)
+	require.NoError(t, err)
 
 	type testCase struct {
 		description string

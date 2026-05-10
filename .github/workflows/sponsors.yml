@@ -2,15 +2,19 @@ name: Generate Sponsors List
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   generate-sponsors:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Generate Sponsors
-        uses: JamesIves/github-sponsors-readme-action@v1
+        uses: JamesIves/github-sponsors-readme-action@2fd9142e765f755780202122261dc85e78459405 # v1
         with:
           token: ${{ secrets.SPONSORS_GENERATOR_PAT }}
           active-only: false
@@ -18,7 +22,7 @@ jobs:
           template: '<a href="https://github.com/{{{ login }}}"><img src="{{{ avatarUrl }}}" width="64px" alt="User avatar: {{{ login }}}" /></a>&nbsp;&nbsp;'
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: |

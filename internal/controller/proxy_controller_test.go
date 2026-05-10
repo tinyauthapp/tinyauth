@@ -1,70 +1,51 @@
 package controller_test
 
 import (
+	"context"
 	"net/http/httptest"
-	"path"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestProxyController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	authServiceCfg := service.AuthServiceConfig{
-		Users: []config.User{
-			{
-				Username: "testuser",
-				Password: "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-			},
-			{
-				Username:   "totpuser",
-				Password:   "$2a$10$ZwVYQH07JX2zq7Fjkt3gU.BjwvvwPeli4OqOno04RQIv0P7usBrXa", // password
-				TotpSecret: "JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK",
-			},
-		},
-		SessionExpiry:     10, // 10 seconds, useful for testing
-		CookieDomain:      "example.com",
-		LoginTimeout:      10, // 10 seconds, useful for testing
-		LoginMaxRetries:   3,
-		SessionCookieName: "tinyauth-session",
-	}
+	cfg, runtime := test.CreateTestConfigs(t)
 
-	controllerCfg := controller.ProxyControllerConfig{
-		AppURL: "https://tinyauth.example.com",
-	}
-
-	acls := map[string]config.App{
+	acls := map[string]model.App{
 		"app_path_allow": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "path-allow.example.com",
 			},
-			Path: config.AppPath{
+			Path: model.AppPath{
 				Allow: "/allowed",
 			},
 		},
 		"app_user_allow": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "user-allow.example.com",
 			},
-			Users: config.AppUsers{
+			Users: model.AppUsers{
 				Allow: "testuser",
 			},
 		},
 		"ip_bypass": {
-			Config: config.AppConfig{
+			Config: model.AppConfig{
 				Domain: "ip-bypass.example.com",
 			},
-			IP: config.AppIP{
+			IP: model.AppIP{
 				Bypass: []string{"10.10.10.10"},
 			},
 		},
@@ -74,24 +55,31 @@ func TestProxyController(t *testing.T) {
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
 
 	simpleCtx := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:   "testuser",
-			Name:       "Testuser",
-			Email:      "testuser@example.com",
-			IsLoggedIn: true,
-			Provider:   "local",
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "testuser",
+					Name:     "Testuser",
+					Email:    "testuser@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
 
 	simpleCtxTotp := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:    "totpuser",
-			Name:        "Totpuser",
-			Email:       "totpuser@example.com",
-			IsLoggedIn:  true,
-			Provider:    "local",
-			TotpEnabled: true,
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "totpuser",
+					Name:     "Totpuser",
+					Email:    "totpuser@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
@@ -391,32 +379,19 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	oauthBrokerCfgs := make(map[string]config.OAuthServiceConfig)
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
-
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
+	queries := repository.New(app.GetDB())
 
-	docker := service.NewDockerService()
-	err = docker.Init()
-	require.NoError(t, err)
+	wg := &sync.WaitGroup{}
+	ctx := context.TODO()
 
-	ldap := service.NewLdapService(service.LdapServiceConfig{})
-	err = ldap.Init()
-	require.NoError(t, err)
-
-	broker := service.NewOAuthBrokerService(oauthBrokerCfgs)
-	err = broker.Init()
-	require.NoError(t, err)
-
-	authService := service.NewAuthService(authServiceCfg, docker, ldap, queries, broker)
-	err = authService.Init()
-	require.NoError(t, err)
-
-	aclsService := service.NewAccessControlsService(docker, acls)
+	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	aclsService := service.NewAccessControlsService(log, nil, acls)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -431,15 +406,13 @@ func TestProxyController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			proxyController := controller.NewProxyController(controllerCfg, group, aclsService, authService)
-			proxyController.SetupRoutes()
+			controller.NewProxyController(log, runtime, group, aclsService, authService)
 
 			test.run(t, router, recorder)
 		})
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

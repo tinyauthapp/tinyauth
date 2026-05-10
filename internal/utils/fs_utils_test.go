@@ -4,24 +4,25 @@ import (
 	"os"
 	"testing"
 
-	"gotest.tools/v3/assert"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadFile(t *testing.T) {
 	// Setup
 	file, err := os.Create("/tmp/tinyauth_test_file")
-	assert.NilError(t, err)
+	require.NoError(t, err)
 
 	_, err = file.WriteString("file content\n")
-	assert.NilError(t, err)
+	require.NoError(t, err)
 
 	err = file.Close()
-	assert.NilError(t, err)
+	require.NoError(t, err)
 	defer os.Remove("/tmp/tinyauth_test_file")
 
 	// Normal case
 	content, err := ReadFile("/tmp/tinyauth_test_file")
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "file content\n", content)
 
 	// Non-existing file

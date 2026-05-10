@@ -1,55 +1,46 @@
 package controller_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"net/http/httptest"
 	"net/url"
-	"path"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/config"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
+	"github.com/tinyauthapp/tinyauth/internal/controller"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 func TestOIDCController(t *testing.T) {
-	tlog.NewTestLogger().Init()
-	tempDir := t.TempDir()
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
 
-	oidcServiceCfg := service.OIDCServiceConfig{
-		Clients: map[string]config.OIDCClientConfig{
-			"test": {
-				ClientID:            "some-client-id",
-				ClientSecret:        "some-client-secret",
-				TrustedRedirectURIs: []string{"https://test.example.com/callback"},
-				Name:                "Test Client",
-			},
-		},
-		PrivateKeyPath: path.Join(tempDir, "key.pem"),
-		PublicKeyPath:  path.Join(tempDir, "key.pub"),
-		Issuer:         "https://tinyauth.example.com",
-		SessionExpiry:  500,
-	}
-
-	controllerCfg := controller.OIDCControllerConfig{}
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	simpleCtx := func(c *gin.Context) {
-		c.Set("context", &config.UserContext{
-			Username:   "test",
-			Name:       "Test User",
-			Email:      "test@example.com",
-			IsLoggedIn: true,
-			Provider:   "local",
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderLocal,
+			Local: &model.LocalContext{
+				BaseContext: model.BaseContext{
+					Username: "test",
+					Name:     "Test User",
+					Email:    "test@example.com",
+				},
+			},
 		})
 		c.Next()
 	}
@@ -99,7 +90,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, res["redirect_uri"], "https://tinyauth.example.com/error?error=User+is+not+logged+in+or+the+session+is+invalid")
 			},
@@ -119,7 +110,7 @@ func TestOIDCController(t *testing.T) {
 					Nonce:        "some-nonce",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -127,7 +118,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, res["redirect_uri"], "https://test.example.com/callback?error=unsupported_response_type&error_description=Invalid+request+parameters&state=some-state")
 			},
@@ -147,7 +138,7 @@ func TestOIDCController(t *testing.T) {
 					Nonce:        "some-nonce",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -156,11 +147,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				assert.Equal(t, queryParams.Get("state"), "some-state")
@@ -179,7 +170,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -187,7 +178,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, res["error"], "unsupported_grant_type")
 			},
@@ -202,7 +193,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -240,7 +231,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -263,11 +254,11 @@ func TestOIDCController(t *testing.T) {
 
 				var authorizeRes map[string]any
 				err := json.Unmarshal(authorizeTestRecorder.Body.Bytes(), &authorizeRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := authorizeRes["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				code := queryParams.Get("code")
@@ -279,7 +270,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -302,7 +293,7 @@ func TestOIDCController(t *testing.T) {
 
 				var tokenRes map[string]any
 				err := json.Unmarshal(tokenRecorder.Body.Bytes(), &tokenRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, ok := tokenRes["refresh_token"]
 				assert.True(t, ok, "Expected refresh token in response")
@@ -316,7 +307,7 @@ func TestOIDCController(t *testing.T) {
 					ClientSecret: "some-client-secret",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -328,7 +319,7 @@ func TestOIDCController(t *testing.T) {
 				assert.Equal(t, 200, recorder.Code)
 				var refreshRes map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &refreshRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, ok = refreshRes["access_token"]
 				assert.True(t, ok, "Expected access token in refresh response")
@@ -349,11 +340,11 @@ func TestOIDCController(t *testing.T) {
 
 				var authorizeRes map[string]any
 				err := json.Unmarshal(authorizeTestRecorder.Body.Bytes(), &authorizeRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := authorizeRes["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				code := queryParams.Get("code")
@@ -365,7 +356,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -385,7 +376,7 @@ func TestOIDCController(t *testing.T) {
 
 				var secondRes map[string]any
 				err = json.Unmarshal(secondRecorder.Body.Bytes(), &secondRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				assert.Equal(t, "invalid_grant", secondRes["error"])
 			},
@@ -413,7 +404,7 @@ func TestOIDCController(t *testing.T) {
 
 				var tokenRes map[string]any
 				err := json.Unmarshal(tokenRecorder.Body.Bytes(), &tokenRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				accessToken := tokenRes["access_token"].(string)
 				assert.NotEmpty(t, accessToken)
@@ -425,7 +416,7 @@ func TestOIDCController(t *testing.T) {
 
 				var userInfoRes map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &userInfoRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, ok := userInfoRes["sub"]
 				assert.True(t, ok, "Expected sub claim in userinfo response")
@@ -445,7 +436,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_request", res["error"])
 			},
 		},
@@ -460,7 +451,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_request", res["error"])
 			},
 		},
@@ -475,7 +466,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_request", res["error"])
 			},
 		},
@@ -490,7 +481,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_grant", res["error"])
 			},
 		},
@@ -505,7 +496,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_request", res["error"])
 			},
 		},
@@ -520,7 +511,7 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_request", res["error"])
 			},
 		},
@@ -537,7 +528,7 @@ func TestOIDCController(t *testing.T) {
 
 				var tokenRes map[string]any
 				err := json.Unmarshal(tokenRecorder.Body.Bytes(), &tokenRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				accessToken := tokenRes["access_token"].(string)
 				assert.NotEmpty(t, accessToken)
@@ -551,7 +542,7 @@ func TestOIDCController(t *testing.T) {
 
 				var userInfoRes map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &userInfoRes)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				_, ok := userInfoRes["sub"]
 				assert.True(t, ok, "Expected sub claim in userinfo response")
@@ -575,7 +566,7 @@ func TestOIDCController(t *testing.T) {
 					CodeChallengeMethod: "",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -584,11 +575,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				assert.Equal(t, queryParams.Get("state"), "some-state")
@@ -605,7 +596,7 @@ func TestOIDCController(t *testing.T) {
 					CodeVerifier: "some-challenge",
 				}
 				reqBodyEncoded, err := query.Values(tokenReqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req = httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -636,7 +627,7 @@ func TestOIDCController(t *testing.T) {
 					CodeChallengeMethod: "S256",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -645,11 +636,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				assert.Equal(t, queryParams.Get("state"), "some-state")
@@ -666,7 +657,7 @@ func TestOIDCController(t *testing.T) {
 					CodeVerifier: "some-challenge",
 				}
 				reqBodyEncoded, err := query.Values(tokenReqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req = httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -697,7 +688,7 @@ func TestOIDCController(t *testing.T) {
 					CodeChallengeMethod: "S256",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -706,11 +697,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				assert.Equal(t, queryParams.Get("state"), "some-state")
@@ -727,7 +718,7 @@ func TestOIDCController(t *testing.T) {
 					CodeVerifier: "some-challenge-1",
 				}
 				reqBodyEncoded, err := query.Values(tokenReqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req = httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -758,7 +749,7 @@ func TestOIDCController(t *testing.T) {
 					CodeChallengeMethod: "foo",
 				}
 				reqBodyBytes, err := json.Marshal(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize", strings.NewReader(string(reqBodyBytes)))
 				req.Header.Set("Content-Type", "application/json")
@@ -767,11 +758,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				error := queryParams.Get("error")
@@ -790,11 +781,11 @@ func TestOIDCController(t *testing.T) {
 
 				var res map[string]any
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				redirectURI := res["redirect_uri"].(string)
 				url, err := url.Parse(redirectURI)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				queryParams := url.Query()
 				code := queryParams.Get("code")
@@ -806,7 +797,7 @@ func TestOIDCController(t *testing.T) {
 					RedirectURI: "https://test.example.com/callback",
 				}
 				reqBodyEncoded, err := query.Values(reqBody)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/token", strings.NewReader(reqBodyEncoded.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -817,7 +808,7 @@ func TestOIDCController(t *testing.T) {
 				assert.Equal(t, 200, recorder.Code)
 
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				accessToken := res["access_token"].(string)
 				assert.NotEmpty(t, accessToken)
@@ -842,20 +833,22 @@ func TestOIDCController(t *testing.T) {
 				assert.Equal(t, 401, recorder.Code)
 
 				err = json.Unmarshal(recorder.Body.Bytes(), &res)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, "invalid_grant", res["error"])
 			},
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(config.Config{})
+	app := bootstrap.NewBootstrapApp(cfg)
 
-	db, err := app.SetupDatabase(path.Join(tempDir, "tinyauth.db"))
+	err := app.SetupDatabase()
 	require.NoError(t, err)
 
-	queries := repository.New(db)
-	oidcService := service.NewOIDCService(oidcServiceCfg, queries)
-	err = oidcService.Init()
+	queries := repository.New(app.GetDB())
+
+	wg := &sync.WaitGroup{}
+
+	oidcService, err := service.NewOIDCService(log, cfg, runtime, queries, context.TODO(), wg)
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -869,8 +862,7 @@ func TestOIDCController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			oidcController := controller.NewOIDCController(controllerCfg, oidcService, group)
-			oidcController.SetupRoutes()
+			controller.NewOIDCController(log, oidcService, runtime, group)
 
 			recorder := httptest.NewRecorder()
 
@@ -879,7 +871,6 @@ func TestOIDCController(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		err = db.Close()
-		require.NoError(t, err)
+		app.GetDB().Close()
 	})
 }

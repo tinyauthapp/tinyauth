@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/assets"
-	"github.com/tinyauthapp/tinyauth/internal/utils/tlog"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,28 +18,24 @@ type UIMiddleware struct {
 	uiFileServer http.Handler
 }
 
-func NewUIMiddleware() *UIMiddleware {
-	return &UIMiddleware{}
-}
+func NewUIMiddleware() (*UIMiddleware, error) {
+	m := &UIMiddleware{}
 
-func (m *UIMiddleware) Init() error {
 	ui, err := fs.Sub(assets.FrontendAssets, "dist")
 
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to load ui assets: %w", err)
 	}
 
 	m.uiFs = ui
 	m.uiFileServer = http.FileServerFS(ui)
 
-	return nil
+	return m, nil
 }
 
 func (m *UIMiddleware) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/")
-
-		tlog.App.Debug().Str("path", path).Msg("path")
 
 		switch strings.SplitN(path, "/", 2)[0] {
 		case "api", "resources", ".well-known":

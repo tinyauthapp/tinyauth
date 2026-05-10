@@ -1,4 +1,4 @@
-package config
+package model
 
 // Default configuration
 func NewDefaultConfiguration() *Config {
@@ -14,10 +14,12 @@ func NewDefaultConfiguration() *Config {
 			Path:    "./resources",
 		},
 		Server: ServerConfig{
-			Port:    3000,
-			Address: "0.0.0.0",
+			Port:                       3000,
+			Address:                    "0.0.0.0",
+			ConcurrentListenersEnabled: false,
 		},
 		Auth: AuthConfig{
+			SubdomainsEnabled:  true,
 			SessionExpiry:      86400, // 1 day
 			SessionMaxLifetime: 0,     // disabled
 			LoginTimeout:       300,   // 5 minutes
@@ -29,7 +31,7 @@ func NewDefaultConfiguration() *Config {
 			BackgroundImage:       "/background.jpg",
 			WarningsEnabled:       true,
 		},
-		Ldap: LdapConfig{
+		LDAP: LDAPConfig{
 			Insecure:      false,
 			SearchFilter:  "(uid=%s)",
 			GroupCacheTTL: 900, // 15 minutes
@@ -62,23 +64,9 @@ func NewDefaultConfiguration() *Config {
 		Tailscale: TailscaleConfig{
 			Dir: "./state",
 		},
+		LabelProvider: "auto",
 	}
 }
-
-// Version information, set at build time
-
-var Version = "development"
-var CommitHash = "development"
-var BuildTimestamp = "0000-00-00T00:00:00Z"
-
-// Cookie name templates
-
-var SessionCookieName = "tinyauth-session"
-var CSRFCookieName = "tinyauth-csrf"
-var RedirectCookieName = "tinyauth-redirect"
-var OAuthSessionCookieName = "tinyauth-oauth"
-
-// Main app config
 
 type Config struct {
 	AppURL       string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
@@ -111,14 +99,16 @@ type ResourcesConfig struct {
 }
 
 type ServerConfig struct {
-	Port       int    `description:"The port on which the server listens." yaml:"port"`
-	Address    string `description:"The address on which the server listens." yaml:"address"`
-	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath"`
+	Port                       int    `description:"The port on which the server listens." yaml:"port"`
+	Address                    string `description:"The address on which the server listens." yaml:"address"`
+	SocketPath                 string `description:"The path to the Unix socket." yaml:"socketPath"`
+	ConcurrentListenersEnabled bool   `description:"Enable listening on both TCP and Unix socket at the same time." yaml:"concurrentListenersEnabled"`
 }
 
 type AuthConfig struct {
 	IP                 IPConfig                  `description:"IP whitelisting config options." yaml:"ip"`
 	Users              []string                  `description:"Comma-separated list of users (username:hashed_password)." yaml:"users"`
+	SubdomainsEnabled  bool                      `description:"Enable subdomains support." yaml:"subdomainsEnabled"`
 	UserAttributes     map[string]UserAttributes `description:"Map of per-user OIDC attributes (username -> attributes)." yaml:"userAttributes"`
 	UsersFile          string                    `description:"Path to the users file." yaml:"usersFile"`
 	SecureCookie       bool                      `description:"Enable secure cookies." yaml:"secureCookie"`
@@ -162,9 +152,10 @@ type IPConfig struct {
 }
 
 type OAuthConfig struct {
-	Whitelist    []string                      `description:"Comma-separated list of allowed OAuth domains." yaml:"whitelist"`
-	AutoRedirect string                        `description:"The OAuth provider to use for automatic redirection." yaml:"autoRedirect"`
-	Providers    map[string]OAuthServiceConfig `description:"OAuth providers configuration." yaml:"providers"`
+	Whitelist     []string                      `description:"Comma-separated list of allowed OAuth domains." yaml:"whitelist"`
+	WhitelistFile string                        `description:"Path to the OAuth whitelist file." yaml:"whitelistFile"`
+	AutoRedirect  string                        `description:"The OAuth provider to use for automatic redirection." yaml:"autoRedirect"`
+	Providers     map[string]OAuthServiceConfig `description:"OAuth providers configuration." yaml:"providers"`
 }
 
 type OIDCConfig struct {
@@ -180,7 +171,7 @@ type UIConfig struct {
 	WarningsEnabled       bool   `description:"Enable UI warnings." yaml:"warningsEnabled"`
 }
 
-type LdapConfig struct {
+type LDAPConfig struct {
 	Address       string `description:"LDAP server address." yaml:"address"`
 	BindDN        string `description:"Bind DN for LDAP authentication." yaml:"bindDn"`
 	BindPassword  string `description:"Bind password for LDAP authentication." yaml:"bindPassword"`
@@ -213,6 +204,7 @@ type ExperimentalConfig struct {
 	ConfigFile string `description:"Path to config file." yaml:"-"`
 }
 
+<<<<<<< HEAD:internal/config/config.go
 type TailscaleConfig struct {
 	Dir       string `description:"Tailscale state directory." yaml:"dir"`
 	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
@@ -234,6 +226,8 @@ type Claims struct {
 	Groups            any    `json:"groups"`
 }
 
+=======
+>>>>>>> main:internal/model/config.go
 type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`
 	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret"`
@@ -256,6 +250,7 @@ type OIDCClientConfig struct {
 	Name                string   `description:"Client name in UI." yaml:"name"`
 }
 
+<<<<<<< HEAD:internal/config/config.go
 var OverrideProviders = map[string]string{
 	"google": "Google",
 	"github": "GitHub",
@@ -318,6 +313,8 @@ type RedirectQuery struct {
 	RedirectURI string `url:"redirect_uri"`
 }
 
+=======
+>>>>>>> main:internal/model/config.go
 // ACLs
 
 type Apps struct {
@@ -373,7 +370,3 @@ type AppPath struct {
 	Allow string `description:"Comma-separated list of allowed paths." yaml:"allow"`
 	Block string `description:"Comma-separated list of blocked paths." yaml:"block"`
 }
-
-// API server
-
-var ApiServer = "https://api.tinyauth.app"
