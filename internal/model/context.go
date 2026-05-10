@@ -165,100 +165,55 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 	return c, nil
 }
 
-func (c *UserContext) GetUsername() string {
+func (c *UserContext) getBaseContext() *BaseContext {
 	switch c.Provider {
-	case ProviderLocal:
+	case ProviderLocal, ProviderBasicAuth:
 		if c.Local == nil {
-			return ""
+			return nil
 		}
-		return c.Local.Username
+		return &c.Local.BaseContext
 	case ProviderLDAP:
 		if c.LDAP == nil {
-			return ""
+			return nil
 		}
-		return c.LDAP.Username
-	case ProviderBasicAuth:
-		if c.Local == nil {
-			return ""
-		}
-		return c.Local.Username
+		return &c.LDAP.BaseContext
 	case ProviderOAuth:
 		if c.OAuth == nil {
-			return ""
+			return nil
 		}
-		return c.OAuth.Username
+		return &c.OAuth.BaseContext
 	case ProviderTailscale:
 		if c.Tailscale == nil {
-			return ""
+			return nil
 		}
-		return c.Tailscale.Username
+		return &c.Tailscale.BaseContext
 	default:
+		return nil
+	}
+}
+
+func (c *UserContext) GetUsername() string {
+	base := c.getBaseContext()
+	if base == nil {
 		return ""
 	}
+	return base.Username
 }
 
 func (c *UserContext) GetEmail() string {
-	switch c.Provider {
-	case ProviderLocal:
-		if c.Local == nil {
-			return ""
-		}
-		return c.Local.Email
-	case ProviderLDAP:
-		if c.LDAP == nil {
-			return ""
-		}
-		return c.LDAP.Email
-	case ProviderBasicAuth:
-		if c.Local == nil {
-			return ""
-		}
-		return c.Local.Email
-	case ProviderOAuth:
-		if c.OAuth == nil {
-			return ""
-		}
-		return c.OAuth.Email
-	case ProviderTailscale:
-		if c.Tailscale == nil {
-			return ""
-		}
-		return c.Tailscale.Email
-	default:
+	base := c.getBaseContext()
+	if base == nil {
 		return ""
 	}
+	return base.Email
 }
 
 func (c *UserContext) GetName() string {
-	switch c.Provider {
-	case ProviderLocal:
-		if c.Local == nil {
-			return ""
-		}
-		return c.Local.Name
-	case ProviderLDAP:
-		if c.LDAP == nil {
-			return ""
-		}
-		return c.LDAP.Name
-	case ProviderBasicAuth:
-		if c.Local == nil {
-			return ""
-		}
-		return c.Local.Name
-	case ProviderOAuth:
-		if c.OAuth == nil {
-			return ""
-		}
-		return c.OAuth.Name
-	case ProviderTailscale:
-		if c.Tailscale == nil {
-			return ""
-		}
-		return c.Tailscale.Name
-	default:
+	base := c.getBaseContext()
+	if base == nil {
 		return ""
 	}
+	return base.Name
 }
 
 func (c *UserContext) GetProviderID() string {
