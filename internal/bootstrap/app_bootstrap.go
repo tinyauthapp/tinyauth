@@ -356,8 +356,6 @@ func (app *BootstrapApp) serveUnix() error {
 		os.Remove(app.config.Server.SocketPath)
 	}
 
-	defer shutdown()
-
 	go func() {
 		<-app.ctx.Done()
 		app.log.App.Debug().Msg("Shutting down unix socket listener")
@@ -367,6 +365,7 @@ func (app *BootstrapApp) serveUnix() error {
 	err = server.Serve(listener)
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		shutdown()
 		return fmt.Errorf("failed to start unix socket listener: %w", err)
 	}
 
