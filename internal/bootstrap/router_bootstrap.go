@@ -85,6 +85,43 @@ func (app *BootstrapApp) runListeners() (chan error, error) {
 	return lec, nil
 }
 
+// The way we calculate listeners is as follows:
+// If concurrent listeners are disabled, we pick the first available listener, so:
+// 1. If tailscale is enabled, we use tailscale
+// 2. If socket path is configured, we use unix socket
+// 3. Finally if none is configured we use http
+// If concurrent listeners are enabled, we add all available listeners in the following order
+func (app *BootstrapApp) calculateListenerPolicy() []Listener {
+	l := []Listener{}
+
+	if !app.config.Server.ConcurrentListenersEnabled {
+		if app.config.Tailscale.Enabled {
+			l = append(l, ListenerTailscale)
+			return l
+		}
+
+		if app.config.Server.SocketPath != "" {
+			l = append(l, ListenerUnix)
+			return l
+		}
+
+		l = append(l, ListenerHTTP)
+		return l
+	}
+
+	if app.config.Server.SocketPath != "" {
+		l = append(l, ListenerUnix)
+	}
+
+	if app.config.Tailscale.Enabled {
+		l = append(l, ListenerTailscale)
+	}
+
+	l = append(l, ListenerHTTP)
+
+	return l
+}
+
 func (app *BootstrapApp) listenerFromType(listenerType Listener) (func() error, error) {
 	switch listenerType {
 	case ListenerHTTP:

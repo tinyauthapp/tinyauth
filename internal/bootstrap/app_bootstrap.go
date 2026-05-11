@@ -255,21 +255,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// setup listeners
-	runUnix := app.config.Server.SocketPath != ""
-	runHTTP := app.config.Server.SocketPath == "" || app.config.Server.ConcurrentListenersEnabled
-	runTailscale := app.services.tailscaleService != nil
-
-	if runHTTP {
-		app.listeners = append(app.listeners, ListenerHTTP)
-	}
-
-	if runUnix {
-		app.listeners = append(app.listeners, ListenerUnix)
-	}
-
-	if runTailscale {
-		app.listeners = append(app.listeners, ListenerTailscale)
-	}
+	app.listeners = app.calculateListenerPolicy()
 
 	if app.config.Server.ConcurrentListenersEnabled {
 		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
