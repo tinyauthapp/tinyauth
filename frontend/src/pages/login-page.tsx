@@ -158,8 +158,8 @@ export const LoginPage = () => {
       mutationFn: () => axios.post("/api/user/tailscale"),
       mutationKey: ["tailscale"],
       onSuccess: () => {
-        toast.success("Logged in", {
-          description: t("Tailscale session confirmed"),
+        toast.success(t("loginSuccessTitle"), {
+          description: t("loginTailscaleSuccess"),
         });
 
         redirectTimer.current = window.setTimeout(() => {
@@ -173,8 +173,8 @@ export const LoginPage = () => {
         }, 500);
       },
       onError: () => {
-        toast.error("Failed to login", {
-          description: "Failed to authenticate with Tailscale.",
+        toast.error(t("loginFailTitle"), {
+          description: t("loginTailscaleFail"),
         });
       },
     });
@@ -266,17 +266,15 @@ export const LoginPage = () => {
         <CardHeader className="gap-3">
           <TailscaleIcon className="mx-auto h-8 w-8" />
           <CardTitle className="text-center text-xl">
-            Tinyauth · Tailscale
+            {t("loginTailscaleTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="text-muted-foreground text-sm">
-            We detected that you are accessing Tinyauth from an authorized
-            Tailscale device. Would you like to continue with your Tailscale
-            credentials?
+            {t("loginTailscaleDescription")}
           </div>
           <div className="text-muted-foreground text-sm">
-            Machine Name: <code>{tailscale.nodeName}</code>
+            {t("loginTailscaleDeviceName")} <code>{tailscale.nodeName}</code>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col items-stretch gap-3">
@@ -285,7 +283,7 @@ export const LoginPage = () => {
             onClick={() => tailscaleMutate()}
             loading={tailscaleIsPending}
           >
-            Continue with Tailscale
+            {t("loginTailscaleSubmit")}
           </Button>
           <Button
             className="w-full"
@@ -293,7 +291,7 @@ export const LoginPage = () => {
             onClick={() => setUseTailscale(false)}
             disabled={tailscaleIsPending}
           >
-            Use other login method
+            {t("loginTailscaleOtherMethod")}
           </Button>
         </CardFooter>
       </Card>

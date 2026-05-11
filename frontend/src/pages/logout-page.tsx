@@ -75,9 +75,17 @@ export const LogoutPage = () => {
   if (auth.providerId === "tailscale") {
     return (
       <LogoutLayout logoutMutation={logoutMutation}>
-        You are currently logged in with the Tailscale integration identified by
-        the <code>{tailscale.nodeName}</code> node. Click the button below to
-        log out.
+        <Trans
+          i18nKey="logoutTailscaleSubtitle"
+          t={t}
+          components={{
+            code: <code />,
+          }}
+          values={{
+            deviceName: tailscale.nodeName,
+          }}
+          shouldUnescape={true}
+        />
       </LogoutLayout>
     );
   }

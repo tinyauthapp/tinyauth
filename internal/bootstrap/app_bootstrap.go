@@ -396,7 +396,7 @@ func (app *BootstrapApp) serveUnix() error {
 }
 
 func (app *BootstrapApp) serveTailscale() error {
-	app.log.App.Info().Msgf("Starting Tailscale server on %s", app.services.tailscaleService.GetHostname())
+	app.log.App.Info().Msgf("Starting Tailscale server on %s", fmt.Sprintf("https://%s", app.services.tailscaleService.GetHostname()))
 
 	listener, err := app.services.tailscaleService.CreateListener()
 
