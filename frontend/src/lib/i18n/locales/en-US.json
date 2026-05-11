@@ -86,7 +86,7 @@
     "addressScopeName": "Address",
     "addressScopeDescription": "Allows the app to access your address.",
     "loginTailscaleTitle": "Continue with Tailscale",
-    "loginTailscaleDescription": "We detected that you are accessing Tinyauth from an authorized Tailscale device. Would you like to continue with your Tailscale connection?",
+    "loginTailscaleDescription": "You appear to be accessing Tinyauth from an authorized Tailscale device. Would you like to continue with your Tailscale connection?",
     "loginTailscaleDeviceName": "Device name:",
     "loginTailscaleSubmit": "Continue with Tailscale",
     "loginTailscaleOtherMethod": "Login with another method",
