@@ -37,7 +37,11 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export const LoginPage = () => {
   const { auth, tailscale } = useUserContext();
-  const { ui, oauth, auth: cauth } = useAppContext();
+  const {
+    ui,
+    oauth,
+    auth: { providers },
+  } = useAppContext();
   const { search } = useLocation();
   const { t } = useTranslation();
 
@@ -56,15 +60,15 @@ export const LoginPage = () => {
   const oidcParams = useOIDCParams(searchParams);
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
-    cauth.providers.find((provider) => provider.id === oauth.autoRedirect) !==
+    providers.find((provider) => provider.id === oauth.autoRedirect) !==
       undefined && redirectUri !== undefined,
   );
 
-  const oauthProviders = cauth.providers.filter(
+  const oauthProviders = providers.filter(
     (provider) => provider.id !== "local" && provider.id !== "ldap",
   );
   const userAuthConfigured =
-    cauth.providers.find(
+    providers.find(
       (provider) => provider.id === "local" || provider.id === "ldap",
     ) !== undefined;
 
@@ -300,7 +304,7 @@ export const LoginPage = () => {
     <Card>
       <CardHeader className="gap-1.5">
         <CardTitle className="text-center text-xl">{ui.title}</CardTitle>
-        {cauth.providers.length > 0 && (
+        {providers.length > 0 && (
           <CardDescription className="text-center">
             {oauthProviders.length !== 0
               ? t("loginTitle")
@@ -338,7 +342,7 @@ export const LoginPage = () => {
             })()}
           />
         )}
-        {cauth.providers.length == 0 && (
+        {providers.length == 0 && (
           <pre className="break-normal! text-sm text-red-600">
             {t("failedToFetchProvidersTitle")}
           </pre>
