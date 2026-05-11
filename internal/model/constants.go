@@ -21,3 +21,5 @@ const SessionCookieName = "tinyauth-session"
 const CSRFCookieName = "tinyauth-csrf"
 const RedirectCookieName = "tinyauth-redirect"
 const OAuthSessionCookieName = "tinyauth-oauth"
+
+const GracefulShutdownTimeout = 5 // seconds

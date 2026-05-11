@@ -1,14 +1,17 @@
 package bootstrap
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -199,7 +202,12 @@ func (app *BootstrapApp) serveTailscale() error {
 
 func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, name string) error {
 	shutdown := func() {
-		server.Shutdown(app.ctx)
+		ctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
+		defer cancel()
+		err := server.Shutdown(ctx)
+		if err != nil {
+			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
+		}
 		listener.Close()
 	}
 

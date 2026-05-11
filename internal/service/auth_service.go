@@ -292,6 +292,10 @@ func (auth *AuthService) IsEmailWhitelisted(email string) bool {
 }
 
 func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {
+	if data.Provider == "tailscale" && auth.tailscale == nil {
+		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
+	}
+
 	uuid, err := uuid.NewRandom()
 
 	if err != nil {
@@ -329,10 +333,6 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 	}
 
 	if data.Provider == "tailscale" {
-		if auth.tailscale == nil {
-			return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
-		}
-
 		auth.log.App.Trace().Str("url", fmt.Sprintf("https://%s", auth.tailscale.GetHostname())).Msg("Extracting root domain from Tailscale hostname")
 
 		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", auth.tailscale.GetHostname()))

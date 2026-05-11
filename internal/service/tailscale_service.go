@@ -64,7 +64,7 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 		lc:     lc,
 	}
 
-	connectCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	connectCtx, cancel := context.WithTimeout(ctx, 2*time.Minute) // large enough timeout to allow for user to manually authenticate with link if needed
 	defer cancel()
 
 	err = service.waitForConn(connectCtx)

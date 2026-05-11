@@ -424,7 +424,7 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 	cookie, err := controller.auth.CreateSession(c, sessionCookie)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful TOTP verification")
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful Tailscale login")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",

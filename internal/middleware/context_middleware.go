@@ -116,6 +116,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			if tailscaleContext != nil {
 				c.Set("context", &model.UserContext{
 					Authenticated: false,
+					Provider:      model.ProviderTailscale,
 					Tailscale:     tailscaleContext,
 				})
 			}
