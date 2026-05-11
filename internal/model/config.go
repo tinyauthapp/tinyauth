@@ -62,7 +62,7 @@ func NewDefaultConfiguration() *Config {
 			ConfigFile: "",
 		},
 		Tailscale: TailscaleConfig{
-			Dir: "./state",
+			Dir: "./tailscale_state",
 		},
 		LabelProvider: "auto",
 	}
@@ -206,6 +206,7 @@ type ExperimentalConfig struct {
 }
 
 type TailscaleConfig struct {
+	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled"`
 	Dir       string `description:"Tailscale state directory." yaml:"dir"`
 	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
 	AuthKey   string `description:"Tailscale auth key." yaml:"authKey"`

@@ -27,6 +27,10 @@ type TailscaleService struct {
 }
 
 func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, wg *sync.WaitGroup) (*TailscaleService, error) {
+	if !config.Tailscale.Enabled {
+		return nil, nil
+	}
+
 	srv := new(tsnet.Server)
 
 	// node options
