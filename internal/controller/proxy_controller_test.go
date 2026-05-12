@@ -24,33 +24,6 @@ func TestProxyController(t *testing.T) {
 
 	cfg, runtime := test.CreateTestConfigs(t)
 
-	acls := map[string]model.App{
-		"app_path_allow": {
-			Config: model.AppConfig{
-				Domain: "path-allow.example.com",
-			},
-			Path: model.AppPath{
-				Allow: "/allowed",
-			},
-		},
-		"app_user_allow": {
-			Config: model.AppConfig{
-				Domain: "user-allow.example.com",
-			},
-			Users: model.AppUsers{
-				Allow: "testuser",
-			},
-		},
-		"ip_bypass": {
-			Config: model.AppConfig{
-				Domain: "ip-bypass.example.com",
-			},
-			IP: model.AppIP{
-				Bypass: []string{"10.10.10.10"},
-			},
-		},
-	}
-
 	const browserUserAgent = `
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
 
@@ -391,7 +364,7 @@ func TestProxyController(t *testing.T) {
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
 	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
-	aclsService := service.NewAccessControlsService(log, nil, acls)
+	aclsService := service.NewAccessControlsService(log, cfg, nil)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

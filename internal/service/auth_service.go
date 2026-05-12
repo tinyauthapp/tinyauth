@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +17,6 @@ import (
 
 	"slices"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
@@ -452,171 +450,6 @@ func (auth *AuthService) LocalAuthConfigured() bool {
 
 func (auth *AuthService) LDAPAuthConfigured() bool {
 	return auth.ldap != nil
-}
-
-func (auth *AuthService) IsUserAllowed(c *gin.Context, context model.UserContext, acls *model.App) bool {
-	if acls == nil {
-		return true
-	}
-
-	if context.Provider == model.ProviderOAuth {
-		auth.log.App.Debug().Msg("User is an OAuth user, checking OAuth whitelist")
-		return utils.CheckFilter(acls.OAuth.Whitelist, context.OAuth.Email)
-	}
-
-	if acls.Users.Block != "" {
-		auth.log.App.Debug().Msg("Checking users block list")
-		if utils.CheckFilter(acls.Users.Block, context.GetUsername()) {
-			return false
-		}
-	}
-
-	auth.log.App.Debug().Msg("Checking users allow list")
-	return utils.CheckFilter(acls.Users.Allow, context.GetUsername())
-}
-
-func (auth *AuthService) IsInOAuthGroup(c *gin.Context, context model.UserContext, acls *model.App) bool {
-	if acls == nil {
-		return true
-	}
-
-	if !context.IsOAuth() {
-		auth.log.App.Debug().Msg("User is not an OAuth user, skipping OAuth group check")
-		return false
-	}
-
-	if _, ok := model.OverrideProviders[context.OAuth.ID]; ok {
-		auth.log.App.Debug().Str("provider", context.OAuth.ID).Msg("Provider override detected, skipping group check")
-		return true
-	}
-
-	for _, userGroup := range context.OAuth.Groups {
-		if utils.CheckFilter(acls.OAuth.Groups, strings.TrimSpace(userGroup)) {
-			auth.log.App.Trace().Str("group", userGroup).Str("required", acls.OAuth.Groups).Msg("User group matched")
-			return true
-		}
-	}
-
-	auth.log.App.Debug().Msg("No groups matched")
-	return false
-}
-
-func (auth *AuthService) IsInLDAPGroup(c *gin.Context, context model.UserContext, acls *model.App) bool {
-	if acls == nil {
-		return true
-	}
-
-	if !context.IsLDAP() {
-		auth.log.App.Debug().Msg("User is not an LDAP user, skipping LDAP group check")
-		return false
-	}
-
-	for _, userGroup := range context.LDAP.Groups {
-		if utils.CheckFilter(acls.LDAP.Groups, strings.TrimSpace(userGroup)) {
-			auth.log.App.Trace().Str("group", userGroup).Str("required", acls.LDAP.Groups).Msg("User group matched")
-			return true
-		}
-	}
-
-	auth.log.App.Debug().Msg("No groups matched")
-	return false
-}
-
-func (auth *AuthService) IsAuthEnabled(uri string, acls *model.App) (bool, error) {
-	if acls == nil {
-		return true, nil
-	}
-
-	// Check for block list
-	if acls.Path.Block != "" {
-		regex, err := regexp.Compile(acls.Path.Block)
-
-		if err != nil {
-			return true, err
-		}
-
-		if !regex.MatchString(uri) {
-			return false, nil
-		}
-	}
-
-	// Check for allow list
-	if acls.Path.Allow != "" {
-		regex, err := regexp.Compile(acls.Path.Allow)
-
-		if err != nil {
-			return true, err
-		}
-
-		if regex.MatchString(uri) {
-			return false, nil
-		}
-	}
-
-	return true, nil
-}
-
-func (auth *AuthService) CheckIP(ip string, acls *model.App) bool {
-	if acls == nil {
-		return true
-	}
-
-	// Merge the global and app IP filter
-	blockedIps := append(auth.config.Auth.IP.Block, acls.IP.Block...)
-	allowedIPs := append(auth.config.Auth.IP.Allow, acls.IP.Allow...)
-
-	for _, blocked := range blockedIps {
-		res, err := utils.FilterIP(blocked, ip)
-		if err != nil {
-			auth.log.App.Warn().Err(err).Str("item", blocked).Msg("Invalid IP/CIDR in block list")
-			continue
-		}
-		if res {
-			auth.log.App.Debug().Str("ip", ip).Str("item", blocked).Msg("IP is in block list, denying access")
-			return false
-		}
-	}
-
-	for _, allowed := range allowedIPs {
-		res, err := utils.FilterIP(allowed, ip)
-		if err != nil {
-			auth.log.App.Warn().Err(err).Str("item", allowed).Msg("Invalid IP/CIDR in allow list")
-			continue
-		}
-		if res {
-			auth.log.App.Debug().Str("ip", ip).Str("item", allowed).Msg("IP is in allow list, allowing access")
-			return true
-		}
-	}
-
-	if len(allowedIPs) > 0 {
-		auth.log.App.Debug().Str("ip", ip).Msg("IP not in allow list, denying access")
-		return false
-	}
-
-	auth.log.App.Debug().Str("ip", ip).Msg("IP not in any block or allow list, allowing access by default")
-	return true
-}
-
-func (auth *AuthService) IsBypassedIP(ip string, acls *model.App) bool {
-	if acls == nil {
-		return false
-	}
-
-	for _, bypassed := range acls.IP.Bypass {
-		res, err := utils.FilterIP(bypassed, ip)
-		if err != nil {
-			auth.log.App.Warn().Err(err).Str("item", bypassed).Msg("Invalid IP/CIDR in bypass list")
-			continue
-		}
-		if res {
-			auth.log.App.Debug().Str("ip", ip).Str("item", bypassed).Msg("IP is in bypass list, skipping authentication")
-			return true
-		}
-	}
-
-	auth.log.App.Debug().Str("ip", ip).Msg("IP not in bypass list, proceeding with authentication")
-	return false
 }
 
 func (auth *AuthService) NewOAuthSession(serviceName string, params OAuthURLParams) (string, OAuthPendingSession, error) {

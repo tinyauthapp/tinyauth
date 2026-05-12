@@ -24,6 +24,9 @@ func NewDefaultConfiguration() *Config {
 			SessionMaxLifetime: 0,     // disabled
 			LoginTimeout:       300,   // 5 minutes
 			LoginMaxRetries:    3,
+			ACLS: ACLSConfig{
+				Policy: "allow",
+			},
 		},
 		UI: UIConfig{
 			Title:                 "Tinyauth",
@@ -114,6 +117,7 @@ type AuthConfig struct {
 	LoginTimeout       int                       `description:"Login timeout in seconds." yaml:"loginTimeout"`
 	LoginMaxRetries    int                       `description:"Maximum login retries." yaml:"loginMaxRetries"`
 	TrustedProxies     []string                  `description:"Comma-separated list of trusted proxy addresses." yaml:"trustedProxies"`
+	ACLS               ACLSConfig                `description:"ACLs configuration." yaml:"acls"`
 }
 
 type UserAttributes struct {
@@ -221,6 +225,10 @@ type OIDCClientConfig struct {
 	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile"`
 	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris"`
 	Name                string   `description:"Client name in UI." yaml:"name"`
+}
+
+type ACLSConfig struct {
+	Policy string `description:"ACL policy for allow-by-default or deny-by-defaut, available options are allow and deny default is allow." yaml:"policy"`
 }
 
 // ACLs

@@ -48,6 +48,32 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			Enabled: true,
 			Path:    filepath.Join(tempDir, "resources"),
 		},
+		Apps: map[string]model.App{
+			"app_path_allow": {
+				Config: model.AppConfig{
+					Domain: "path-allow.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "/allowed",
+				},
+			},
+			"app_user_allow": {
+				Config: model.AppConfig{
+					Domain: "user-allow.example.com",
+				},
+				Users: model.AppUsers{
+					Allow: "testuser",
+				},
+			},
+			"ip_bypass": {
+				Config: model.AppConfig{
+					Domain: "ip-bypass.example.com",
+				},
+				IP: model.AppIP{
+					Bypass: []string{"10.10.10.10"},
+				},
+			},
+		},
 	}
 
 	passwd, err := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)

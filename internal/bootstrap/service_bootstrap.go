@@ -45,7 +45,7 @@ func (app *BootstrapApp) setupServices() error {
 		labelProvider = dockerService
 	}
 
-	accessControlsService := service.NewAccessControlsService(app.log, &labelProvider, app.config.Apps)
+	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
 	app.services.accessControlService = accessControlsService
 
 	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)

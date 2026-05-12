@@ -101,7 +101,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 
-	if controller.auth.IsBypassedIP(clientIP, acls) {
+	if controller.acls.IsIPBypassed(clientIP, acls) {
 		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -110,13 +110,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, acls)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to determine if authentication is enabled for resource")
-		controller.handleError(c, proxyCtx)
-		return
-	}
+	authEnabled := controller.acls.IsAuthEnabled(proxyCtx.Path, acls)
 
 	if !authEnabled {
 		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
@@ -128,7 +122,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.CheckIP(clientIP, acls) {
+	if !controller.acls.IsIPAllowed(clientIP, acls) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
 			IP:       clientIP,
@@ -165,7 +159,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	}
 
 	if userContext.Authenticated {
-		userAllowed := controller.auth.IsUserAllowed(c, *userContext, acls)
+		userAllowed := controller.acls.IsUserAllowed(*userContext, acls)
 
 		if !userAllowed {
 			controller.log.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User is not allowed to access resource")
@@ -205,9 +199,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			var groupOK bool
 
 			if userContext.IsOAuth() {
-				groupOK = controller.auth.IsInOAuthGroup(c, *userContext, acls)
+				groupOK = controller.acls.IsInOAuthGroup(*userContext, acls)
 			} else {
-				groupOK = controller.auth.IsInLDAPGroup(c, *userContext, acls)
+				groupOK = controller.acls.IsInLDAPGroup(*userContext, acls)
 			}
 
 			if !groupOK {
