@@ -13,17 +13,17 @@ type AccessControlPolicy string
 
 const (
 	PolicyAllow AccessControlPolicy = "allow"
-	PolicyBlock AccessControlPolicy = "block"
+	PolicyDeny  AccessControlPolicy = "deny"
 )
 
 func accessControlPolicyFromString(s string) (AccessControlPolicy, bool) {
 	switch strings.ToLower(s) {
 	case "allow":
 		return PolicyAllow, true
-	case "block":
-		return PolicyBlock, true
+	case "deny":
+		return PolicyDeny, true
 	default:
-		return "", false
+		return PolicyAllow, false
 	}
 }
 
@@ -49,17 +49,16 @@ func NewAccessControlsService(
 		labelProvider: labelProvider,
 	}
 
-	policy, ok := accessControlPolicyFromString(config.Auth.ACLS.Policy)
+	policy, ok := accessControlPolicyFromString(config.Auth.ACLs.Policy)
 
 	if !ok {
-		log.App.Warn().Str("policy", config.Auth.ACLS.Policy).Msg("Invalid ACL policy in config, defaulting to 'allow'")
-		service.policy = PolicyAllow
+		log.App.Warn().Str("policy", config.Auth.ACLs.Policy).Msg("Invalid ACL policy in config, defaulting to 'allow'")
 	}
 
 	if policy == PolicyAllow {
 		log.App.Debug().Msg("Using 'allow' ACL policy: access to apps will be allowed by default unless explicitly blocked")
 	} else {
-		log.App.Debug().Msg("Using 'block' ACL policy: access to apps will be blocked by default unless explicitly allowed")
+		log.App.Debug().Msg("Using 'deny' ACL policy: access to apps will be blocked by default unless explicitly allowed")
 	}
 
 	service.policy = policy
@@ -121,7 +120,7 @@ func (service *AccessControlsService) IsUserAllowed(context model.UserContext, a
 	}
 
 	service.log.App.Debug().Msg("Checking users allow list")
-	return utils.CheckFilter(acls.Users.Allow, context.GetUsername())
+	return service.policyResult(utils.CheckFilter(acls.Users.Allow, context.GetUsername()))
 }
 
 func (service *AccessControlsService) IsInOAuthGroup(context model.UserContext, acls *model.App) bool {
@@ -211,8 +210,8 @@ func (service *AccessControlsService) IsIPAllowed(ip string, acls *model.App) bo
 	}
 
 	// Merge the global and app IP filter
-	blockedIps := append(service.config.Auth.IP.Block, acls.IP.Block...)
-	allowedIPs := append(service.config.Auth.IP.Allow, acls.IP.Allow...)
+	blockedIps := append(acls.IP.Block, service.config.Auth.IP.Block...)
+	allowedIPs := append(acls.IP.Allow, service.config.Auth.IP.Allow...)
 
 	for _, blocked := range blockedIps {
 		res, err := utils.FilterIP(blocked, ip)

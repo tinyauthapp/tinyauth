@@ -40,6 +40,9 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			SessionExpiry:   10,
 			LoginTimeout:    10,
 			LoginMaxRetries: 3,
+			ACLs: model.ACLsConfig{
+				Policy: "allow",
+			},
 		},
 		Database: model.DatabaseConfig{
 			Path: filepath.Join(tempDir, "test.db"),
