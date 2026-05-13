@@ -296,6 +296,11 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 	if !ok {
 		return errors.New("access_denied")
 	}
+	
+	// Redirect URI to verify that it's trusted
+	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
+		return errors.New("invalid_request_uri")
+	}
 
 	// Scopes
 	scopes := strings.Split(req.Scope, " ")
@@ -316,11 +321,6 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 	// Response type
 	if !slices.Contains(SupportedResponseTypes, req.ResponseType) {
 		return errors.New("unsupported_response_type")
-	}
-
-	// Redirect URI
-	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
-		return errors.New("invalid_request_uri")
 	}
 
 	// PKCE code challenge method if set
