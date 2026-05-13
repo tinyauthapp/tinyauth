@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-It is recommended to use the [latest](https://github.com/tinyauthapp/tinyauth/releases/latest) available version of tinyauth. This is because it includes security fixes, new features and dependency updates. Older versions, especially major ones, are not supported and won't receive security or patch updates.
+It is recommended to use the [latest](https://github.com/tinyauthapp/tinyauth/releases/latest) available version of Tinyauth. This is because it includes security fixes, new features and dependency updates. Older versions, especially major ones, are not supported and won't receive security or patch updates.
 
 ## Reporting a Vulnerability
 
@@ -10,7 +10,7 @@ Please **do not** report security vulnerabilities through public GitHub issues, 
 
 Instead, report them privately using [GitHub's Private Vulnerability Reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) via the **Security** tab of this repository.
 
-Or send me an email at <security@tinyauth.app>.
+Or send us an email at <security@tinyauth.app>.
 
 ### A note on AI-assisted reports
 
