@@ -19,40 +19,25 @@ func NewStore(q *Queries) repository.Store {
 	return &Store{q: q}
 }
 
-var errMap = []struct {
-	from error
-	to   error
-}{
-	{sql.ErrNoRows, repository.ErrNotFound},
+var errorMap = map[error]error{
+	sql.ErrNoRows: repository.ErrNotFound,
 }
 
 func mapErr(err error) error {
-	for _, e := range errMap {
-		if errors.Is(err, e.from) {
-			return e.to
+	for from, to := range errorMap {
+		if errors.Is(err, from) {
+			return to
 		}
 	}
 	return err
 }
 
-func oidcCodeToRepo(v OidcCode) repository.OidcCode {
-	return repository.OidcCode(v)
-}
-func oidcTokenToRepo(v OidcToken) repository.OidcToken {
-	return repository.OidcToken(v)
-}
-func oidcUserinfoToRepo(v OidcUserinfo) repository.OidcUserinfo {
-	return repository.OidcUserinfo(v)
-}
-func sessionToRepo(v Session) repository.Session {
-	return repository.Session(v)
-}
 func (s *Store) CreateOidcCode(ctx context.Context, arg repository.CreateOidcCodeParams) (repository.OidcCode, error) {
 	r, err := s.q.CreateOidcCode(ctx, CreateOidcCodeParams(arg))
 	if err != nil {
 		return repository.OidcCode{}, mapErr(err)
 	}
-	return oidcCodeToRepo(r), nil
+	return repository.OidcCode(r), nil
 }
 
 func (s *Store) CreateOidcToken(ctx context.Context, arg repository.CreateOidcTokenParams) (repository.OidcToken, error) {
@@ -60,7 +45,7 @@ func (s *Store) CreateOidcToken(ctx context.Context, arg repository.CreateOidcTo
 	if err != nil {
 		return repository.OidcToken{}, mapErr(err)
 	}
-	return oidcTokenToRepo(r), nil
+	return repository.OidcToken(r), nil
 }
 
 func (s *Store) CreateOidcUserInfo(ctx context.Context, arg repository.CreateOidcUserInfoParams) (repository.OidcUserinfo, error) {
@@ -68,7 +53,7 @@ func (s *Store) CreateOidcUserInfo(ctx context.Context, arg repository.CreateOid
 	if err != nil {
 		return repository.OidcUserinfo{}, mapErr(err)
 	}
-	return oidcUserinfoToRepo(r), nil
+	return repository.OidcUserinfo(r), nil
 }
 
 func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
@@ -76,7 +61,7 @@ func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionP
 	if err != nil {
 		return repository.Session{}, mapErr(err)
 	}
-	return sessionToRepo(r), nil
+	return repository.Session(r), nil
 }
 
 func (s *Store) DeleteExpiredOidcCodes(ctx context.Context, expiresAt int64) ([]repository.OidcCode, error) {
@@ -86,7 +71,7 @@ func (s *Store) DeleteExpiredOidcCodes(ctx context.Context, expiresAt int64) ([]
 	}
 	out := make([]repository.OidcCode, len(rows))
 	for i, row := range rows {
-		out[i] = oidcCodeToRepo(row)
+		out[i] = repository.OidcCode(row)
 	}
 	return out, nil
 }
@@ -98,7 +83,7 @@ func (s *Store) DeleteExpiredOidcTokens(ctx context.Context, arg repository.Dele
 	}
 	out := make([]repository.OidcToken, len(rows))
 	for i, row := range rows {
-		out[i] = oidcTokenToRepo(row)
+		out[i] = repository.OidcToken(row)
 	}
 	return out, nil
 }
@@ -140,7 +125,7 @@ func (s *Store) GetOidcCode(ctx context.Context, codeHash string) (repository.Oi
 	if err != nil {
 		return repository.OidcCode{}, mapErr(err)
 	}
-	return oidcCodeToRepo(r), nil
+	return repository.OidcCode(r), nil
 }
 
 func (s *Store) GetOidcCodeBySub(ctx context.Context, sub string) (repository.OidcCode, error) {
@@ -148,7 +133,7 @@ func (s *Store) GetOidcCodeBySub(ctx context.Context, sub string) (repository.Oi
 	if err != nil {
 		return repository.OidcCode{}, mapErr(err)
 	}
-	return oidcCodeToRepo(r), nil
+	return repository.OidcCode(r), nil
 }
 
 func (s *Store) GetOidcCodeBySubUnsafe(ctx context.Context, sub string) (repository.OidcCode, error) {
@@ -156,7 +141,7 @@ func (s *Store) GetOidcCodeBySubUnsafe(ctx context.Context, sub string) (reposit
 	if err != nil {
 		return repository.OidcCode{}, mapErr(err)
 	}
-	return oidcCodeToRepo(r), nil
+	return repository.OidcCode(r), nil
 }
 
 func (s *Store) GetOidcCodeUnsafe(ctx context.Context, codeHash string) (repository.OidcCode, error) {
@@ -164,7 +149,7 @@ func (s *Store) GetOidcCodeUnsafe(ctx context.Context, codeHash string) (reposit
 	if err != nil {
 		return repository.OidcCode{}, mapErr(err)
 	}
-	return oidcCodeToRepo(r), nil
+	return repository.OidcCode(r), nil
 }
 
 func (s *Store) GetOidcToken(ctx context.Context, accessTokenHash string) (repository.OidcToken, error) {
@@ -172,7 +157,7 @@ func (s *Store) GetOidcToken(ctx context.Context, accessTokenHash string) (repos
 	if err != nil {
 		return repository.OidcToken{}, mapErr(err)
 	}
-	return oidcTokenToRepo(r), nil
+	return repository.OidcToken(r), nil
 }
 
 func (s *Store) GetOidcTokenByRefreshToken(ctx context.Context, refreshTokenHash string) (repository.OidcToken, error) {
@@ -180,7 +165,7 @@ func (s *Store) GetOidcTokenByRefreshToken(ctx context.Context, refreshTokenHash
 	if err != nil {
 		return repository.OidcToken{}, mapErr(err)
 	}
-	return oidcTokenToRepo(r), nil
+	return repository.OidcToken(r), nil
 }
 
 func (s *Store) GetOidcTokenBySub(ctx context.Context, sub string) (repository.OidcToken, error) {
@@ -188,7 +173,7 @@ func (s *Store) GetOidcTokenBySub(ctx context.Context, sub string) (repository.O
 	if err != nil {
 		return repository.OidcToken{}, mapErr(err)
 	}
-	return oidcTokenToRepo(r), nil
+	return repository.OidcToken(r), nil
 }
 
 func (s *Store) GetOidcUserInfo(ctx context.Context, sub string) (repository.OidcUserinfo, error) {
@@ -196,7 +181,7 @@ func (s *Store) GetOidcUserInfo(ctx context.Context, sub string) (repository.Oid
 	if err != nil {
 		return repository.OidcUserinfo{}, mapErr(err)
 	}
-	return oidcUserinfoToRepo(r), nil
+	return repository.OidcUserinfo(r), nil
 }
 
 func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session, error) {
@@ -204,7 +189,7 @@ func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session
 	if err != nil {
 		return repository.Session{}, mapErr(err)
 	}
-	return sessionToRepo(r), nil
+	return repository.Session(r), nil
 }
 
 func (s *Store) UpdateOidcTokenByRefreshToken(ctx context.Context, arg repository.UpdateOidcTokenByRefreshTokenParams) (repository.OidcToken, error) {
@@ -212,7 +197,7 @@ func (s *Store) UpdateOidcTokenByRefreshToken(ctx context.Context, arg repositor
 	if err != nil {
 		return repository.OidcToken{}, mapErr(err)
 	}
-	return oidcTokenToRepo(r), nil
+	return repository.OidcToken(r), nil
 }
 
 func (s *Store) UpdateSession(ctx context.Context, arg repository.UpdateSessionParams) (repository.Session, error) {
@@ -220,5 +205,5 @@ func (s *Store) UpdateSession(ctx context.Context, arg repository.UpdateSessionP
 	if err != nil {
 		return repository.Session{}, mapErr(err)
 	}
-	return sessionToRepo(r), nil
+	return repository.Session(r), nil
 }

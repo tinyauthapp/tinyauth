@@ -32,6 +32,7 @@ import (
 var storeSrc string
 
 func main() {
+	fmt.Println("sqlc-wrapper: generating store.go files for sqlc driver packages...")
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}
@@ -88,13 +89,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	models, _ := collectTypes(driverTypePkg)
 
 	src, err := render(tmplData{
-		PkgName:    driverTypePkg.Name(),
-		RepoPkg:    repoPkgPath,
-		ModelTypes: models,
-		Methods:    renderMethods(methods),
+		PkgName: driverTypePkg.Name(),
+		RepoPkg: repoPkgPath,
+		Methods: renderMethods(methods),
 	})
 	if err != nil {
 		return fmt.Errorf("render: %w", err)
@@ -260,19 +259,6 @@ func compareStructs(name string, driver, repo *types.Struct) error {
 	return nil
 }
 
-// collectTypes returns model and params struct names from the driver package.
-func collectTypes(pkg *types.Package) (models []string, params []string) {
-	names, _ := scopeStructs(pkg)
-	for _, name := range names {
-		if strings.HasSuffix(name, "Params") {
-			params = append(params, name)
-		} else {
-			models = append(models, name)
-		}
-	}
-	return
-}
-
 type methodInfo struct {
 	Name    string
 	Params  []paramInfo
@@ -369,14 +355,6 @@ func repoName(t types.Type, driverPath string) string {
 	return ""
 }
 
-// converterFn maps a type name to its converter function name: "Session" → "sessionToRepo".
-func converterFn(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToLower(s[:1]) + s[1:] + "ToRepo"
-}
-
 // renderedMethod holds pre-built signature and body strings passed to the template.
 type renderedMethod struct {
 	Signature string
@@ -441,35 +419,11 @@ func callArgs(m methodInfo) string {
 	return "ctx, " + strings.Join(args, ", ")
 }
 
-// bodyTemplates holds the per-shape method body templates, parsed once at init.
-var bodyTemplates = template.Must(
-	template.New("bodies").Parse(`
-{{define "void"}}	return mapErr({{.Call}})
-{{end}}
-
-{{define "scalar"}}	r, err := {{.Call}}
-	if err != nil {
-		return {{.RepoType}}{}, mapErr(err)
-	}
-	return {{.Converter}}(r), nil
-{{end}}
-
-{{define "slice"}}	rows, err := {{.Call}}
-	if err != nil {
-		return nil, mapErr(err)
-	}
-	out := make([]{{.RepoType}}, len(rows))
-	for i, row := range rows {
-		out[i] = {{.Converter}}(row)
-	}
-	return out, nil
-{{end}}`),
-)
+var bodyTmpl = template.Must(template.New("store").Parse(storeSrc))
 
 type bodyData struct {
-	Call      string
-	RepoType  string
-	Converter string
+	Call     string
+	RepoType string
 }
 
 func buildBody(m methodInfo) string {
@@ -486,36 +440,28 @@ func buildBody(m methodInfo) string {
 		data = bodyData{Call: call}
 	case m.Results[0].IsSlice:
 		name = "slice"
-		data = bodyData{Call: call, RepoType: m.Results[0].RepoType, Converter: converterFn(m.Results[0].TypeStr)}
+		data = bodyData{Call: call, RepoType: m.Results[0].RepoType}
 	default:
 		name = "scalar"
-		data = bodyData{Call: call, RepoType: m.Results[0].RepoType, Converter: converterFn(m.Results[0].TypeStr)}
+		data = bodyData{Call: call, RepoType: m.Results[0].RepoType}
 	}
 
 	var buf bytes.Buffer
-	if err := bodyTemplates.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := bodyTmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		panic(fmt.Sprintf("buildBody %s: %v", name, err))
 	}
 	return buf.String()
 }
 
 type tmplData struct {
-	PkgName    string
-	RepoPkg    string
-	ModelTypes []string
-	Methods    []renderedMethod
+	PkgName string
+	RepoPkg string
+	Methods []renderedMethod
 }
 
 func render(data tmplData) ([]byte, error) {
-	t, err := template.New("store").Funcs(template.FuncMap{
-		"converterFn": converterFn,
-	}).Parse(storeSrc)
-	if err != nil {
-		return nil, fmt.Errorf("parse template: %w", err)
-	}
-
 	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
+	if err := bodyTmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
