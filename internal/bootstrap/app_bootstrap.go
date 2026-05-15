@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -173,7 +174,9 @@ func (app *BootstrapApp) Setup() error {
 	defer func() {
 		app.cancel()
 		app.wg.Wait()
-		app.db.Close()
+		if app.db != nil {
+			app.db.Close()
+		}
 	}()
 
 	// store
