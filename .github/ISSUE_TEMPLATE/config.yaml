@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Tinyauth Community Support on Discord
+    url: https://discord.gg/eHzVaCzRRd
+    about: Please ask and answer questions here.
+  - name: Tinyauth Documentation
+    url: https://tinyauth.app/docs/getting-started/
+    about: Please check the documentation here.
