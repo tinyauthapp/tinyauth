@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: "bun"
+  - package-ecosystem: "npm"
     directory: "/frontend"
     groups:
       minor-patch:
