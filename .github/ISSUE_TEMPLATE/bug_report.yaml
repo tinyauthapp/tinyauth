@@ -1,5 +1,5 @@
 name: Bug Report
-description: Create a report to help us improve Lingarr
+description: Create a report to help us improve this project
 title: "[BUG]"
 labels: bug
 assignees:
@@ -59,26 +59,26 @@ body:
 - type: input
   id: os
   attributes:
-      label: Operating System
-      placeholder: "e.g. iOS, android, windows, linux, etc"
+    label: Operating System
+    placeholder: "e.g. iOS, android, windows, linux, etc"
 
 - type: input
   id: browser
   attributes:
-      label: Browser
-      placeholder: "e.g. chrome, firefox, safari, edge, etc"
+    label: Browser
+    placeholder: "e.g. chrome, firefox, safari, edge, etc"
 
 - type: input
   id: tinyauth
   attributes:
-      label: Tinyauth Version
-      placeholder: "e.g. v5.0.0"
+    label: Tinyauth Version
+    placeholder: "e.g. v5.0.0"
 
 - type: input
   id: docker
   attributes:
-      label: Docker Version (if applicable)
-      placeholder: "e.g. 27.3.1"
+    label: Docker Version (if applicable)
+    placeholder: "e.g. 27.3.1"
 
 - type: checkboxes
   id: not-llm
