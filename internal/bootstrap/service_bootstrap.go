@@ -16,33 +16,10 @@ func (app *BootstrapApp) setupServices() error {
 
 	app.services.ldapService = ldapService
 
-	useKubernetes := app.config.LabelProvider == "kubernetes" ||
-		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
+	labelProvider, err := app.getLabelProvider()
 
-	var labelProvider service.LabelProvider
-
-	if useKubernetes {
-		app.log.App.Debug().Msg("Using Kubernetes label provider")
-
-		kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
-
-		if err != nil {
-			return fmt.Errorf("failed to initialize kubernetes service: %w", err)
-		}
-
-		app.services.kubernetesService = kubernetesService
-		labelProvider = kubernetesService
-	} else {
-		app.log.App.Debug().Msg("Using Docker label provider")
-
-		dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
-
-		if err != nil {
-			return fmt.Errorf("failed to initialize docker service: %w", err)
-		}
-
-		app.services.dockerService = dockerService
-		labelProvider = dockerService
+	if err != nil {
+		return fmt.Errorf("failed to initialize label provider: %w", err)
 	}
 
 	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
@@ -63,4 +40,37 @@ func (app *BootstrapApp) setupServices() error {
 	app.services.oidcService = oidcService
 
 	return nil
+}
+
+func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
+	if app.config.LabelProvider == "none" {
+		return nil, nil
+	}
+
+	useKubernetes := app.config.LabelProvider == "kubernetes" ||
+		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
+
+	if useKubernetes {
+		app.log.App.Debug().Msg("Using Kubernetes label provider")
+
+		kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
+		}
+
+		app.services.kubernetesService = kubernetesService
+		return kubernetesService, nil
+	}
+
+	app.log.App.Debug().Msg("Using Docker label provider")
+
+	dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize docker service: %w", err)
+	}
+
+	app.services.dockerService = dockerService
+	return dockerService, nil
 }

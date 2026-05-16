@@ -81,7 +81,7 @@ type Config struct {
 	UI            UIConfig           `description:"UI customization." yaml:"ui"`
 	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
-	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, or kubernetes). auto detects the environment." yaml:"labelProvider"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 }
 
