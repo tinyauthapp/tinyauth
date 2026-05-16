@@ -606,45 +606,48 @@ func (auth *AuthService) ensureOAuthSessionLimit() {
 	auth.oauthMutex.Lock()
 	defer auth.oauthMutex.Unlock()
 
-	if len(auth.oauthPendingSessions) >= MaxOAuthPendingSessions {
+	if len(auth.oauthPendingSessions) <= MaxOAuthPendingSessions {
+		return
+	}
 
-		cleanupIds := make([]string, 0, OAuthCleanupCount)
+	type entry struct {
+		id        string
+		expiresAt int64
+	}
 
-		for range OAuthCleanupCount {
-			oldestId := ""
-			oldestTime := int64(0)
+	entries := make([]entry, 0, len(auth.oauthPendingSessions))
+	for id, session := range auth.oauthPendingSessions {
+		entries = append(entries, entry{id, session.ExpiresAt.Unix()})
+	}
 
-			for id, session := range auth.oauthPendingSessions {
-				if oldestTime == 0 {
-					oldestId = id
-					oldestTime = session.ExpiresAt.Unix()
-					continue
-				}
-				if slices.Contains(cleanupIds, id) {
-					continue
-				}
-				if session.ExpiresAt.Unix() < oldestTime {
-					oldestId = id
-					oldestTime = session.ExpiresAt.Unix()
-				}
-			}
-
-			cleanupIds = append(cleanupIds, oldestId)
+	slices.SortFunc(entries, func(a, b entry) int {
+		if a.expiresAt < b.expiresAt {
+			return -1
 		}
-
-		for _, id := range cleanupIds {
-			delete(auth.oauthPendingSessions, id)
+		if a.expiresAt > b.expiresAt {
+			return 1
 		}
+		return 0
+	})
+
+	for _, e := range entries[:OAuthCleanupCount] {
+		delete(auth.oauthPendingSessions, e.id)
 	}
 }
 
 func (auth *AuthService) lockdownMode() {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	auth.lockdownCtx = ctx
-	auth.lockdownCancelFunc = cancel
 
 	auth.loginMutex.Lock()
+
+	if auth.lockdown != nil && auth.lockdown.Active {
+		auth.loginMutex.Unlock()
+		cancel()
+		return
+	}
+
+	auth.lockdownCtx = ctx
+	auth.lockdownCancelFunc = cancel
 
 	auth.log.App.Warn().Msg("Too many failed login attempts, entering lockdown mode")
 
@@ -658,9 +661,11 @@ func (auth *AuthService) lockdownMode() {
 	auth.loginAttempts = make(map[string]*LoginAttempt)
 
 	timer := time.NewTimer(time.Until(auth.lockdown.ActiveUntil))
-	defer timer.Stop()
 
 	auth.loginMutex.Unlock()
+
+	defer cancel()
+	defer timer.Stop()
 
 	select {
 	case <-timer.C:

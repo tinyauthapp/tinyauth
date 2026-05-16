@@ -26,6 +26,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string, ctx context.Con
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: config.Insecure,
+				MinVersion:         tls.VersionTLS12,
 			},
 		},
 	}

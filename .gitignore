@@ -48,3 +48,6 @@ __debug_*
 
 # testing config
 config.certify.yml
+
+# deepsec
+/.deepsec

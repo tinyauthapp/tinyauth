@@ -32,7 +32,7 @@ func (controller *ResourcesController) resourcesHandler(c *gin.Context) {
 	if controller.config.Resources.Path == "" {
 		c.JSON(404, gin.H{
 			"status":  404,
-			"message": "Resources not found",
+			"message": "Resource not found",
 		})
 		return
 	}

@@ -121,7 +121,7 @@ type OIDCService struct {
 
 	clients    map[string]model.OIDCClientConfig
 	privateKey *rsa.PrivateKey
-	publicKey  crypto.PublicKey
+	publicKey  *rsa.PublicKey
 	issuer     string
 }
 
@@ -239,6 +239,16 @@ func NewOIDCService(
 		}
 	}
 
+	rPublicKey, ok := publicKey.(*rsa.PublicKey)
+
+	if !ok {
+		return nil, fmt.Errorf("public key is not an rsa public key")
+	}
+
+	if rPublicKey.N.Cmp(privateKey.N) != 0 || rPublicKey.E != privateKey.E {
+		return nil, fmt.Errorf("public key does not pair with private key")
+	}
+
 	// We will reorganize the client into a map with the client ID as the key
 	clients := make(map[string]model.OIDCClientConfig)
 
@@ -271,7 +281,7 @@ func NewOIDCService(
 
 		clients:    clients,
 		privateKey: privateKey,
-		publicKey:  publicKey,
+		publicKey:  rPublicKey,
 		issuer:     issuer,
 	}
 
@@ -297,6 +307,11 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 		return errors.New("access_denied")
 	}
 
+	// Redirect URI to verify that it's trusted
+	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
+		return errors.New("invalid_request_uri")
+	}
+
 	// Scopes
 	scopes := strings.Split(req.Scope, " ")
 
@@ -316,11 +331,6 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 	// Response type
 	if !slices.Contains(SupportedResponseTypes, req.ResponseType) {
 		return errors.New("unsupported_response_type")
-	}
-
-	// Redirect URI
-	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
-		return errors.New("invalid_request_uri")
 	}
 
 	// PKCE code challenge method if set
@@ -455,7 +465,7 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 
 	hasher := sha256.New()
 
-	der := x509.MarshalPKCS1PublicKey(&service.privateKey.PublicKey)
+	der := x509.MarshalPKCS1PublicKey(service.publicKey)
 
 	if der == nil {
 		return "", errors.New("failed to marshal public key")
@@ -813,7 +823,7 @@ func (service *OIDCService) cleanupRoutine() {
 func (service *OIDCService) GetJWK() ([]byte, error) {
 	hasher := sha256.New()
 
-	der := x509.MarshalPKCS1PublicKey(&service.privateKey.PublicKey)
+	der := x509.MarshalPKCS1PublicKey(service.publicKey)
 
 	if der == nil {
 		return nil, errors.New("failed to marshal public key")
@@ -822,13 +832,13 @@ func (service *OIDCService) GetJWK() ([]byte, error) {
 	hasher.Write(der)
 
 	jwk := jose.JSONWebKey{
-		Key:       service.privateKey,
+		Key:       service.publicKey,
 		Algorithm: string(jose.RS256),
 		Use:       "sig",
 		KeyID:     base64.URLEncoding.EncodeToString(hasher.Sum(nil)),
 	}
 
-	return jwk.Public().MarshalJSON()
+	return jwk.MarshalJSON()
 }
 
 func (service *OIDCService) ValidatePKCE(codeChallenge string, codeVerifier string) bool {

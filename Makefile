@@ -17,7 +17,7 @@ PROD_COMPOSE := $(shell test -f "docker-compose.test.prod.yml" && echo "docker-c
 
 # Deps
 deps:
-	bun install --frozen-lockfile --cwd frontend
+	cd frontend && pnpm ci
 	go mod download
 
 # Clean data
@@ -31,7 +31,7 @@ clean-webui:
 
 # Build the web UI
 webui: clean-webui
-	bun run --cwd frontend build
+	cd frontend && pnpm run build
 	cp -r frontend/dist internal/assets
 
 # Build the binary

@@ -1,6 +1,0 @@
-# Ignore artifacts:
-dist
-node_modules
-bun.lock
-package.json
-src/lib/i18n/locales
