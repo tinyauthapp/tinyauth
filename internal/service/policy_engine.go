@@ -68,8 +68,8 @@ func (engine *PolicyEngine) evaluateRuleByName(name RuleName, ctx *ACLContext) E
 	rule, exists := engine.rules[name]
 
 	if !exists {
-		engine.log.App.Warn().Str("rule", string(name)).Msg("Rule not found in policy engine, defaulting to abstain")
-		return EffectAbstain
+		engine.log.App.Warn().Str("rule", string(name)).Msg("Rule not found in policy engine, defaulting to deny")
+		return EffectDeny
 	}
 
 	return rule.Evaluate(ctx)

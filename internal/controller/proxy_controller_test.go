@@ -368,6 +368,26 @@ func TestProxyController(t *testing.T) {
 	policyEngine, err := service.NewPolicyEngine(cfg, log)
 	require.NoError(t, err)
 
+	policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleOAuthGroup, &service.OAuthGroupRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleLDAPGroup, &service.LDAPGroupRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleAuthEnabled, &service.AuthEnabledRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleIPAllowed, &service.IPAllowedRule{
+		Log:    log,
+		Config: cfg,
+	})
+	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
+		Log: log,
+	})
+
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			router := gin.Default()
