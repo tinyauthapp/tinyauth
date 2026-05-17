@@ -402,16 +402,10 @@ func TestMemoryStore(t *testing.T) {
 		{
 			description: "Delete expired OIDC tokens",
 			run: func(t *testing.T, s repository.Store) {
-				// expired by TokenExpiresAt
+				// both expiries past
 				_, err := s.CreateOidcToken(ctx, repository.CreateOidcTokenParams{
 					Sub: "sub-1", AccessTokenHash: "at-1",
-					TokenExpiresAt: 10, RefreshTokenExpiresAt: 100,
-				})
-				require.NoError(t, err)
-				// expired by RefreshTokenExpiresAt
-				_, err = s.CreateOidcToken(ctx, repository.CreateOidcTokenParams{
-					Sub: "sub-2", AccessTokenHash: "at-2",
-					TokenExpiresAt: 100, RefreshTokenExpiresAt: 10,
+					TokenExpiresAt: 10, RefreshTokenExpiresAt: 10,
 				})
 				require.NoError(t, err)
 				// valid
@@ -426,7 +420,7 @@ func TestMemoryStore(t *testing.T) {
 					RefreshTokenExpiresAt: 50,
 				})
 				require.NoError(t, err)
-				assert.Len(t, deleted, 2)
+				assert.Len(t, deleted, 1)
 
 				_, err = s.GetOidcToken(ctx, "at-3")
 				assert.NoError(t, err)

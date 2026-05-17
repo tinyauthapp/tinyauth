@@ -207,7 +207,7 @@ func (s *Store) DeleteExpiredOidcTokens(_ context.Context, arg repository.Delete
 	defer s.mu.Unlock()
 	var deleted []repository.OidcToken
 	for k, t := range s.oidcTokens {
-		if t.TokenExpiresAt < arg.TokenExpiresAt || t.RefreshTokenExpiresAt < arg.RefreshTokenExpiresAt {
+		if t.TokenExpiresAt < arg.TokenExpiresAt && t.RefreshTokenExpiresAt < arg.RefreshTokenExpiresAt {
 			deleted = append(deleted, t)
 			delete(s.oidcTokens, k)
 		}
