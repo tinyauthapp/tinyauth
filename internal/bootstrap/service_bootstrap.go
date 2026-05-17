@@ -25,6 +25,12 @@ func (app *BootstrapApp) setupServices() error {
 	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
 	app.services.accessControlService = accessControlsService
 
+	err = app.setupPolicyEngine()
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize policy engine: %w", err)
+	}
+
 	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
 	app.services.oauthBrokerService = oauthBrokerService
 
@@ -73,4 +79,35 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 
 	app.services.dockerService = dockerService
 	return dockerService, nil
+}
+
+func (app *BootstrapApp) setupPolicyEngine() error {
+	policyEngine, err := service.NewPolicyEngine(app.config, app.log)
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize policy engine: %w", err)
+	}
+
+	policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
+		Log: app.log,
+	})
+	policyEngine.RegisterRule(service.RuleOAuthGroup, &service.OAuthGroupRule{
+		Log: app.log,
+	})
+	policyEngine.RegisterRule(service.RuleLDAPGroup, &service.LDAPGroupRule{
+		Log: app.log,
+	})
+	policyEngine.RegisterRule(service.RuleAuthEnabled, &service.AuthEnabledRule{
+		Log: app.log,
+	})
+	policyEngine.RegisterRule(service.RuleIPAllowed, &service.IPAllowedRule{
+		Log:    app.log,
+		Config: app.config,
+	})
+	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
+		Log: app.log,
+	})
+
+	app.services.policyEngine = policyEngine
+	return nil
 }

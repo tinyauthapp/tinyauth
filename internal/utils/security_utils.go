@@ -3,7 +3,7 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
+	"fmt"
 	"net"
 	"regexp"
 	"strings"
@@ -46,26 +46,27 @@ func EncodeBasicAuth(username string, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func FilterIP(filter string, ip string) (bool, error) {
+func CheckIPFilter(filter string, ip string) (bool, error) {
 	ipAddr := net.ParseIP(ip)
 
 	if ipAddr == nil {
-		return false, errors.New("invalid IP address")
+		return false, fmt.Errorf("invalid ip address")
 	}
 
-	filter = strings.Replace(filter, "-", "/", -1)
+	filter = strings.ReplaceAll(filter, "-", "/")
 
 	if strings.Contains(filter, "/") {
 		_, cidr, err := net.ParseCIDR(filter)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("invalid cidr notation: %w", err)
 		}
 		return cidr.Contains(ipAddr), nil
 	}
 
 	ipFilter := net.ParseIP(filter)
+
 	if ipFilter == nil {
-		return false, errors.New("invalid IP address in filter")
+		return false, fmt.Errorf("invalid ip address")
 	}
 
 	if ipFilter.Equal(ipAddr) {
@@ -75,31 +76,29 @@ func FilterIP(filter string, ip string) (bool, error) {
 	return false, nil
 }
 
-func CheckFilter(filter string, str string) bool {
+func CheckFilter(filter string, input string) (bool, error) {
 	if len(strings.TrimSpace(filter)) == 0 {
-		return true
+		return false, fmt.Errorf("filter is empty")
 	}
 
 	if strings.HasPrefix(filter, "/") && strings.HasSuffix(filter, "/") {
 		re, err := regexp.Compile(filter[1 : len(filter)-1])
 		if err != nil {
-			return false
+			return false, fmt.Errorf("invalid regex filter: %w", err)
 		}
 
-		if re.MatchString(strings.TrimSpace(str)) {
-			return true
-		}
-	}
-
-	filterSplit := strings.Split(filter, ",")
-
-	for _, item := range filterSplit {
-		if strings.TrimSpace(item) == strings.TrimSpace(str) {
-			return true
+		if re.MatchString(input) {
+			return true, nil
 		}
 	}
 
-	return false
+	for item := range strings.SplitSeq(filter, ",") {
+		if strings.TrimSpace(item) == input {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func GenerateUUID(str string) string {

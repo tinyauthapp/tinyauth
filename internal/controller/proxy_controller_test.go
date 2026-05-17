@@ -365,6 +365,8 @@ func TestProxyController(t *testing.T) {
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
 	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
 	aclsService := service.NewAccessControlsService(log, cfg, nil)
+	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	require.NoError(t, err)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -379,7 +381,7 @@ func TestProxyController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			controller.NewProxyController(log, runtime, group, aclsService, authService)
+			controller.NewProxyController(log, runtime, group, aclsService, authService, policyEngine)
 
 			test.run(t, router, recorder)
 		})

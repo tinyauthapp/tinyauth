@@ -34,6 +34,7 @@ type Services struct {
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
+	policyEngine         *service.PolicyEngine
 }
 
 type BootstrapApp struct {

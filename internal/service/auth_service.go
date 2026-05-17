@@ -284,7 +284,12 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 }
 
 func (auth *AuthService) IsEmailWhitelisted(email string) bool {
-	return utils.CheckFilter(strings.Join(auth.runtime.OAuthWhitelist, ","), email)
+	match, err := utils.CheckFilter(strings.Join(auth.runtime.OAuthWhitelist, ","), email)
+	if err != nil {
+		auth.log.App.Warn().Err(err).Str("email", email).Msg("Invalid email filter pattern")
+		return false
+	}
+	return match
 }
 
 func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {
