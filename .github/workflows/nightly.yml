@@ -5,12 +5,13 @@ on:
     - cron: "0 0 * * *"
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -143,6 +144,8 @@ jobs:
     needs:
       - create-release
       - generate-metadata
+    permissions:
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -201,6 +204,8 @@ jobs:
       - create-release
       - generate-metadata
       - image-build
+    permissions:
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -259,6 +264,8 @@ jobs:
     needs:
       - create-release
       - generate-metadata
+    permissions:
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -317,6 +324,8 @@ jobs:
       - create-release
       - generate-metadata
       - image-build-arm
+    permissions:
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -375,6 +384,8 @@ jobs:
     needs:
       - image-build
       - image-build-arm
+    permissions:
+      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -414,6 +425,8 @@ jobs:
     needs:
       - image-build-distroless
       - image-build-arm-distroless
+    permissions:
+      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -453,6 +466,8 @@ jobs:
     needs:
       - binary-build
       - binary-build-arm
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:

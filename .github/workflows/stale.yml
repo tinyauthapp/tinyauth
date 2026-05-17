@@ -4,12 +4,14 @@ on:
     - cron: 0 10 * * *
 
 permissions:
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   stale:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10
         with:
