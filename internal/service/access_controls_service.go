@@ -30,27 +30,21 @@ func NewAccessControlsService(
 }
 
 func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App {
-	var appAcls *model.App
+	var nameMatch *model.App
 
-	// first pass - try to find an exact match for the domain
+	// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
 	for app, config := range service.config.Apps {
 		if config.Config.Domain == domain {
 			service.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
-			appAcls = &config
-			break // If we find a match by domain, we can stop searching
+			return &config
 		}
-	}
-
-	// second pass - if we didn't find a match by domain, try to find a match by app name (subdomain)
-	for app, config := range service.config.Apps {
 		if strings.SplitN(domain, ".", 2)[0] == app {
 			service.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
-			appAcls = &config
-			break // If we find a match by app name, we can stop searching
+			nameMatch = &config
 		}
 	}
 
-	return appAcls
+	return nameMatch
 }
 
 func (service *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {

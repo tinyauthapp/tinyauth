@@ -85,20 +85,22 @@ func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 			return nil, err
 		}
 
-		// fist pass - try to find an exact match for the domain
-		for _, appLabels := range labels.Apps {
+		var nameMatch *model.App
+
+		// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
+		for appName, appLabels := range labels.Apps {
 			if appLabels.Config.Domain == appDomain {
 				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
 				return &appLabels, nil
 			}
-		}
-
-		// second pass - if we didn't find a match by domain, try to find a match by app name (subdomain)
-		for appName, appLabels := range labels.Apps {
 			if strings.SplitN(appDomain, ".", 2)[0] == appName {
 				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
-				return &appLabels, nil
+				nameMatch = &appLabels
 			}
+		}
+
+		if nameMatch != nil {
+			return nameMatch, nil
 		}
 	}
 
