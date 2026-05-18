@@ -61,6 +61,7 @@ func NewPolicyEngine(config model.Config, log *logger.Logger) (*PolicyEngine, er
 }
 
 func (engine *PolicyEngine) RegisterRule(name RuleName, rule Rule) {
+	engine.log.App.Debug().Str("rule", string(name)).Msg("Registering ACL rule in policy engine")
 	engine.rules[name] = rule
 }
 
@@ -98,4 +99,12 @@ func (engine *PolicyEngine) Evaluate(name RuleName, ctx *ACLContext) bool {
 		Msg("Evaluated ACL rule")
 
 	return access
+}
+
+func (engine *PolicyEngine) Policy() Policy {
+	return engine.policy
+}
+
+func (engine *PolicyEngine) Rules() map[RuleName]Rule {
+	return engine.rules
 }
