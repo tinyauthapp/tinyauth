@@ -34,6 +34,16 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectAbstain,
 		},
 		{
+			name: "abstains when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectAbstain,
+		},
+		{
 			name: "allows OAuth user when email matches whitelist",
 			ctx: &ACLContext{
 				ACLs: &model.App{
@@ -205,6 +215,16 @@ func TestOAuthGroupRule(t *testing.T) {
 			expected: EffectAbstain,
 		},
 		{
+			name: "abstains when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectAbstain,
+		},
+		{
 			name: "abstains when user is not OAuth",
 			ctx: &ACLContext{
 				ACLs: &model.App{
@@ -322,6 +342,16 @@ func TestLDAPGroupRule(t *testing.T) {
 		{
 			name:     "abstains when context is nil",
 			ctx:      nil,
+			expected: EffectAbstain,
+		},
+		{
+			name: "abstains when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
 			expected: EffectAbstain,
 		},
 		{

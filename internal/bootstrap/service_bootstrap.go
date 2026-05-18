@@ -49,36 +49,48 @@ func (app *BootstrapApp) setupServices() error {
 }
 
 func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
-	if app.config.LabelProvider == "none" {
-		return nil, nil
-	}
-
-	useKubernetes := app.config.LabelProvider == "kubernetes" ||
-		(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
-
-	if useKubernetes {
-		app.log.App.Debug().Msg("Using Kubernetes label provider")
-
-		kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
+	switch app.config.LabelProvider {
+	case "none", "docker", "kubernetes", "auto":
+		if app.config.LabelProvider == "none" {
+			return nil, nil
 		}
 
-		app.services.kubernetesService = kubernetesService
-		return kubernetesService, nil
+		useKubernetes := app.config.LabelProvider == "kubernetes" ||
+			(app.config.LabelProvider == "auto" && os.Getenv("KUBERNETES_SERVICE_HOST") != "")
+
+		if useKubernetes {
+			app.log.App.Debug().Msg("Using Kubernetes label provider")
+
+			kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
+			}
+
+			app.services.kubernetesService = kubernetesService
+			return kubernetesService, nil
+		}
+
+		app.log.App.Debug().Msg("Using Docker label provider")
+
+		dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize docker service: %w", err)
+		}
+
+		if dockerService == nil {
+			if app.config.LabelProvider == "docker" {
+				app.log.App.Warn().Msg("Docker label provider selected but Docker is not available, will continue without it")
+			}
+			return nil, nil
+		}
+
+		app.services.dockerService = dockerService
+		return dockerService, nil
+	default:
+		return nil, fmt.Errorf("invalid label provider: %s", app.config.LabelProvider)
 	}
-
-	app.log.App.Debug().Msg("Using Docker label provider")
-
-	dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize docker service: %w", err)
-	}
-
-	app.services.dockerService = dockerService
-	return dockerService, nil
 }
 
 func (app *BootstrapApp) setupPolicyEngine() error {

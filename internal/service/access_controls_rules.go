@@ -25,7 +25,7 @@ type UserAllowedRule struct {
 }
 
 func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil {
+	if ctx.ACLs == nil || ctx.UserContext == nil {
 		return EffectAbstain
 	}
 
@@ -80,7 +80,7 @@ type OAuthGroupRule struct {
 }
 
 func (rule *OAuthGroupRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil {
+	if ctx.ACLs == nil || ctx.UserContext == nil {
 		return EffectAbstain
 	}
 
@@ -114,7 +114,7 @@ type LDAPGroupRule struct {
 }
 
 func (rule *LDAPGroupRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx == nil {
+	if ctx == nil || ctx.UserContext == nil {
 		return EffectAbstain
 	}
 
