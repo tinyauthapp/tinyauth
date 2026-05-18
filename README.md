@@ -28,9 +28,6 @@ Tinyauth is the simplest and tiniest authentication and authorization server you
 > [!NOTE]
 > This is the main development branch. For the latest stable release, see the [documentation](https://tinyauth.app) or the latest stable tag.
 
-> [!NOTE]
-> Tinyauth is in the process of migrating to the new [tinyauthapp](https://github.com/tinyauthapp) organization. The organization **is official** and it will host all of the Tinyauth related repositories in the future.
-
 ## Getting Started
 
 You can get started with Tinyauth by following the guide in the [documentation](https://tinyauth.app/docs/getting-started). There is also an available [docker-compose](./docker-compose.example.yml) file that has Traefik, Whoami and Tinyauth to demonstrate its capabilities (keep in mind that this file lives in the development branch so it may have updates that are not yet released).
@@ -59,7 +56,7 @@ If you like, you can help translate Tinyauth into more languages by visiting the
 
 ## License
 
-Tinyauth is licensed under the GNU General Public License v3.0. TL;DR — You may copy, distribute and modify the software as long as you track changes/dates in source files. Any modifications to or software including (via compiler) GPL-licensed code must also be made available under the GPL along with build & install instructions. For more information about the license check the [license](./LICENSE) file.
+Tinyauth is licensed under the GNU Affero General Public License v3.0. TL;DR — You may copy, distribute and modify the software as long as you track changes/dates in source files. Any modifications to or software including (via compiler) AGPL-licensed code must also be made available under the AGPL along with build & install instructions. If you run a modified version over a network, you must also make the source available to the users of that service. For more information about the license check the [license](LICENSE) file.
 
 ## Sponsors
 
