@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,20 +34,22 @@ type Services struct {
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
+	tailscaleService     *service.TailscaleService
 	policyEngine         *service.PolicyEngine
 }
 
 type BootstrapApp struct {
-	config   model.Config
-	runtime  model.RuntimeConfig
-	services Services
-	log      *logger.Logger
-	ctx      context.Context
-	cancel   context.CancelFunc
-	queries  repository.Store
-	router   *gin.Engine
-	db       *sql.DB
-	wg       sync.WaitGroup
+	config    model.Config
+	runtime   model.RuntimeConfig
+	services  Services
+	log       *logger.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
+	queries   repository.Store
+	router    *gin.Engine
+	db        *sql.DB
+	wg        sync.WaitGroup
+	listeners []Listener
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -68,6 +69,8 @@ func (app *BootstrapApp) Setup() error {
 	log.Init()
 	app.log = log
 
+	app.log.App.Info().Msgf("Starting Tinyauth version: %s", model.Version)
+
 	// get app url
 	if app.config.AppURL == "" {
 		return errors.New("app url cannot be empty, perhaps config loading failed")
@@ -80,6 +83,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, app.runtime.AppURL)
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -231,6 +235,11 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
+	// throw in tailscale if it's configured just before setting up the controllers
+	if app.services.tailscaleService != nil {
+		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
+	}
+
 	// setup router
 	err = app.setupRouter()
 
@@ -248,42 +257,18 @@ func (app *BootstrapApp) Setup() error {
 		app.wg.Go(app.heartbeatRoutine)
 	}
 
-	// create err channel to listen for server errors
-	errChanLen := 0
-
-	runUnix := app.config.Server.SocketPath != ""
-	runHTTP := app.config.Server.SocketPath == "" || app.config.Server.ConcurrentListenersEnabled
-
-	if runUnix {
-		errChanLen++
-	}
-
-	if runHTTP {
-		errChanLen++
-	}
-
-	errChan := make(chan error, errChanLen)
+	// setup listeners
+	app.listeners = app.calculateListenerPolicy()
 
 	if app.config.Server.ConcurrentListenersEnabled {
 		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
 	}
 
-	// serve unix
-	if runUnix {
-		app.wg.Go(func() {
-			if err := app.serveUnix(); err != nil {
-				errChan <- err
-			}
-		})
-	}
+	// run listeners
+	lec, err := app.runListeners()
 
-	// serve to http
-	if runHTTP {
-		app.wg.Go(func() {
-			if err := app.serveHTTP(); err != nil {
-				errChan <- err
-			}
-		})
+	if err != nil {
+		return fmt.Errorf("failed to run listeners: %w", err)
 	}
 
 	// monitor cancellation and server errors
@@ -292,87 +277,12 @@ func (app *BootstrapApp) Setup() error {
 		case <-app.ctx.Done():
 			app.log.App.Info().Msg("Oh, it's time for me to go, bye!")
 			return nil
-		case err := <-errChan:
+		case err := <-lec:
 			if err != nil {
-				return fmt.Errorf("server error: %w", err)
+				return fmt.Errorf("listener error: %w", err)
 			}
 		}
 	}
-}
-
-func (app *BootstrapApp) serveHTTP() error {
-	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
-
-	app.log.App.Info().Msgf("Starting server on %s", address)
-
-	server := &http.Server{
-		Addr:    address,
-		Handler: app.router.Handler(),
-	}
-
-	go func() {
-		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down http listener")
-		server.Shutdown(app.ctx)
-	}()
-
-	err := server.ListenAndServe()
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start http listener: %w", err)
-	}
-
-	return nil
-}
-
-func (app *BootstrapApp) serveUnix() error {
-	if app.config.Server.SocketPath == "" {
-		return nil
-	}
-
-	_, err := os.Stat(app.config.Server.SocketPath)
-
-	if err == nil {
-		app.log.App.Info().Msgf("Removing existing socket file %s", app.config.Server.SocketPath)
-		err := os.Remove(app.config.Server.SocketPath)
-
-		if err != nil {
-			return fmt.Errorf("failed to remove existing socket file: %w", err)
-		}
-	}
-
-	app.log.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
-
-	listener, err := net.Listen("unix", app.config.Server.SocketPath)
-
-	if err != nil {
-		return fmt.Errorf("failed to create unix socket listener: %w", err)
-	}
-
-	server := &http.Server{
-		Handler: app.router.Handler(),
-	}
-
-	shutdown := func() {
-		server.Shutdown(app.ctx)
-		listener.Close()
-		os.Remove(app.config.Server.SocketPath)
-	}
-
-	go func() {
-		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down unix socket listener")
-		shutdown()
-	}()
-
-	err = server.Serve(listener)
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		shutdown()
-		return fmt.Errorf("failed to start unix socket listener: %w", err)
-	}
-
-	return nil
 }
 
 func (app *BootstrapApp) heartbeatRoutine() {

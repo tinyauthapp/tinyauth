@@ -36,12 +36,17 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export const LoginPage = () => {
-  const { isLoggedIn } = useUserContext();
-  const { providers, title, oauthAutoRedirect } = useAppContext();
+  const { auth, tailscale } = useUserContext();
+  const {
+    ui,
+    oauth,
+    auth: { providers },
+  } = useAppContext();
   const { search } = useLocation();
   const { t } = useTranslation();
 
   const [showRedirectButton, setShowRedirectButton] = useState(false);
+  const [useTailscale, setUseTailscale] = useState(tailscale.nodeName !== "");
 
   const hasAutoRedirectedRef = useRef(false);
 
@@ -55,7 +60,7 @@ export const LoginPage = () => {
   const oidcParams = useOIDCParams(searchParams);
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
-    providers.find((provider) => provider.id === oauthAutoRedirect) !==
+    providers.find((provider) => provider.id === oauth.autoRedirect) !==
       undefined && redirectUri !== undefined,
   );
 
@@ -148,21 +153,47 @@ export const LoginPage = () => {
     },
   });
 
+  const { mutate: tailscaleMutate, isPending: tailscaleIsPending } =
+    useMutation({
+      mutationFn: () => axios.post("/api/user/tailscale"),
+      mutationKey: ["tailscale"],
+      onSuccess: () => {
+        toast.success(t("loginSuccessTitle"), {
+          description: t("loginTailscaleSuccess"),
+        });
+
+        redirectTimer.current = window.setTimeout(() => {
+          if (oidcParams.isOidc) {
+            window.location.replace(`/authorize?${oidcParams.compiled}`);
+            return;
+          }
+          window.location.replace(
+            `/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
+          );
+        }, 500);
+      },
+      onError: () => {
+        toast.error(t("loginFailTitle"), {
+          description: t("loginTailscaleFail"),
+        });
+      },
+    });
+
   useEffect(() => {
     if (
-      !isLoggedIn &&
+      !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
       redirectUri !== undefined
     ) {
       hasAutoRedirectedRef.current = true;
-      oauthMutate(oauthAutoRedirect);
+      oauthMutate(oauth.autoRedirect);
     }
   }, [
-    isLoggedIn,
+    auth.authenticated,
     oauthMutate,
     hasAutoRedirectedRef,
-    oauthAutoRedirect,
+    oauth.autoRedirect,
     isOauthAutoRedirect,
     redirectUri,
   ]);
@@ -179,11 +210,11 @@ export const LoginPage = () => {
     };
   }, [redirectTimer, redirectButtonTimer]);
 
-  if (isLoggedIn && oidcParams.isOidc) {
+  if (auth.authenticated && oidcParams.isOidc) {
     return <Navigate to={`/authorize?${oidcParams.compiled}`} replace />;
   }
 
-  if (isLoggedIn && redirectUri !== undefined) {
+  if (auth.authenticated && redirectUri !== undefined) {
     return (
       <Navigate
         to={`/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
@@ -192,7 +223,7 @@ export const LoginPage = () => {
     );
   }
 
-  if (isLoggedIn) {
+  if (auth.authenticated) {
     return <Navigate to="/logout" replace />;
   }
 
@@ -228,10 +259,49 @@ export const LoginPage = () => {
       </Card>
     );
   }
+
+  if (useTailscale) {
+    return (
+      <Card>
+        <CardHeader className="gap-3">
+          <TailscaleIcon className="mx-auto h-8 w-8" />
+          <CardTitle className="text-center text-xl">
+            {t("loginTailscaleTitle")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="text-muted-foreground text-sm">
+            {t("loginTailscaleDescription")}
+          </div>
+          <div className="text-muted-foreground text-sm">
+            {t("loginTailscaleDeviceName")} <code>{tailscale.nodeName}</code>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col items-stretch gap-3">
+          <Button
+            className="w-full"
+            onClick={() => tailscaleMutate()}
+            loading={tailscaleIsPending}
+          >
+            {t("loginTailscaleSubmit")}
+          </Button>
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={() => setUseTailscale(false)}
+            disabled={tailscaleIsPending}
+          >
+            {t("loginTailscaleOtherMethod")}
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="gap-1.5">
-        <CardTitle className="text-center text-xl">{title}</CardTitle>
+        <CardTitle className="text-center text-xl">{ui.title}</CardTitle>
         {providers.length > 0 && (
           <CardDescription className="text-center">
             {oauthProviders.length !== 0

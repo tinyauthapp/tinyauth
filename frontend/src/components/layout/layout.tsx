@@ -6,17 +6,17 @@ import { DomainWarning } from "../domain-warning/domain-warning";
 import { ThemeToggle } from "../theme-toggle/theme-toggle";
 
 const BaseLayout = ({ children }: { children: React.ReactNode }) => {
-  const { backgroundImage, title } = useAppContext();
+  const { ui } = useAppContext();
 
   useEffect(() => {
-    document.title = title;
-  }, [title]);
+    document.title = ui.title;
+  }, [ui.title]);
 
   return (
     <div
       className="flex flex-col justify-center items-center min-h-svh px-4"
       style={{
-        backgroundImage: `url(${backgroundImage})`,
+        backgroundImage: `url(${ui.backgroundImage})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
@@ -31,7 +31,7 @@ const BaseLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const Layout = () => {
-  const { appUrl, warningsEnabled } = useAppContext();
+  const { app, ui } = useAppContext();
   const [ignoreDomainWarning, setIgnoreDomainWarning] = useState(() => {
     return window.sessionStorage.getItem("ignoreDomainWarning") === "true";
   });
@@ -42,11 +42,15 @@ export const Layout = () => {
     setIgnoreDomainWarning(true);
   }, [setIgnoreDomainWarning]);
 
-  if (!ignoreDomainWarning && warningsEnabled && appUrl !== currentUrl) {
+  if (
+    !ignoreDomainWarning &&
+    ui.warningsEnabled &&
+    !app.trustedDomains.includes(currentUrl)
+  ) {
     return (
       <BaseLayout>
         <DomainWarning
-          appUrl={appUrl}
+          appUrl={app.appUrl}
           currentUrl={currentUrl}
           onClick={() => handleIgnore()}
         />

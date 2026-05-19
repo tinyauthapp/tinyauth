@@ -6,15 +6,32 @@ export const providerSchema = z.object({
   oauth: z.boolean(),
 });
 
-export const appContextSchema = z.object({
+const authSchema = z.object({
   providers: z.array(providerSchema),
+});
+
+const oauthSchema = z.object({
+  autoRedirect: z.string(),
+});
+
+const uiSchema = z.object({
   title: z.string(),
-  appUrl: z.string(),
-  cookieDomain: z.string(),
   forgotPasswordMessage: z.string(),
   backgroundImage: z.string(),
-  oauthAutoRedirect: z.string(),
   warningsEnabled: z.boolean(),
+});
+
+const appSchema = z.object({
+  appUrl: z.string(),
+  cookieDomain: z.string(),
+  trustedDomains: z.array(z.string()),
+});
+
+export const appContextSchema = z.object({
+  auth: authSchema,
+  oauth: oauthSchema,
+  ui: uiSchema,
+  app: appSchema,
 });
 
 export type AppContextSchema = z.infer<typeof appContextSchema>;

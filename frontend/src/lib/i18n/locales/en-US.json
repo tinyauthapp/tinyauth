@@ -80,5 +80,17 @@
     "profileScopeDescription": "Allows the app to access your profile information.",
     "groupsScopeName": "Groups",
     "groupsScopeDescription": "Allows the app to access your group information.",
-    "backToLoginButton": "Back to login"
+    "backToLoginButton": "Back to login",
+    "phoneScopeName": "Phone",
+    "phoneScopeDescription": "Allows the app to access your phone number.",
+    "addressScopeName": "Address",
+    "addressScopeDescription": "Allows the app to access your address.",
+    "loginTailscaleTitle": "Continue with Tailscale",
+    "loginTailscaleDescription": "You appear to be accessing Tinyauth from an authorized Tailscale device. Would you like to continue with your Tailscale connection?",
+    "loginTailscaleDeviceName": "Device name:",
+    "loginTailscaleSubmit": "Continue with Tailscale",
+    "loginTailscaleOtherMethod": "Login with another method",
+    "loginTailscaleSuccess": "Successfully authenticated with Tailscale.",
+    "loginTailscaleFail": "Failed to authenticate with Tailscale. Please try again or use another login method.",
+    "logoutTailscaleSubtitle": "You are currently logged in with Tailscale on your device <code>{{deviceName}}</code>. Click the button below to logout."
 }

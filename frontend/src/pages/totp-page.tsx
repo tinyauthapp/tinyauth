@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { useOIDCParams } from "@/lib/hooks/oidc";
 
 export const TotpPage = () => {
-  const { totpPending } = useUserContext();
+  const { totp } = useUserContext();
   const { t } = useTranslation();
   const { search } = useLocation();
   const formId = useId();
@@ -64,7 +64,7 @@ export const TotpPage = () => {
     };
   }, [redirectTimer]);
 
-  if (!totpPending) {
+  if (!totp.pending) {
     return <Navigate to="/" replace />;
   }
 

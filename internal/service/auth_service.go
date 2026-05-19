@@ -78,6 +78,7 @@ type AuthService struct {
 	ldap        *LdapService
 	queries     repository.Store
 	oauthBroker *OAuthBrokerService
+	tailscale   *TailscaleService
 
 	loginAttempts        map[string]*LoginAttempt
 	ldapGroupsCache      map[string]*LdapGroupsCache
@@ -99,6 +100,7 @@ func NewAuthService(
 	ldap *LdapService,
 	queries repository.Store,
 	oauthBroker *OAuthBrokerService,
+	tailscale *TailscaleService,
 ) *AuthService {
 	service := &AuthService{
 		log:                  log,
@@ -111,6 +113,7 @@ func NewAuthService(
 		ldap:                 ldap,
 		queries:              queries,
 		oauthBroker:          oauthBroker,
+		tailscale:            tailscale,
 	}
 
 	wg.Go(service.CleanupOAuthSessionsRoutine)
@@ -292,6 +295,10 @@ func (auth *AuthService) IsEmailWhitelisted(email string) bool {
 }
 
 func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {
+	if data.Provider == "tailscale" && auth.tailscale == nil {
+		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
+	}
+
 	uuid, err := uuid.NewRandom()
 
 	if err != nil {
@@ -326,6 +333,28 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session entry: %w", err)
+	}
+
+	if data.Provider == "tailscale" {
+		auth.log.App.Trace().Str("url", fmt.Sprintf("https://%s", auth.tailscale.GetHostname())).Msg("Extracting root domain from Tailscale hostname")
+
+		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", auth.tailscale.GetHostname()))
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cookie domain for tailscale user: %w", err)
+		}
+
+		return &http.Cookie{
+			Name:     auth.runtime.SessionCookieName,
+			Value:    session.UUID,
+			Path:     "/",
+			Domain:   fmt.Sprintf(".%s", tsCookieDomain),
+			Expires:  expiresAt,
+			MaxAge:   int(time.Until(expiresAt).Seconds()),
+			Secure:   auth.config.Auth.SecureCookie,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		}, nil
 	}
 
 	return &http.Cookie{

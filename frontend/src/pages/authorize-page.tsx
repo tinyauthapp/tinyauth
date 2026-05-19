@@ -77,7 +77,7 @@ const createScopeMap = (t: TFunction<"translation", undefined>): Scope[] => {
 };
 
 export const AuthorizePage = () => {
-  const { isLoggedIn } = useUserContext();
+  const { auth } = useUserContext();
   const { search } = useLocation();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -127,7 +127,7 @@ export const AuthorizePage = () => {
     );
   }
 
-  if (!isLoggedIn) {
+  if (!auth.authenticated) {
     return <Navigate to={`/login?${oidcParams.compiled}`} replace />;
   }
 

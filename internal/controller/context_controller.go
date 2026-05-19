@@ -1,39 +1,74 @@
 package controller
 
 import (
-	"fmt"
-	"net/url"
-
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"github.com/gin-gonic/gin"
 )
 
+// UCR -> User Context Response
+
+type UCRAuth struct {
+	Authenticated bool   `json:"authenticated"`
+	Username      string `json:"username"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	ProviderID    string `json:"providerId"`
+}
+
+type UCROAuth struct {
+	Active      bool   `json:"active"`
+	DisplayName string `json:"displayName"`
+}
+
+type UCRTOTP struct {
+	Pending bool `json:"pending"`
+}
+
+type UCRTailscale struct {
+	NodeName string `json:"nodeName,omitempty"`
+}
+
 type UserContextResponse struct {
-	Status      int    `json:"status"`
-	Message     string `json:"message"`
-	IsLoggedIn  bool   `json:"isLoggedIn"`
-	Username    string `json:"username"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Provider    string `json:"provider"`
-	OAuth       bool   `json:"oauth"`
-	TOTPPending bool   `json:"totpPending"`
-	OAuthName   string `json:"oauthName"`
+	Status    int          `json:"status"`
+	Message   string       `json:"message"`
+	Auth      UCRAuth      `json:"auth"`
+	OAuth     UCROAuth     `json:"oauth"`
+	TOTP      UCRTOTP      `json:"totp"`
+	Tailscale UCRTailscale `json:"tailscale"`
+}
+
+// ACR -> App Context Response
+
+type ACRAuth struct {
+	Providers []model.Provider `json:"providers"`
+}
+
+type ACROAuth struct {
+	AutoRedirect string `json:"autoRedirect"`
+}
+
+type ACRUI struct {
+	Title                 string `json:"title"`
+	ForgotPasswordMessage string `json:"forgotPasswordMessage"`
+	BackgroundImage       string `json:"backgroundImage"`
+	WarningsEnabled       bool   `json:"warningsEnabled"`
+}
+
+type ACRApp struct {
+	AppURL         string   `json:"appUrl"`
+	CookieDomain   string   `json:"cookieDomain"`
+	TrustedDomains []string `json:"trustedDomains"`
 }
 
 type AppContextResponse struct {
-	Status                int              `json:"status"`
-	Message               string           `json:"message"`
-	Providers             []model.Provider `json:"providers"`
-	Title                 string           `json:"title"`
-	AppURL                string           `json:"appUrl"`
-	CookieDomain          string           `json:"cookieDomain"`
-	ForgotPasswordMessage string           `json:"forgotPasswordMessage"`
-	BackgroundImage       string           `json:"backgroundImage"`
-	OAuthAutoRedirect     string           `json:"oauthAutoRedirect"`
-	WarningsEnabled       bool             `json:"warningsEnabled"`
+	Status  int      `json:"status"`
+	Message string   `json:"message"`
+	Auth    ACRAuth  `json:"auth"`
+	OAuth   ACROAuth `json:"oauth"`
+	UI      ACRUI    `json:"ui"`
+	App     ACRApp   `json:"app"`
 }
 
 type ContextController struct {
@@ -71,51 +106,58 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
 		c.JSON(200, UserContextResponse{
-			Status:     401,
-			Message:    "Unauthorized",
-			IsLoggedIn: false,
+			Status:  401,
+			Message: "Unauthorized",
+			Auth:    UCRAuth{Authenticated: false},
 		})
 		return
 	}
 
 	userContext := UserContextResponse{
-		Status:      200,
-		Message:     "Success",
-		IsLoggedIn:  context.Authenticated,
-		Username:    context.GetUsername(),
-		Name:        context.GetName(),
-		Email:       context.GetEmail(),
-		Provider:    context.GetProviderID(),
-		OAuth:       context.IsOAuth(),
-		TOTPPending: context.TOTPPending(),
-		OAuthName:   context.OAuthName(),
+		Status:  200,
+		Message: "Success",
+		Auth: UCRAuth{
+			Authenticated: context.Authenticated,
+			Username:      context.GetUsername(),
+			Name:          context.GetName(),
+			Email:         context.GetEmail(),
+			ProviderID:    context.GetProviderID(),
+		},
+		OAuth: UCROAuth{
+			Active:      context.IsOAuth(),
+			DisplayName: context.OAuthName(),
+		},
+		TOTP: UCRTOTP{
+			Pending: context.TOTPPending(),
+		},
+		Tailscale: UCRTailscale{
+			NodeName: context.TailscaleNodeName(),
+		},
 	}
 
 	c.JSON(200, userContext)
 }
 
 func (controller *ContextController) appContextHandler(c *gin.Context) {
-	appUrl, err := url.Parse(controller.runtime.AppURL)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to parse app URL")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
-
 	c.JSON(200, AppContextResponse{
-		Status:                200,
-		Message:               "Success",
-		Providers:             controller.runtime.ConfiguredProviders,
-		Title:                 controller.config.UI.Title,
-		AppURL:                fmt.Sprintf("%s://%s", appUrl.Scheme, appUrl.Host),
-		CookieDomain:          controller.runtime.CookieDomain,
-		ForgotPasswordMessage: controller.config.UI.ForgotPasswordMessage,
-		BackgroundImage:       controller.config.UI.BackgroundImage,
-		OAuthAutoRedirect:     controller.config.OAuth.AutoRedirect,
-		WarningsEnabled:       controller.config.UI.WarningsEnabled,
+		Status:  200,
+		Message: "Success",
+		Auth: ACRAuth{
+			Providers: controller.runtime.ConfiguredProviders,
+		},
+		OAuth: ACROAuth{
+			AutoRedirect: controller.config.OAuth.AutoRedirect,
+		},
+		UI: ACRUI{
+			Title:                 controller.config.UI.Title,
+			ForgotPasswordMessage: controller.config.UI.ForgotPasswordMessage,
+			BackgroundImage:       controller.config.UI.BackgroundImage,
+			WarningsEnabled:       controller.config.UI.WarningsEnabled,
+		},
+		App: ACRApp{
+			AppURL:         controller.runtime.AppURL,
+			CookieDomain:   controller.runtime.CookieDomain,
+			TrustedDomains: controller.runtime.TrustedDomains,
+		},
 	})
 }

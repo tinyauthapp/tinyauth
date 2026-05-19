@@ -65,6 +65,9 @@ func NewDefaultConfiguration() *Config {
 		Experimental: ExperimentalConfig{
 			ConfigFile: "",
 		},
+		Tailscale: TailscaleConfig{
+			Dir: "./tailscale_state",
+		},
 		LabelProvider: "auto",
 	}
 }
@@ -84,6 +87,7 @@ type Config struct {
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
 	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
+	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
 }
 
 type DatabaseConfig struct {
@@ -206,6 +210,16 @@ type LogStreamConfig struct {
 type ExperimentalConfig struct {
 	ConfigFile string `description:"Path to config file." yaml:"-"`
 }
+
+type TailscaleConfig struct {
+	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled"`
+	Dir       string `description:"Tailscale state directory." yaml:"dir"`
+	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
+	AuthKey   string `description:"Tailscale auth key." yaml:"authKey"`
+	Ephemeral bool   `description:"Use ephemeral Tailscale node." yaml:"ephemeral"`
+}
+
+// OAuth/OIDC config
 
 type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`

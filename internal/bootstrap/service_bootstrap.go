@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+
 	"os"
 
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -22,6 +23,14 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to initialize label provider: %w", err)
 	}
 
+	tailscaleService, err := service.NewTailscaleService(app.log, app.config, app.ctx, &app.wg)
+
+	if err != nil {
+		app.log.App.Warn().Err(err).Msg("Failed to initialize Tailscale connection, will continue without it")
+	}
+
+	app.services.tailscaleService = tailscaleService
+
 	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
 	app.services.accessControlService = accessControlsService
 
@@ -34,7 +43,7 @@ func (app *BootstrapApp) setupServices() error {
 	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
 	app.services.oauthBrokerService = oauthBrokerService
 
-	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, &app.wg, app.services.ldapService, app.queries, app.services.oauthBrokerService)
+	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, &app.wg, app.services.ldapService, app.queries, app.services.oauthBrokerService, app.services.tailscaleService)
 	app.services.authService = authService
 
 	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx, &app.wg)

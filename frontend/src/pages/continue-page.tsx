@@ -14,8 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRedirectUri } from "@/lib/hooks/redirect-uri";
 
 export const ContinuePage = () => {
-  const { cookieDomain, warningsEnabled } = useAppContext();
-  const { isLoggedIn } = useUserContext();
+  const { app, ui } = useAppContext();
+  const { auth } = useUserContext();
   const { search } = useLocation();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -29,17 +29,18 @@ export const ContinuePage = () => {
 
   const { url, valid, trusted, allowedProto, httpsDowngrade } = useRedirectUri(
     redirectUri,
-    cookieDomain,
+    app.cookieDomain,
   );
 
   const urlHref = url?.href;
 
   const hasValidRedirect = valid && allowedProto;
-  const showUntrustedWarning = hasValidRedirect && !trusted && warningsEnabled;
+  const showUntrustedWarning =
+    hasValidRedirect && !trusted && ui.warningsEnabled;
   const showInsecureWarning =
-    hasValidRedirect && httpsDowngrade && warningsEnabled;
+    hasValidRedirect && httpsDowngrade && ui.warningsEnabled;
   const shouldAutoRedirect =
-    isLoggedIn &&
+    auth.authenticated &&
     hasValidRedirect &&
     !showUntrustedWarning &&
     !showInsecureWarning;
@@ -77,7 +78,7 @@ export const ContinuePage = () => {
     };
   }, [shouldAutoRedirect, redirectToTarget]);
 
-  if (!isLoggedIn) {
+  if (!auth.authenticated) {
     return (
       <Navigate
         to={`/login${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
@@ -104,7 +105,7 @@ export const ContinuePage = () => {
               components={{
                 code: <code />,
               }}
-              values={{ cookieDomain }}
+              values={{ cookieDomain: app.cookieDomain }}
               shouldUnescape={true}
             />
           </CardDescription>
