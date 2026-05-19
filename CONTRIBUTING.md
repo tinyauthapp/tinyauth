@@ -7,7 +7,7 @@ Contributing to Tinyauth is straightforward. Follow the steps below to set up a 
 
 ## Requirements
 
-- Bun
+- pnpm
 - Golang v1.24.0 or later
 - Git
 - Docker
@@ -34,7 +34,7 @@ Frontend dependencies can be installed as follows:
 
 ```sh
 cd frontend/
-bun install
+pnpm ci
 ```
 
 ## Create the `.env` file

@@ -4,7 +4,8 @@ package model
 func NewDefaultConfiguration() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			Path: "./tinyauth.db",
+			Driver: "sqlite",
+			Path:   "./tinyauth.db",
 		},
 		Analytics: AnalyticsConfig{
 			Enabled: true,
@@ -24,6 +25,9 @@ func NewDefaultConfiguration() *Config {
 			SessionMaxLifetime: 0,     // disabled
 			LoginTimeout:       300,   // 5 minutes
 			LoginMaxRetries:    3,
+			ACLs: ACLsConfig{
+				Policy: "allow",
+			},
 		},
 		UI: UIConfig{
 			Title:                 "Tinyauth",
@@ -81,13 +85,15 @@ type Config struct {
 	UI            UIConfig           `description:"UI customization." yaml:"ui"`
 	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
 	LabelProvider string             `description:"Label provider to use (docker, kubernetes, auto)." yaml:"labelProvider"`
 }
 
 type DatabaseConfig struct {
-	Path string `description:"The path to the database, including file name." yaml:"path"`
+	Driver string `description:"The database driver to use. Valid values: sqlite, memory." yaml:"driver"`
+	Path   string `description:"The path to the SQLite database, including file name. Only used when driver is sqlite." yaml:"path"`
 }
 
 type AnalyticsConfig struct {
@@ -118,6 +124,7 @@ type AuthConfig struct {
 	LoginTimeout       int                       `description:"Login timeout in seconds." yaml:"loginTimeout"`
 	LoginMaxRetries    int                       `description:"Maximum login retries." yaml:"loginMaxRetries"`
 	TrustedProxies     []string                  `description:"Comma-separated list of trusted proxy addresses." yaml:"trustedProxies"`
+	ACLs               ACLsConfig                `description:"ACLs configuration." yaml:"acls"`
 }
 
 type UserAttributes struct {
@@ -244,6 +251,12 @@ type TailscaleWhoisResponse struct {
 	NodeName    string
 	Tags        []string
 }
+
+type ACLsConfig struct {
+	Policy string `description:"ACL policy for allow-by-default or deny-by-default, available options are allow and deny, default is allow." yaml:"policy"`
+}
+
+// ACLs
 
 type Apps struct {
 	Apps map[string]App `description:"App ACLs configuration." yaml:"apps"`

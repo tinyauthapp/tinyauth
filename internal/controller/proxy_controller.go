@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -51,10 +52,11 @@ type ProxyContext struct {
 }
 
 type ProxyController struct {
-	log     *logger.Logger
-	runtime model.RuntimeConfig
-	acls    *service.AccessControlsService
-	auth    *service.AuthService
+	log          *logger.Logger
+	runtime      model.RuntimeConfig
+	acls         *service.AccessControlsService
+	auth         *service.AuthService
+	policyEngine *service.PolicyEngine
 }
 
 func NewProxyController(
@@ -63,12 +65,14 @@ func NewProxyController(
 	router *gin.RouterGroup,
 	acls *service.AccessControlsService,
 	auth *service.AuthService,
+	policyEngine *service.PolicyEngine,
 ) *ProxyController {
 	controller := &ProxyController{
-		log:     log,
-		runtime: runtime,
-		acls:    acls,
-		auth:    auth,
+		log:          log,
+		runtime:      runtime,
+		acls:         acls,
+		auth:         auth,
+		policyEngine: policyEngine,
 	}
 
 	proxyGroup := router.Group("/auth")
@@ -101,7 +105,13 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 
-	if controller.auth.IsBypassedIP(clientIP, acls) {
+	aclsCtx := &service.ACLContext{
+		ACLs: acls,
+		IP:   net.ParseIP(clientIP),
+		Path: proxyCtx.Path,
+	}
+
+	if controller.policyEngine.Evaluate(service.RuleIPBypassed, aclsCtx) {
 		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -110,15 +120,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, acls)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to determine if authentication is enabled for resource")
-		controller.handleError(c, proxyCtx)
-		return
-	}
-
-	if !authEnabled {
+	if controller.policyEngine.Evaluate(service.RuleAuthEnabled, aclsCtx) {
 		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
 		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
@@ -128,7 +130,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.CheckIP(clientIP, acls) {
+	if !controller.policyEngine.Evaluate(service.RuleIPAllowed, aclsCtx) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
 			IP:       clientIP,
@@ -144,9 +146,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 		if !controller.useBrowserResponse(proxyCtx) {
 			c.Header("x-tinyauth-location", redirectURL)
-			c.JSON(401, gin.H{
-				"status":  401,
-				"message": "Unauthorized",
+			c.JSON(403, gin.H{
+				"status":  403,
+				"message": "Forbidden",
 			})
 			return
 		}
@@ -164,10 +166,10 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		}
 	}
 
-	if userContext.Authenticated {
-		userAllowed := controller.auth.IsUserAllowed(c, *userContext, acls)
+	aclsCtx.UserContext = userContext
 
-		if !userAllowed {
+	if userContext.Authenticated {
+		if !controller.policyEngine.Evaluate(service.RuleUserAllowed, aclsCtx) {
 			controller.log.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User is not allowed to access resource")
 
 			queries, err := query.Values(UnauthorizedQuery{
@@ -205,9 +207,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			var groupOK bool
 
 			if userContext.IsOAuth() {
-				groupOK = controller.auth.IsInOAuthGroup(c, *userContext, acls)
+				groupOK = controller.policyEngine.Evaluate(service.RuleOAuthGroup, aclsCtx)
 			} else {
-				groupOK = controller.auth.IsInLDAPGroup(c, *userContext, acls)
+				groupOK = controller.policyEngine.Evaluate(service.RuleLDAPGroup, aclsCtx)
 			}
 
 			if !groupOK {

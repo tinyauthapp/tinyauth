@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -31,7 +31,7 @@ func TestContextMiddleware(t *testing.T) {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 	}
 
-	seedSession := func(t *testing.T, queries *repository.Queries, params repository.CreateSessionParams) {
+	seedSession := func(t *testing.T, queries repository.Store, params repository.CreateSessionParams) {
 		t.Helper()
 		_, err := queries.CreateSession(context.Background(), params)
 		require.NoError(t, err)
@@ -39,7 +39,7 @@ func TestContextMiddleware(t *testing.T) {
 
 	type runArgs struct {
 		do      func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder)
-		queries *repository.Queries
+		queries repository.Store
 	}
 
 	type testCase struct {
@@ -252,15 +252,10 @@ func TestContextMiddleware(t *testing.T) {
 	ctx := context.TODO()
 	wg := &sync.WaitGroup{}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
-	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
+	store := memory.New()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker, nil)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil)
 
 	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
 
@@ -286,11 +281,7 @@ func TestContextMiddleware(t *testing.T) {
 				return captured, recorder
 			}
 
-			test.run(t, runArgs{do: do, queries: queries})
+			test.run(t, runArgs{do: do, queries: store})
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

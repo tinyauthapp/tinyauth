@@ -1,12 +1,14 @@
 # Site builder
-FROM oven/bun:1.3.13-alpine AS frontend-builder
+FROM node:26.1-alpine3.23 AS frontend-builder
 
 WORKDIR /frontend
 
-COPY ./frontend/package.json ./
-COPY ./frontend/bun.lock ./
+RUN npm install -g pnpm@11.1.2
 
-RUN bun install --frozen-lockfile
+COPY ./frontend/package.json ./
+COPY ./frontend/pnpm-lock.yaml ./
+
+RUN pnpm ci
 
 COPY ./frontend/public ./public
 COPY ./frontend/src ./src
@@ -17,7 +19,7 @@ COPY ./frontend/tsconfig.app.json ./
 COPY ./frontend/tsconfig.node.json ./
 COPY ./frontend/vite.config.ts ./
 
-RUN bun run build
+RUN pnpm run build
 
 # Builder
 FROM golang:1.26-alpine3.23 AS builder

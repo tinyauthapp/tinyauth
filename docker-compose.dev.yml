@@ -1,9 +1,10 @@
 services:
   traefik:
     image: traefik:v3.6
-    command: --api.insecure=true --providers.docker
+    command: --api.insecure=true --providers.docker --entrypoints.web.address=:80 --entrypoints.websecure.address=:443
     ports:
       - 80:80
+      - 443:443
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -25,6 +26,8 @@ services:
     labels:
       traefik.enable: true
       traefik.http.routers.tinyauth.rule: Host(`tinyauth.127.0.0.1.sslip.io`)
+      traefik.http.routers.tinyauth.entrypoints: websecure
+      traefik.http.routers.tinyauth.tls: true
 
   tinyauth-backend:
     build:

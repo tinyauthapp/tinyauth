@@ -208,7 +208,12 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		name = user.Name
 	} else {
 		controller.log.App.Debug().Msg("No name from OAuth provider, generating from email")
-		name = fmt.Sprintf("%s (%s)", utils.Capitalize(strings.Split(user.Email, "@")[0]), strings.Split(user.Email, "@")[1])
+		parts := strings.SplitN(user.Email, "@", 2)
+		if len(parts) == 2 {
+			name = fmt.Sprintf("%s (%s)", utils.Capitalize(parts[0]), parts[1])
+		} else {
+			name = utils.Capitalize(user.Email)
+		}
 	}
 
 	var username string

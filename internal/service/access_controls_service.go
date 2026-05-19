@@ -13,51 +13,52 @@ type LabelProvider interface {
 
 type AccessControlsService struct {
 	log           *logger.Logger
+	config        model.Config
 	labelProvider *LabelProvider
-	static        map[string]model.App
 }
 
 func NewAccessControlsService(
 	log *logger.Logger,
-	labelProvider *LabelProvider,
-	static map[string]model.App) *AccessControlsService {
+	config model.Config,
+	labelProvider *LabelProvider) *AccessControlsService {
+
 	return &AccessControlsService{
 		log:           log,
+		config:        config,
 		labelProvider: labelProvider,
-		static:        static,
 	}
 }
 
-func (acls *AccessControlsService) lookupStaticACLs(domain string) *model.App {
-	var appAcls *model.App
-	for app, config := range acls.static {
+func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App {
+	var nameMatch *model.App
+
+	// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
+	for app, config := range service.config.Apps {
 		if config.Config.Domain == domain {
-			acls.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
-			appAcls = &config
-			break // If we find a match by domain, we can stop searching
+			service.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
+			return &config
 		}
-
 		if strings.SplitN(domain, ".", 2)[0] == app {
-			acls.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
-			appAcls = &config
-			break // If we find a match by app name, we can stop searching
+			service.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
+			nameMatch = &config
 		}
 	}
-	return appAcls
+
+	return nameMatch
 }
 
-func (acls *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {
+func (service *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {
 	// First check in the static config
-	app := acls.lookupStaticACLs(domain)
+	app := service.lookupStaticACLs(domain)
 
 	if app != nil {
-		acls.log.App.Debug().Msg("Using static ACLs for app")
+		service.log.App.Debug().Msg("Using static ACLs for app")
 		return app, nil
 	}
 
 	// If we have a label provider configured, try to get ACLs from it
-	if acls.labelProvider != nil {
-		return (*acls.labelProvider).GetLabels(domain)
+	if service.labelProvider != nil && *service.labelProvider != nil {
+		return (*service.labelProvider).GetLabels(domain)
 	}
 
 	// no labels

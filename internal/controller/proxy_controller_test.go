@@ -9,10 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -23,33 +22,6 @@ func TestProxyController(t *testing.T) {
 	log.Init()
 
 	cfg, runtime := test.CreateTestConfigs(t)
-
-	acls := map[string]model.App{
-		"app_path_allow": {
-			Config: model.AppConfig{
-				Domain: "path-allow.example.com",
-			},
-			Path: model.AppPath{
-				Allow: "/allowed",
-			},
-		},
-		"app_user_allow": {
-			Config: model.AppConfig{
-				Domain: "user-allow.example.com",
-			},
-			Users: model.AppUsers{
-				Allow: "testuser",
-			},
-		},
-		"ip_bypass": {
-			Config: model.AppConfig{
-				Domain: "ip-bypass.example.com",
-			},
-			IP: model.AppIP{
-				Bypass: []string{"10.10.10.10"},
-			},
-		},
-	}
 
 	const browserUserAgent = `
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
@@ -379,19 +351,37 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
-	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
+	store := memory.New()
 
 	wg := &sync.WaitGroup{}
 	ctx := context.TODO()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker, nil)
-	aclsService := service.NewAccessControlsService(log, nil, acls)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil)
+	aclsService := service.NewAccessControlsService(log, cfg, nil)
+
+	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	require.NoError(t, err)
+
+	policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleOAuthGroup, &service.OAuthGroupRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleLDAPGroup, &service.LDAPGroupRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleAuthEnabled, &service.AuthEnabledRule{
+		Log: log,
+	})
+	policyEngine.RegisterRule(service.RuleIPAllowed, &service.IPAllowedRule{
+		Log:    log,
+		Config: cfg,
+	})
+	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
+		Log: log,
+	})
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
@@ -406,13 +396,9 @@ func TestProxyController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			controller.NewProxyController(log, runtime, group, aclsService, authService)
+			controller.NewProxyController(log, runtime, group, aclsService, authService, policyEngine)
 
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

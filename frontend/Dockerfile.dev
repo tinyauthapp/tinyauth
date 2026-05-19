@@ -1,11 +1,13 @@
-FROM oven/bun:1.2.16-alpine
+FROM node:26.1-alpine3.23
+
+RUN npm install -g pnpm@11.1.2
 
 WORKDIR /frontend
 
 COPY ./frontend/package.json ./
-COPY ./frontend/bun.lock ./
+COPY ./frontend/pnpm-lock.yaml ./
 
-RUN bun install --frozen-lockfile
+RUN pnpm ci
 
 COPY ./frontend/public ./public
 COPY ./frontend/src ./src
@@ -19,4 +21,4 @@ COPY ./frontend/vite.config.ts ./
 
 EXPOSE 5173
 
-ENTRYPOINT ["bun", "run", "dev"]
+ENTRYPOINT ["pnpm", "run", "dev"]

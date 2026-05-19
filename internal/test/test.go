@@ -40,6 +40,9 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			SessionExpiry:   10,
 			LoginTimeout:    10,
 			LoginMaxRetries: 3,
+			ACLs: model.ACLsConfig{
+				Policy: "allow",
+			},
 		},
 		Database: model.DatabaseConfig{
 			Path: filepath.Join(tempDir, "test.db"),
@@ -47,6 +50,32 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 		Resources: model.ResourcesConfig{
 			Enabled: true,
 			Path:    filepath.Join(tempDir, "resources"),
+		},
+		Apps: map[string]model.App{
+			"app_path_allow": {
+				Config: model.AppConfig{
+					Domain: "path-allow.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "/allowed",
+				},
+			},
+			"app_user_allow": {
+				Config: model.AppConfig{
+					Domain: "user-allow.example.com",
+				},
+				Users: model.AppUsers{
+					Allow: "testuser",
+				},
+			},
+			"ip_bypass": {
+				Config: model.AppConfig{
+					Domain: "ip-bypass.example.com",
+				},
+				IP: model.AppIP{
+					Bypass: []string{"10.10.10.10"},
+				},
+			},
 		},
 	}
 

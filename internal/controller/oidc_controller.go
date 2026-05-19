@@ -146,7 +146,7 @@ func (controller *OIDCController) Authorize(c *gin.Context) {
 	client, ok := controller.oidc.GetClient(req.ClientID)
 
 	if !ok {
-		controller.authorizeError(c, err, "Client not found", "The client ID is invalid", "", "", "")
+		controller.authorizeError(c, fmt.Errorf("client not found: %s", req.ClientID), "Client not found", "The client ID is invalid", "", "", "")
 		return
 	}
 
@@ -288,7 +288,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		entry, err := controller.oidc.GetCodeEntry(c, controller.oidc.Hash(req.Code), client.ClientID)
 		if err != nil {
 			if err := controller.oidc.DeleteTokenByCodeHash(c, controller.oidc.Hash(req.Code)); err != nil {
-				controller.log.App.Error().Err(err).Msg("Failed to delete code")
+				controller.log.App.Error().Err(err).Msg("Failed to revoke tokens for replayed code")
 			}
 			if errors.Is(err, service.ErrCodeNotFound) {
 				controller.log.App.Warn().Msg("Code not found")

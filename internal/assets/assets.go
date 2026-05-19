@@ -11,5 +11,5 @@ var FrontendAssets embed.FS
 
 // Migrations
 //
-//go:embed migrations/*.sql
+//go:embed migrations/sqlite/*.sql
 var Migrations embed.FS

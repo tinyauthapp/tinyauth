@@ -7,7 +7,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -116,12 +115,12 @@ type OIDCService struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
-	queries *repository.Queries
+	queries repository.Store
 	context context.Context
 
 	clients    map[string]model.OIDCClientConfig
 	privateKey *rsa.PrivateKey
-	publicKey  crypto.PublicKey
+	publicKey  *rsa.PublicKey
 	issuer     string
 }
 
@@ -129,7 +128,7 @@ func NewOIDCService(
 	log *logger.Logger,
 	config model.Config,
 	runtime model.RuntimeConfig,
-	queries *repository.Queries,
+	queries repository.Store,
 	ctx context.Context,
 	wg *sync.WaitGroup) (*OIDCService, error) {
 	// If not configured, skip init
@@ -239,6 +238,16 @@ func NewOIDCService(
 		}
 	}
 
+	rPublicKey, ok := publicKey.(*rsa.PublicKey)
+
+	if !ok {
+		return nil, fmt.Errorf("public key is not an rsa public key")
+	}
+
+	if rPublicKey.N.Cmp(privateKey.N) != 0 || rPublicKey.E != privateKey.E {
+		return nil, fmt.Errorf("public key does not pair with private key")
+	}
+
 	// We will reorganize the client into a map with the client ID as the key
 	clients := make(map[string]model.OIDCClientConfig)
 
@@ -271,7 +280,7 @@ func NewOIDCService(
 
 		clients:    clients,
 		privateKey: privateKey,
-		publicKey:  publicKey,
+		publicKey:  rPublicKey,
 		issuer:     issuer,
 	}
 
@@ -297,6 +306,11 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 		return errors.New("access_denied")
 	}
 
+	// Redirect URI to verify that it's trusted
+	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
+		return errors.New("invalid_request_uri")
+	}
+
 	// Scopes
 	scopes := strings.Split(req.Scope, " ")
 
@@ -316,11 +330,6 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 	// Response type
 	if !slices.Contains(SupportedResponseTypes, req.ResponseType) {
 		return errors.New("unsupported_response_type")
-	}
-
-	// Redirect URI
-	if !slices.Contains(client.TrustedRedirectURIs, req.RedirectURI) {
-		return errors.New("invalid_request_uri")
 	}
 
 	// PKCE code challenge method if set
@@ -424,7 +433,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 	oidcCode, err := service.queries.GetOidcCode(c, codeHash)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return repository.OidcCode{}, ErrCodeNotFound
 		}
 		return repository.OidcCode{}, err
@@ -455,7 +464,7 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 
 	hasher := sha256.New()
 
-	der := x509.MarshalPKCS1PublicKey(&service.privateKey.PublicKey)
+	der := x509.MarshalPKCS1PublicKey(service.publicKey)
 
 	if der == nil {
 		return "", errors.New("failed to marshal public key")
@@ -568,7 +577,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 	entry, err := service.queries.GetOidcTokenByRefreshToken(c, service.Hash(refreshToken))
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return TokenResponse{}, ErrTokenNotFound
 		}
 		return TokenResponse{}, err
@@ -647,7 +656,7 @@ func (service *OIDCService) GetAccessToken(c *gin.Context, tokenHash string) (re
 	entry, err := service.queries.GetOidcToken(c, tokenHash)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return repository.OidcToken{}, ErrTokenNotFound
 		}
 		return repository.OidcToken{}, err
@@ -735,15 +744,15 @@ func (service *OIDCService) Hash(token string) string {
 
 func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) error {
 	err := service.queries.DeleteOidcCodeBySub(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	err = service.queries.DeleteOidcTokenBySub(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	err = service.queries.DeleteOidcUserInfo(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -783,14 +792,16 @@ func (service *OIDCService) cleanupRoutine() {
 			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(service.context, currentTime)
 
 			if err != nil {
-				service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
+			service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
 			}
 
 			for _, expiredCode := range expiredCodes {
 				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
 
 				if err != nil {
-					service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+					if !errors.Is(err, repository.ErrNotFound) {
+						service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+					}
 					continue
 				}
 
@@ -813,7 +824,7 @@ func (service *OIDCService) cleanupRoutine() {
 func (service *OIDCService) GetJWK() ([]byte, error) {
 	hasher := sha256.New()
 
-	der := x509.MarshalPKCS1PublicKey(&service.privateKey.PublicKey)
+	der := x509.MarshalPKCS1PublicKey(service.publicKey)
 
 	if der == nil {
 		return nil, errors.New("failed to marshal public key")
@@ -822,13 +833,13 @@ func (service *OIDCService) GetJWK() ([]byte, error) {
 	hasher.Write(der)
 
 	jwk := jose.JSONWebKey{
-		Key:       service.privateKey,
+		Key:       service.publicKey,
 		Algorithm: string(jose.RS256),
 		Use:       "sig",
 		KeyID:     base64.URLEncoding.EncodeToString(hasher.Sum(nil)),
 	}
 
-	return jwk.Public().MarshalJSON()
+	return jwk.MarshalJSON()
 }
 
 func (service *OIDCService) ValidatePKCE(codeChallenge string, codeVerifier string) bool {

@@ -21,5 +21,6 @@ type LocalUser struct {
 
 type UserSearch struct {
 	Username string
+	Email    string // used for LDAP, we can't throw it to LDAPUser because it would need another cache or an LDAP lookup every time
 	Type     UserSearchType
 }

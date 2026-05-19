@@ -134,8 +134,7 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 	return ldap.conn, nil
 }
 
-func (ldap *LdapService) GetUserDN(username string) (string, error) {
-	// Escape the username to prevent LDAP injection
+func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, err error) {
 	escapedUsername := ldapgo.EscapeFilter(username)
 	filter := fmt.Sprintf(ldap.config.LDAP.SearchFilter, escapedUsername)
 
@@ -143,7 +142,7 @@ func (ldap *LdapService) GetUserDN(username string) (string, error) {
 		ldap.config.LDAP.BaseDN,
 		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{"dn"},
+		[]string{"dn", "mail"},
 		nil,
 	)
 
@@ -152,15 +151,15 @@ func (ldap *LdapService) GetUserDN(username string) (string, error) {
 
 	searchResult, err := ldap.conn.Search(searchRequest)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if len(searchResult.Entries) != 1 {
-		return "", fmt.Errorf("multiple or no entries found for user %s", username)
+		return "", "", fmt.Errorf("multiple or no entries found for user %s", username)
 	}
 
-	userDN := searchResult.Entries[0].DN
-	return userDN, nil
+	entry := searchResult.Entries[0]
+	return entry.DN, entry.GetAttributeValue("mail"), nil
 }
 
 func (ldap *LdapService) GetUserGroups(userDN string) ([]string, error) {
