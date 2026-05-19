@@ -32,6 +32,7 @@ type TailscaleService struct {
 	srv *tsnet.Server
 	lc  *local.Client
 	ln  *net.Listener
+	mu  sync.Mutex
 }
 
 func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, wg *sync.WaitGroup) (*TailscaleService, error) {
@@ -60,6 +61,7 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 	lc, err := srv.LocalClient()
 
 	if err != nil {
+		_ = srv.Close()
 		return nil, fmt.Errorf("failed to get tailscale local client: %w", err)
 	}
 
@@ -78,6 +80,7 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 	err = service.waitForConn(connectCtx)
 
 	if err != nil {
+		_ = srv.Close()
 		return nil, fmt.Errorf("failed to connect to tailscale network: %w", err)
 	}
 
@@ -89,10 +92,16 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 func (ts *TailscaleService) watchAndClose() {
 	<-ts.ctx.Done()
 	ts.log.App.Debug().Msg("Shutting down Tailscale service")
-	if ts.ln != nil {
+	ts.mu.Lock()
+	srv := ts.srv
+	ln := ts.ln
+	ts.ln = nil
+	ts.srv = nil
+	ts.mu.Unlock()
+	if ln != nil {
 		(*ts.ln).Close()
 	}
-	if ts.srv != nil {
+	if srv != nil {
 		ts.srv.Close()
 	}
 }
@@ -119,6 +128,9 @@ func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*TailscaleW
 }
 
 func (ts *TailscaleService) CreateListener() (net.Listener, error) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
 	if ts.ln != nil {
 		return *ts.ln, nil
 	}
