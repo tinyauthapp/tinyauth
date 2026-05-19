@@ -15,6 +15,14 @@ import (
 	"tailscale.com/tsnet"
 )
 
+type TailscaleWhoisResponse struct {
+	UserID      string
+	LoginName   string
+	DisplayName string
+	NodeName    string
+	Tags        []string
+}
+
 type TailscaleService struct {
 	log    *logger.Logger
 	wg     *sync.WaitGroup
@@ -89,7 +97,7 @@ func (ts *TailscaleService) watchAndClose() {
 	}
 }
 
-func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*model.TailscaleWhoisResponse, error) {
+func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*TailscaleWhoisResponse, error) {
 	who, err := ts.lc.WhoIs(ctx, addr)
 
 	if err != nil {
@@ -99,7 +107,7 @@ func (ts *TailscaleService) Whois(ctx context.Context, addr string) (*model.Tail
 		return nil, fmt.Errorf("failed to get client whois: %w", err)
 	}
 
-	res := model.TailscaleWhoisResponse{
+	res := TailscaleWhoisResponse{
 		UserID:      who.UserProfile.ID.String(),
 		LoginName:   who.UserProfile.LoginName,
 		DisplayName: who.UserProfile.DisplayName,

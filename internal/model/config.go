@@ -88,7 +88,6 @@ type Config struct {
 	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
-	LabelProvider string             `description:"Label provider to use (docker, kubernetes, auto)." yaml:"labelProvider"`
 }
 
 type DatabaseConfig struct {
@@ -242,14 +241,6 @@ type OIDCClientConfig struct {
 	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile"`
 	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris"`
 	Name                string   `description:"Client name in UI." yaml:"name"`
-}
-
-type TailscaleWhoisResponse struct {
-	UserID      string
-	LoginName   string
-	DisplayName string
-	NodeName    string
-	Tags        []string
 }
 
 type ACLsConfig struct {
