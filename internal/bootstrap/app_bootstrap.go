@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -44,7 +45,7 @@ type BootstrapApp struct {
 	log      *logger.Logger
 	ctx      context.Context
 	cancel   context.CancelFunc
-	queries  *repository.Queries
+	queries  repository.Store
 	router   *gin.Engine
 	db       *sql.DB
 	wg       sync.WaitGroup
@@ -163,7 +164,7 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
 
 	// database
-	err = app.SetupDatabase()
+	store, err := app.SetupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
@@ -174,12 +175,13 @@ func (app *BootstrapApp) Setup() error {
 	defer func() {
 		app.cancel()
 		app.wg.Wait()
-		app.db.Close()
+		if app.db != nil {
+			app.db.Close()
+		}
 	}()
 
-	// queries
-	queries := repository.New(app.db)
-	app.queries = queries
+	// store
+	app.queries = store
 
 	// services
 	err = app.setupServices()

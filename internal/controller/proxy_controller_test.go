@@ -9,10 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -352,19 +351,15 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	app := bootstrap.NewBootstrapApp(cfg)
-
-	err := app.SetupDatabase()
-	require.NoError(t, err)
-
-	queries := repository.New(app.GetDB())
+	store := memory.New()
 
 	wg := &sync.WaitGroup{}
 	ctx := context.TODO()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker)
 	aclsService := service.NewAccessControlsService(log, cfg, nil)
+
 	policyEngine, err := service.NewPolicyEngine(cfg, log)
 	require.NoError(t, err)
 
@@ -406,8 +401,4 @@ func TestProxyController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

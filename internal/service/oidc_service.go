@@ -7,7 +7,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -116,7 +115,7 @@ type OIDCService struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
-	queries *repository.Queries
+	queries repository.Store
 	context context.Context
 
 	clients    map[string]model.OIDCClientConfig
@@ -129,7 +128,7 @@ func NewOIDCService(
 	log *logger.Logger,
 	config model.Config,
 	runtime model.RuntimeConfig,
-	queries *repository.Queries,
+	queries repository.Store,
 	ctx context.Context,
 	wg *sync.WaitGroup) (*OIDCService, error) {
 	// If not configured, skip init
@@ -434,7 +433,7 @@ func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, client
 	oidcCode, err := service.queries.GetOidcCode(c, codeHash)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return repository.OidcCode{}, ErrCodeNotFound
 		}
 		return repository.OidcCode{}, err
@@ -578,7 +577,7 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 	entry, err := service.queries.GetOidcTokenByRefreshToken(c, service.Hash(refreshToken))
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return TokenResponse{}, ErrTokenNotFound
 		}
 		return TokenResponse{}, err
@@ -657,7 +656,7 @@ func (service *OIDCService) GetAccessToken(c *gin.Context, tokenHash string) (re
 	entry, err := service.queries.GetOidcToken(c, tokenHash)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return repository.OidcToken{}, ErrTokenNotFound
 		}
 		return repository.OidcToken{}, err
@@ -745,15 +744,15 @@ func (service *OIDCService) Hash(token string) string {
 
 func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) error {
 	err := service.queries.DeleteOidcCodeBySub(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	err = service.queries.DeleteOidcTokenBySub(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	err = service.queries.DeleteOidcUserInfo(ctx, sub)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -793,14 +792,16 @@ func (service *OIDCService) cleanupRoutine() {
 			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(service.context, currentTime)
 
 			if err != nil {
-				service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
+			service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
 			}
 
 			for _, expiredCode := range expiredCodes {
 				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
 
 				if err != nil {
-					service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+					if !errors.Is(err, repository.ErrNotFound) {
+						service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
+					}
 					continue
 				}
 

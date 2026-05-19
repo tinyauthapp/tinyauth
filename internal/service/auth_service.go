@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -77,7 +76,7 @@ type AuthService struct {
 	context context.Context
 
 	ldap        *LdapService
-	queries     *repository.Queries
+	queries     repository.Store
 	oauthBroker *OAuthBrokerService
 
 	loginAttempts        map[string]*LoginAttempt
@@ -98,7 +97,7 @@ func NewAuthService(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	ldap *LdapService,
-	queries *repository.Queries,
+	queries repository.Store,
 	oauthBroker *OAuthBrokerService,
 ) *AuthService {
 	service := &AuthService{
@@ -420,7 +419,7 @@ func (auth *AuthService) GetSession(ctx context.Context, uuid string) (*reposito
 	session, err := auth.queries.GetSession(ctx, uuid)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return nil, errors.New("session not found")
 		}
 		return nil, err
