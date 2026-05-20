@@ -285,10 +285,15 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 	}
 }
 
-func (auth *AuthService) IsEmailWhitelisted(email string) bool {
-	match, err := utils.CheckFilter(strings.Join(auth.runtime.OAuthWhitelist, ","), email)
+func (auth *AuthService) IsEmailWhitelisted(provider string, email string) bool {
+	whitelist := auth.runtime.OAuthWhitelist
+	if providerConfig, ok := auth.runtime.OAuthProviders[provider]; ok && len(providerConfig.Whitelist) > 0 {
+		whitelist = providerConfig.Whitelist
+	}
+
+	match, err := utils.CheckFilter(strings.Join(whitelist, ","), email)
 	if err != nil {
-		auth.log.App.Warn().Err(err).Str("email", email).Msg("Invalid email filter pattern")
+		auth.log.App.Warn().Err(err).Str("provider", provider).Str("email", email).Msg("Invalid email filter pattern")
 		return false
 	}
 	return match
