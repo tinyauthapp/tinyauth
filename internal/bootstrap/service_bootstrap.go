@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-
 	"os"
 
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -126,7 +125,8 @@ func (app *BootstrapApp) setupPolicyEngine() error {
 		Config: app.config,
 	})
 	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
-		Log: app.log,
+		Log:    app.log,
+		Config: app.config,
 	})
 
 	app.services.policyEngine = policyEngine

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
@@ -558,12 +559,12 @@ func TestIPAllowedRule(t *testing.T) {
 		expected Effect
 	}{
 		{
-			name: "abstains when ACLs are nil",
+			name: "allows when ACLs are nil and no global lists configured",
 			ctx: &ACLContext{
 				ACLs: nil,
 				IP:   net.ParseIP("10.0.0.1"),
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
 		},
 		{
 			name: "denies when IP matches app block list",
@@ -669,15 +670,21 @@ func TestIPBypassedRule(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	rule := &IPBypassedRule{Log: log}
+	defaultIPBR := &IPBypassedRule{Log: log}
+	globBypassIPBR := &IPBypassedRule{
+		Log:    log,
+		Config: model.Config{Auth: model.AuthConfig{IP: model.IPConfig{Bypass: []string{"10.0.0.0/24"}}}},
+	}
 
 	tests := []struct {
 		name     string
+		rule     *IPBypassedRule
 		ctx      *ACLContext
 		expected Effect
 	}{
 		{
-			name: "deny when ACLs are nil",
+			name: "deny when ACLs are nil and no global bypass",
+			rule: defaultIPBR,
 			ctx: &ACLContext{
 				ACLs: nil,
 				IP:   net.ParseIP("10.0.0.1"),
@@ -685,7 +692,48 @@ func TestIPBypassedRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
+			name: "allows when ACLs are nil but IP matches global bypass",
+			rule: globBypassIPBR,
+			ctx: &ACLContext{
+				ACLs: nil,
+				IP:   net.ParseIP("10.0.0.5"),
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "denies when ACLs are nil and IP does not match global bypass",
+			rule: globBypassIPBR,
+			ctx: &ACLContext{
+				ACLs: nil,
+				IP:   net.ParseIP("192.168.1.1"),
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "allows when IP matches per-app bypass but not global bypass",
+			rule: defaultIPBR,
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
+				},
+				IP: net.ParseIP("10.0.0.5"),
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when IP matches global bypass but not per-app bypass",
+			rule: globBypassIPBR,
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					IP: model.AppIP{Bypass: []string{"172.16.0.0/24"}},
+				},
+				IP: net.ParseIP("10.0.0.5"),
+			},
+			expected: EffectAllow,
+		},
+		{
 			name: "allows when IP matches bypass list",
+			rule: defaultIPBR,
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
@@ -696,6 +744,7 @@ func TestIPBypassedRule(t *testing.T) {
 		},
 		{
 			name: "denies when IP does not match bypass list",
+			rule: defaultIPBR,
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
@@ -706,6 +755,7 @@ func TestIPBypassedRule(t *testing.T) {
 		},
 		{
 			name: "denies when bypass list is empty",
+			rule: defaultIPBR,
 			ctx: &ACLContext{
 				ACLs: &model.App{},
 				IP:   net.ParseIP("10.0.0.1"),
@@ -714,6 +764,7 @@ func TestIPBypassedRule(t *testing.T) {
 		},
 		{
 			name: "skips invalid bypass entries and allows on later match",
+			rule: defaultIPBR,
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"not-an-ip", "10.0.0.1"}},
@@ -726,7 +777,7 @@ func TestIPBypassedRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, rule.Evaluate(tt.ctx))
+			assert.Equal(t, tt.expected, tt.rule.Evaluate(tt.ctx))
 		})
 	}
 }

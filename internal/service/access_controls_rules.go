@@ -182,13 +182,14 @@ type IPAllowedRule struct {
 }
 
 func (rule *IPAllowedRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil {
-		return EffectAbstain
-	}
+	// merge global and per-app block/allow lists
+	blockedIps := append([]string{}, rule.Config.Auth.IP.Block...)
+	allowedIPs := append([]string{}, rule.Config.Auth.IP.Allow...)
 
-	// Merge the global and app IP filter
-	blockedIps := append(ctx.ACLs.IP.Block, rule.Config.Auth.IP.Block...)
-	allowedIPs := append(ctx.ACLs.IP.Allow, rule.Config.Auth.IP.Allow...)
+	if ctx.ACLs != nil {
+		blockedIps = append(blockedIps, ctx.ACLs.IP.Block...)
+		allowedIPs = append(allowedIPs, ctx.ACLs.IP.Allow...)
+	}
 
 	for _, blocked := range blockedIps {
 		match, err := utils.CheckIPFilter(blocked, ctx.IP.String())
@@ -224,15 +225,18 @@ func (rule *IPAllowedRule) Evaluate(ctx *ACLContext) Effect {
 }
 
 type IPBypassedRule struct {
-	Log *logger.Logger
+	Log    *logger.Logger
+	Config model.Config
 }
 
 func (rule *IPBypassedRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil {
-		return EffectDeny
+	// merge global and per-app bypass lists
+	bypassList := append([]string{}, rule.Config.Auth.IP.Bypass...)
+	if ctx.ACLs != nil {
+		bypassList = append(bypassList, ctx.ACLs.IP.Bypass...)
 	}
 
-	for _, bypassed := range ctx.ACLs.IP.Bypass {
+	for _, bypassed := range bypassList {
 		match, err := utils.CheckIPFilter(bypassed, ctx.IP.String())
 		if err != nil {
 			rule.Log.App.Warn().Err(err).Str("item", bypassed).Msg("Invalid IP/CIDR in bypass list")

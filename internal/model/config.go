@@ -154,8 +154,9 @@ type AddressClaim struct {
 }
 
 type IPConfig struct {
-	Allow []string `description:"List of allowed IPs or CIDR ranges." yaml:"allow"`
-	Block []string `description:"List of blocked IPs or CIDR ranges." yaml:"block"`
+	Allow  []string `description:"List of allowed IPs or CIDR ranges." yaml:"allow"`
+	Block  []string `description:"List of blocked IPs or CIDR ranges." yaml:"block"`
+	Bypass []string `description:"List of IPs or CIDR ranges that bypass authentication entirely." yaml:"bypass"`
 }
 
 type OAuthConfig struct {
