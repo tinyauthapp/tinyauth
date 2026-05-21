@@ -18,7 +18,7 @@ const totpSchema = z.object({
 });
 
 const tailscaleSchema = z.object({
-  nodeName: z.string(),
+  nodeName: z.string().optional(),
 });
 
 export const userContextSchema = z.object({

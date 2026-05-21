@@ -46,7 +46,7 @@ export const LoginPage = () => {
   const { t } = useTranslation();
 
   const [showRedirectButton, setShowRedirectButton] = useState(false);
-  const [useTailscale, setUseTailscale] = useState(tailscale.nodeName !== "");
+  const [useTailscale, setUseTailscale] = useState(tailscale.nodeName !== undefined);
 
   const hasAutoRedirectedRef = useRef(false);
 
