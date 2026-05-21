@@ -25,7 +25,7 @@ func TestKubernetesService(t *testing.T) {
 			description: "Cache by domain returns app and misses unknown domain",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "foo.example.com"}}
-				svc.addIngressApps("default", "my-ingress", []ingressApp{
+				svc.addResourceApps("default", "my-ingress", []resourceApp{
 					{domain: "foo.example.com", appName: "foo", app: app},
 				})
 
@@ -41,7 +41,7 @@ func TestKubernetesService(t *testing.T) {
 			description: "Cache by app name returns app and misses unknown name",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "bar.example.com"}}
-				svc.addIngressApps("default", "my-ingress", []ingressApp{
+				svc.addResourceApps("default", "my-ingress", []resourceApp{
 					{domain: "bar.example.com", appName: "bar", app: app},
 				})
 
@@ -54,14 +54,14 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
-			description: "RemoveIngress clears domain and app name entries",
+			description: "RemoveResource clears domain and app name entries",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "baz.example.com"}}
-				svc.addIngressApps("default", "my-ingress", []ingressApp{
+				svc.addResourceApps("default", "my-ingress", []resourceApp{
 					{domain: "baz.example.com", appName: "baz", app: app},
 				})
 
-				svc.removeIngress("default", "my-ingress")
+				svc.removeResource("default", "my-ingress")
 
 				got := svc.getByDomain("baz.example.com")
 				assert.Nil(t, got)
@@ -70,15 +70,15 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
-			description: "AddIngressApps replaces stale entries for the same ingress",
+			description: "AddResourceApps replaces stale entries for the same resource",
 			run: func(t *testing.T, svc *KubernetesService) {
 				old := model.App{Config: model.AppConfig{Domain: "old.example.com"}}
-				svc.addIngressApps("default", "my-ingress", []ingressApp{
+				svc.addResourceApps("default", "my-ingress", []resourceApp{
 					{domain: "old.example.com", appName: "old", app: old},
 				})
 
 				updated := model.App{Config: model.AppConfig{Domain: "new.example.com"}}
-				svc.addIngressApps("default", "my-ingress", []ingressApp{
+				svc.addResourceApps("default", "my-ingress", []resourceApp{
 					{domain: "new.example.com", appName: "new", app: updated},
 				})
 
@@ -96,7 +96,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.started = true
 
 				app := model.App{Config: model.AppConfig{Domain: "hit.example.com"}}
-				svc.addIngressApps("default", "ing", []ingressApp{
+				svc.addResourceApps("default", "ing", []resourceApp{
 					{domain: "hit.example.com", appName: "hit", app: app},
 				})
 
@@ -121,7 +121,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.started = true
 
 				app := model.App{Config: model.AppConfig{Domain: "myapp.internal.example.com"}}
-				svc.addIngressApps("default", "ing", []ingressApp{
+				svc.addResourceApps("default", "ing", []resourceApp{
 					{domain: "myapp.internal.example.com", appName: "myapp", app: app},
 				})
 
@@ -139,7 +139,7 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
-			description: "UpdateFromItem parses annotations and populates cache",
+			description: "UpdateFromItem parses annotations and populates cache from ingress",
 			run: func(t *testing.T, svc *KubernetesService) {
 				item := unstructured.Unstructured{}
 				item.SetNamespace("default")
@@ -158,10 +158,29 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
+			description: "UpdateFromItem parses annotations and populates cache from httproute",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+					"tinyauth.apps.gwapp.users.allow":   "bob",
+				})
+
+				svc.updateFromItem(&item)
+
+				got := svc.getByDomain("gwapp.example.com")
+				require.NotNil(t, got)
+				assert.Equal(t, "gwapp.example.com", got.Config.Domain)
+				assert.Equal(t, "bob", got.Users.Allow)
+			},
+		},
+		{
 			description: "UpdateFromItem with no annotations removes existing cache entries",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "todelete.example.com"}}
-				svc.addIngressApps("default", "test-ingress", []ingressApp{
+				svc.addResourceApps("default", "test-ingress", []resourceApp{
 					{domain: "todelete.example.com", appName: "todelete", app: app},
 				})
 
@@ -175,14 +194,62 @@ func TestKubernetesService(t *testing.T) {
 				assert.Nil(t, got)
 			},
 		},
+		{
+			description: "UpdateFromItem parses annotations and populates cache from grpcroute",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-grpcroute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.grpcapp.config.domain": "grpcapp.example.com",
+					"tinyauth.apps.grpcapp.users.allow":   "carol",
+				})
+
+				svc.updateFromItem(&item)
+
+				got := svc.getByDomain("grpcapp.example.com")
+				require.NotNil(t, got)
+				assert.Equal(t, "grpcapp.example.com", got.Config.Domain)
+				assert.Equal(t, "carol", got.Users.Allow)
+			},
+		},
+		{
+			description: "Ingress and HTTPRoute apps coexist in cache",
+			run: func(t *testing.T, svc *KubernetesService) {
+				ingress := unstructured.Unstructured{}
+				ingress.SetNamespace("default")
+				ingress.SetName("my-ingress")
+				ingress.SetAnnotations(map[string]string{
+					"tinyauth.apps.ingapp.config.domain": "ingapp.example.com",
+				})
+
+				httproute := unstructured.Unstructured{}
+				httproute.SetNamespace("default")
+				httproute.SetName("my-httproute")
+				httproute.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+				})
+
+				svc.updateFromItem(&ingress)
+				svc.updateFromItem(&httproute)
+
+				got := svc.getByDomain("ingapp.example.com")
+				require.NotNil(t, got)
+				assert.Equal(t, "ingapp.example.com", got.Config.Domain)
+
+				got = svc.getByDomain("gwapp.example.com")
+				require.NotNil(t, got)
+				assert.Equal(t, "gwapp.example.com", got.Config.Domain)
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			svc := &KubernetesService{
-				ingressApps:  make(map[ingressKey][]ingressApp),
-				domainIndex:  make(map[string]ingressAppKey),
-				appNameIndex: make(map[string]ingressAppKey),
+				resourceApps: make(map[resourceKey][]resourceApp),
+				domainIndex:  make(map[string]resourceAppKey),
+				appNameIndex: make(map[string]resourceAppKey),
 				log:          log,
 			}
 			test.run(t, svc)
