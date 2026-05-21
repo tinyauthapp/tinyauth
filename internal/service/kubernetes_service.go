@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -167,11 +168,78 @@ func (k *KubernetesService) getByAppName(appName string) *model.App {
 	return nil
 }
 
+func (k *KubernetesService) extractPaths(rule map[string]any) ([]string, error) {
+	http, found, err := unstructured.NestedMap(rule, "http")
+	if err != nil {
+		return nil, fmt.Errorf("reading http from rule: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	paths, found, err := unstructured.NestedSlice(http, "paths")
+	if err != nil {
+		return nil, fmt.Errorf("reading http.paths: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	var result []string
+	for _, p := range paths {
+		path, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		if p, ok := path["path"].(string); ok && p != "" {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (k *KubernetesService) extractHosts(item *unstructured.Unstructured) ([]string, error) {
+	rules, found, err := unstructured.NestedSlice(item.Object, "spec", "rules")
+	if err != nil {
+		return nil, fmt.Errorf("reading spec.rules: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	var hosts []string
+	for _, r := range rules {
+		rule, ok := r.(map[string]any)
+		if !ok {
+			continue
+		}
+		if host, ok := rule["host"].(string); ok && host != "" {
+			hosts = append(hosts, host)
+		}
+		paths, err := k.extractPaths(rule)
+		if err != nil {
+			// This is purely to warn users, it doesn't affect our ability to extract hosts so we won't fail the whole operation
+			k.log.App.Warn().Err(err).Str("namespace", item.GetNamespace()).Str("name", item.GetName()).Msg("Failed to extract paths from ingress rule")
+			continue
+		}
+		if len(paths) == 0 {
+			continue
+		}
+		if !slices.Contains(paths, "/") {
+			k.log.App.Warn().Str("namespace", item.GetNamespace()).Str("name", item.GetName()).Strs("paths", paths).Msg("Ingress rule does not contain a catch-all path, another ingress may be able to bypass auth checks if it routes the same host with a different path. Consider adding a catch-all path to this rule to ensure auth checks are applied to all paths for this host.")
+		}
+	}
+	k.log.App.Trace().Strs("hosts", hosts).Msg("Extracted hosts from ingress rules")
+	return hosts, nil
+}
+
 func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
 	namespace := item.GetNamespace()
 	name := item.GetName()
 	annotations := item.GetAnnotations()
 	if annotations == nil {
+		k.removeIngress(namespace, name)
+		return
+	}
+	hosts, err := k.extractHosts(item)
+	if err != nil {
 		k.removeIngress(namespace, name)
 		return
 	}
@@ -184,6 +252,10 @@ func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
 	var apps []ingressApp
 	for appName, appLabels := range labels.Apps {
 		if appLabels.Config.Domain == "" {
+			continue
+		}
+		if len(hosts) > 0 && !slices.Contains(hosts, appLabels.Config.Domain) {
+			k.log.App.Warn().Str("namespace", namespace).Str("name", name).Str("appName", appName).Str("domain", appLabels.Config.Domain).Msg("App domain does not match any hosts defined in ingress rules, skipping")
 			continue
 		}
 		apps = append(apps, ingressApp{
