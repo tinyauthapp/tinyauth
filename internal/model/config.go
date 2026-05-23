@@ -91,8 +91,8 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	Driver string `description:"The database driver to use. Valid values: sqlite, memory." yaml:"driver"`
-	Path   string `description:"The path to the SQLite database, including file name. Only used when driver is sqlite." yaml:"path"`
+	Driver string `description:"The database driver to use. Valid values: sqlite, postgres, memory." yaml:"driver"`
+	Path   string `description:"The path to the SQLite database file, or connection URL when driver is postgres." yaml:"path"`
 }
 
 type AnalyticsConfig struct {
