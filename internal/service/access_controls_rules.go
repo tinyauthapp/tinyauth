@@ -114,7 +114,7 @@ type LDAPGroupRule struct {
 }
 
 func (rule *LDAPGroupRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx == nil || ctx.UserContext == nil {
+	if ctx == nil || ctx.UserContext == nil || ctx.ACLs == nil {
 		return EffectAbstain
 	}
 
