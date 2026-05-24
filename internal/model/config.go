@@ -62,9 +62,6 @@ func NewDefaultConfiguration() *Config {
 			PrivateKeyPath: "./tinyauth_oidc_key",
 			PublicKeyPath:  "./tinyauth_oidc_key.pub",
 		},
-		Experimental: ExperimentalConfig{
-			ConfigFile: "",
-		},
 		Tailscale: TailscaleConfig{
 			Dir: "./tailscale_state",
 		},
@@ -88,6 +85,7 @@ type Config struct {
 	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
+	ConfigFile    string             `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {
@@ -208,9 +206,8 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level"`
 }
 
-type ExperimentalConfig struct {
-	ConfigFile string `description:"Path to config file." yaml:"-"`
-}
+// no experimental features
+type ExperimentalConfig struct{}
 
 type TailscaleConfig struct {
 	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled"`
