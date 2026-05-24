@@ -8,11 +8,11 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
@@ -840,9 +840,9 @@ func TestOIDCController(t *testing.T) {
 
 	store := memory.New()
 
-	wg := &sync.WaitGroup{}
+	dg := ding.New(context.TODO())
 
-	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, context.TODO(), wg)
+	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, dg)
 	require.NoError(t, err)
 
 	for _, test := range tests {

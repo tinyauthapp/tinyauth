@@ -3,9 +3,9 @@ package service_test
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"testing"
 
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -70,9 +70,9 @@ func TestCompileUserinfo(t *testing.T) {
 	log.Init()
 
 	ctx := context.TODO()
-	wg := &sync.WaitGroup{}
+	dg := ding.New(ctx)
 
-	svc, err := service.NewOIDCService(log, cfg, runtime, nil, ctx, wg)
+	svc, err := service.NewOIDCService(log, cfg, runtime, nil, dg)
 	require.NoError(t, err)
 
 	type testCase struct {

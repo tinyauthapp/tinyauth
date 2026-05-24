@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
@@ -89,11 +89,11 @@ func TestWellKnownController(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	wg := &sync.WaitGroup{}
+	dg := ding.New(ctx)
 
 	store := memory.New()
 
-	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, ctx, wg)
+	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, dg)
 	require.NoError(t, err)
 
 	for _, test := range tests {
