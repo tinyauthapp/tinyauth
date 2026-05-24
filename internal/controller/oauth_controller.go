@@ -218,7 +218,11 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	var username string
 
-	if strings.TrimSpace(user.PreferredUsername) != "" {
+	override, exists := controller.auth.GetUsernameOverride(user.Email)
+	if exists {
+		controller.log.App.Debug().Msg("Using username override from OAuth config")
+		username = override
+	} else if strings.TrimSpace(user.PreferredUsername) != "" {
 		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
 		username = user.PreferredUsername
 	} else {

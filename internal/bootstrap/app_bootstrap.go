@@ -113,6 +113,24 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.OAuthWhitelist = oauthWhitelist
 
+	// load oauth username overrides
+	oauthUsernameOverrides, err := utils.GetStringList(app.config.OAuth.UsernameOverrides, app.config.OAuth.UsernameOverridesFile)
+
+	if err != nil {
+		return fmt.Errorf("failed to load oauth username overrides: %w", err)
+	}
+
+	oauthUsernameOverrideMap := make(map[string]string, len(oauthUsernameOverrides))
+	for _, override := range oauthUsernameOverrides {
+		parts := strings.SplitN(override, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid oauth username override format: %s", override)
+		}
+		oauthUsernameOverrideMap[parts[0]] = parts[1]
+	}
+
+	app.runtime.OAuthUsernameOverrides = oauthUsernameOverrideMap
+
 	// setup oauth providers
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 

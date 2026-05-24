@@ -294,6 +294,11 @@ func (auth *AuthService) IsEmailWhitelisted(email string) bool {
 	return match
 }
 
+func (auth *AuthService) GetUsernameOverride(email string) (string, bool) {
+	username, exists := auth.runtime.OAuthUsernameOverrides[email]
+	return username, exists
+}
+
 func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {
 	if data.Provider == "tailscale" && auth.tailscale == nil {
 		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
