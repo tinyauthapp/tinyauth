@@ -8,7 +8,7 @@ import (
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService, err := service.NewLdapService(app.log, app.config, app.ctx, &app.wg)
+	ldapService, err := service.NewLdapService(app.log, app.config, app.ding)
 
 	if err != nil {
 		app.log.App.Warn().Err(err).Msg("Failed to initialize LDAP connection, will continue without it")
@@ -22,7 +22,7 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to initialize label provider: %w", err)
 	}
 
-	tailscaleService, err := service.NewTailscaleService(app.log, app.config, app.ctx, &app.wg)
+	tailscaleService, err := service.NewTailscaleService(app.log, app.config, app.ctx, app.ding)
 
 	if err != nil {
 		app.log.App.Warn().Err(err).Msg("Failed to initialize Tailscale connection, will continue without it")
@@ -42,10 +42,10 @@ func (app *BootstrapApp) setupServices() error {
 	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
 	app.services.oauthBrokerService = oauthBrokerService
 
-	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, &app.wg, app.services.ldapService, app.queries, app.services.oauthBrokerService, app.services.tailscaleService)
+	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, app.ding, app.services.ldapService, app.queries, app.services.oauthBrokerService, app.services.tailscaleService)
 	app.services.authService = authService
 
-	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ctx, &app.wg)
+	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ding)
 
 	if err != nil {
 		return fmt.Errorf("failed to initialize oidc service: %w", err)
@@ -69,7 +69,7 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		if useKubernetes {
 			app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-			kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, &app.wg)
+			kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, app.ding)
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
@@ -81,7 +81,7 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService, err := service.NewDockerService(app.log, app.ctx, &app.wg)
+		dockerService, err := service.NewDockerService(app.log, app.ctx, app.ding)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize docker service: %w", err)

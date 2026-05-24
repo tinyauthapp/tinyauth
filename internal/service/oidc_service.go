@@ -15,13 +15,13 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"slices"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-jose/go-jose/v4"
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -116,7 +116,6 @@ type OIDCService struct {
 	config  model.Config
 	runtime model.RuntimeConfig
 	queries repository.Store
-	context context.Context
 
 	clients    map[string]model.OIDCClientConfig
 	privateKey *rsa.PrivateKey
@@ -129,8 +128,7 @@ func NewOIDCService(
 	config model.Config,
 	runtime model.RuntimeConfig,
 	queries repository.Store,
-	ctx context.Context,
-	wg *sync.WaitGroup) (*OIDCService, error) {
+	dg *ding.Ding) (*OIDCService, error) {
 	// If not configured, skip init
 	if len(runtime.OIDCClients) == 0 {
 		return nil, nil
@@ -276,7 +274,6 @@ func NewOIDCService(
 		config:  config,
 		runtime: runtime,
 		queries: queries,
-		context: ctx,
 
 		clients:    clients,
 		privateKey: privateKey,
@@ -285,7 +282,7 @@ func NewOIDCService(
 	}
 
 	// Start cleanup routine
-	wg.Go(service.cleanupRoutine)
+	dg.Go(service.cleanupRoutine, ding.RingMinor)
 
 	return service, nil
 }
@@ -759,7 +756,7 @@ func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) er
 }
 
 // Cleanup routine - Resource heavy due to the linked tables
-func (service *OIDCService) cleanupRoutine() {
+func (service *OIDCService) cleanupRoutine(ctx context.Context) {
 	service.log.App.Debug().Msg("Starting OIDC cleanup routine")
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
@@ -772,7 +769,7 @@ func (service *OIDCService) cleanupRoutine() {
 			currentTime := time.Now().Unix()
 
 			// For the OIDC tokens, if they are expired we delete the userinfo and codes
-			expiredTokens, err := service.queries.DeleteExpiredOidcTokens(service.context, repository.DeleteExpiredOidcTokensParams{
+			expiredTokens, err := service.queries.DeleteExpiredOidcTokens(ctx, repository.DeleteExpiredOidcTokensParams{
 				TokenExpiresAt:        currentTime,
 				RefreshTokenExpiresAt: currentTime,
 			})
@@ -782,21 +779,21 @@ func (service *OIDCService) cleanupRoutine() {
 			}
 
 			for _, expiredToken := range expiredTokens {
-				err := service.DeleteOldSession(service.context, expiredToken.Sub)
+				err := service.DeleteOldSession(ctx, expiredToken.Sub)
 				if err != nil {
 					service.log.App.Warn().Err(err).Msg("Failed to delete session for expired token")
 				}
 			}
 
 			// For expired codes, we need to get the sub, check if tokens are expired and if they are remove everything
-			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(service.context, currentTime)
+			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(ctx, currentTime)
 
 			if err != nil {
-			service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
+				service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
 			}
 
 			for _, expiredCode := range expiredCodes {
-				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
+				token, err := service.queries.GetOidcTokenBySub(ctx, expiredCode.Sub)
 
 				if err != nil {
 					if !errors.Is(err, repository.ErrNotFound) {
@@ -806,7 +803,7 @@ func (service *OIDCService) cleanupRoutine() {
 				}
 
 				if token.TokenExpiresAt < currentTime && token.RefreshTokenExpiresAt < currentTime {
-					err := service.DeleteOldSession(service.context, expiredCode.Sub)
+					err := service.DeleteOldSession(ctx, expiredCode.Sub)
 					if err != nil {
 						service.log.App.Warn().Err(err).Msg("Failed to delete session for expired code")
 					}
@@ -814,7 +811,7 @@ func (service *OIDCService) cleanupRoutine() {
 			}
 
 			service.log.App.Debug().Msg("Finished OIDC cleanup routine")
-		case <-service.context.Done():
+		case <-ctx.Done():
 			service.log.App.Debug().Msg("Stopping OIDC cleanup routine")
 			return
 		}

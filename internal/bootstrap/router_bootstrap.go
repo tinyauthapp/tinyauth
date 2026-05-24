@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -80,9 +81,9 @@ func (app *BootstrapApp) runListeners() (chan error, error) {
 			return nil, fmt.Errorf("failed to get listener function: %w", err)
 		}
 
-		app.wg.Go(func() {
-			lec <- listenerFunc()
-		})
+		app.ding.Go(func(ctx context.Context) {
+			lec <- listenerFunc(ctx)
+		}, ding.RingNormal)
 	}
 
 	return lec, nil
@@ -125,7 +126,7 @@ func (app *BootstrapApp) calculateListenerPolicy() []Listener {
 	return l
 }
 
-func (app *BootstrapApp) listenerFromType(listenerType Listener) (func() error, error) {
+func (app *BootstrapApp) listenerFromType(listenerType Listener) (func(ctx context.Context) error, error) {
 	switch listenerType {
 	case ListenerHTTP:
 		return app.serveHTTP, nil
@@ -138,7 +139,7 @@ func (app *BootstrapApp) listenerFromType(listenerType Listener) (func() error, 
 	}
 }
 
-func (app *BootstrapApp) serveHTTP() error {
+func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
 	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
 
 	app.log.App.Info().Msgf("Starting server on %s", address)
@@ -154,10 +155,10 @@ func (app *BootstrapApp) serveHTTP() error {
 		Handler: app.router.Handler(),
 	}
 
-	return app.serve(listener, server, "http")
+	return app.serve(listener, server, ctx, "http")
 }
 
-func (app *BootstrapApp) serveUnix() error {
+func (app *BootstrapApp) serveUnix(ctx context.Context) error {
 	_, err := os.Stat(app.config.Server.SocketPath)
 
 	if err == nil {
@@ -181,10 +182,10 @@ func (app *BootstrapApp) serveUnix() error {
 		Handler: app.router.Handler(),
 	}
 
-	return app.serve(listener, server, "unix socket")
+	return app.serve(listener, server, ctx, "unix socket")
 }
 
-func (app *BootstrapApp) serveTailscale() error {
+func (app *BootstrapApp) serveTailscale(ctx context.Context) error {
 	app.log.App.Info().Msgf("Starting Tailscale server on %s", fmt.Sprintf("https://%s", app.services.tailscaleService.GetHostname()))
 
 	listener, err := app.services.tailscaleService.CreateListener()
@@ -197,27 +198,23 @@ func (app *BootstrapApp) serveTailscale() error {
 		Handler: app.router.Handler(),
 	}
 
-	return app.serve(listener, server, "tailscale")
+	return app.serve(listener, server, ctx, "tailscale")
 }
 
-func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, name string) error {
+func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, ctx context.Context, name string) error {
 	shutdown := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
+		// we use a new context for the shutdown since the main one is cancelled
+		sctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
 		defer cancel()
-		err := server.Shutdown(ctx)
-		if err != nil &&
-			// With tailscale, the goroutine for shutting down the tailscale connection
-			// runs first and causes the connection the tailscale listener is running on to close
-			// first so, the shutdown fails
-			// TODO: add priority to the goroutine shutdowns
-			!errors.Is(err, net.ErrClosed) {
+		err := server.Shutdown(sctx)
+		if err != nil {
 			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
 		}
 		listener.Close()
 	}
 
 	go func() {
-		<-app.ctx.Done()
+		<-ctx.Done()
 		app.log.App.Debug().Msgf("Shutting down %s listener", name)
 		shutdown()
 	}()

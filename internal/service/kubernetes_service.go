@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -38,7 +39,6 @@ type ingressApp struct {
 
 type KubernetesService struct {
 	log *logger.Logger
-	ctx context.Context
 
 	client       dynamic.Interface
 	started      bool
@@ -51,7 +51,7 @@ type KubernetesService struct {
 func NewKubernetesService(
 	log *logger.Logger,
 	ctx context.Context,
-	wg *sync.WaitGroup,
+	dg *ding.Ding,
 ) (*KubernetesService, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
@@ -82,16 +82,15 @@ func NewKubernetesService(
 
 	service := &KubernetesService{
 		log:          log,
-		ctx:          ctx,
 		client:       client,
 		ingressApps:  make(map[ingressKey][]ingressApp),
 		domainIndex:  make(map[string]ingressAppKey),
 		appNameIndex: make(map[string]ingressAppKey),
 	}
 
-	wg.Go(func() {
-		service.watchGVR(gvr)
-	})
+	dg.Go(func(ctx context.Context) {
+		service.watchGVR(gvr, ctx)
+	}, ding.RingMajor)
 
 	service.started = true
 	log.App.Debug().Msg("Kubernetes label provider started successfully")
@@ -271,8 +270,8 @@ func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
 	}
 }
 
-func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
-	ctx, cancel := context.WithTimeout(k.ctx, 30*time.Second)
+func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource, ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	list, err := k.client.Resource(gvr).List(ctx, metav1.ListOptions{})
@@ -289,10 +288,10 @@ func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
 
 // runWatcher drains events from an active watcher until it closes or the context is done.
 // Returns true if the caller should restart the watcher, false if it should exit.
-func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.Interface, resyncTicker *time.Ticker) bool {
+func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.Interface, resyncTicker *time.Ticker, ctx context.Context) bool {
 	for {
 		select {
-		case <-k.ctx.Done():
+		case <-ctx.Done():
 			w.Stop()
 			return false
 		case event, ok := <-w.ResultChan():
@@ -314,33 +313,33 @@ func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.
 				k.removeIngress(item.GetNamespace(), item.GetName())
 			}
 		case <-resyncTicker.C:
-			if err := k.resyncGVR(gvr); err != nil {
+			if err := k.resyncGVR(gvr, ctx); err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed during watcher run")
 			}
 		}
 	}
 }
 
-func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
+func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource, ctx context.Context) {
 	resyncTicker := time.NewTicker(5 * time.Minute)
 	defer resyncTicker.Stop()
 
-	if err := k.resyncGVR(gvr); err != nil {
+	if err := k.resyncGVR(gvr, ctx); err != nil {
 		k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Initial resync failed, will retry")
 		time.Sleep(30 * time.Second)
 	}
 
 	for {
 		select {
-		case <-k.ctx.Done():
+		case <-ctx.Done():
 			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Shutting down kubernetes watcher")
 			return
 		case <-resyncTicker.C:
-			if err := k.resyncGVR(gvr); err != nil {
+			if err := k.resyncGVR(gvr, ctx); err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed, will retry")
 			}
 		default:
-			ctx, cancel := context.WithCancel(k.ctx)
+			ctx, cancel := context.WithCancel(ctx)
 			watcher, err := k.client.Resource(gvr).Watch(ctx, metav1.ListOptions{})
 			if err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to start watcher, will retry")
@@ -349,7 +348,7 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 				continue
 			}
 			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Watcher started successfully")
-			if !k.runWatcher(gvr, watcher, resyncTicker) {
+			if !k.runWatcher(gvr, watcher, resyncTicker, ctx) {
 				cancel()
 				return
 			}

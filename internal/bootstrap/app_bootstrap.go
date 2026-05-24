@@ -13,11 +13,11 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/steveiliop56/ding"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -25,6 +25,12 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
+
+// Shutdown order for go routines
+// 1. Lifecycle routines (e.g. database cleanup, heartbeat) - ding.RingMinor
+// 2. HTTP server listeners - ding.RingNormal
+// 3. Services (e.g. auth service, ldap service, tailscale service) - ding.RingMajor
+// 4. Database connection - ding.RingCritical
 
 type Services struct {
 	accessControlService *service.AccessControlsService
@@ -48,7 +54,7 @@ type BootstrapApp struct {
 	queries   repository.Store
 	router    *gin.Engine
 	db        *sql.DB
-	wg        sync.WaitGroup
+	ding      *ding.Ding
 	listeners []Listener
 }
 
@@ -63,6 +69,10 @@ func (app *BootstrapApp) Setup() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	app.ctx = ctx
 	app.cancel = cancel
+
+	// Create a ding instance
+	dg := ding.New(ctx)
+	app.ding = dg
 
 	// setup logger
 	log := logger.NewLogger().WithConfig(app.config.Log)
@@ -179,15 +189,17 @@ func (app *BootstrapApp) Setup() error {
 		return fmt.Errorf("failed to setup database: %w", err)
 	}
 
-	// after this point, we start initializing dependencies so it's a good time to setup a defer
-	// to ensure that resources are cleaned up properly in case of an error during initialization
-	defer func() {
-		app.cancel()
-		app.wg.Wait()
-		if app.db != nil {
-			app.db.Close()
+	app.ding.Go(func(ctx context.Context) {
+		<-ctx.Done()
+		app.log.App.Debug().Msg("Shutting down database connection")
+		if app.db == nil {
+			// using memory store, no db instance
+			return
 		}
-	}()
+		if err := app.db.Close(); err != nil {
+			app.log.App.Error().Err(err).Msg("Failed to close database connection")
+		}
+	}, ding.RingCritical)
 
 	// store
 	app.queries = store
@@ -254,12 +266,12 @@ func (app *BootstrapApp) Setup() error {
 
 	// start db cleanup routine
 	app.log.App.Debug().Msg("Starting database cleanup routine")
-	app.wg.Go(app.dbCleanupRoutine)
+	app.ding.Go(app.dbCleanupRoutine, ding.RingMinor)
 
 	// if analytics are not disabled, start heartbeat
 	if app.config.Analytics.Enabled {
 		app.log.App.Debug().Msg("Starting heartbeat routine")
-		app.wg.Go(app.heartbeatRoutine)
+		app.ding.Go(app.heartbeatRoutine, ding.RingMinor)
 	}
 
 	// setup listeners
@@ -280,6 +292,7 @@ func (app *BootstrapApp) Setup() error {
 	for {
 		select {
 		case <-app.ctx.Done():
+			app.ding.Wait()
 			app.log.App.Info().Msg("Oh, it's time for me to go, bye!")
 			return nil
 		case err := <-lec:
@@ -290,7 +303,7 @@ func (app *BootstrapApp) Setup() error {
 	}
 }
 
-func (app *BootstrapApp) heartbeatRoutine() {
+func (app *BootstrapApp) heartbeatRoutine(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(12) * time.Hour)
 	defer ticker.Stop()
 
@@ -343,7 +356,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 			if res.StatusCode != 200 && res.StatusCode != 201 {
 				app.log.App.Debug().Str("status", res.Status).Msg("Heartbeat returned non-200/201 status")
 			}
-		case <-app.ctx.Done():
+		case <-ctx.Done():
 			app.log.App.Debug().Msg("Stopping heartbeat routine")
 			ticker.Stop()
 			return
@@ -351,7 +364,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 	}
 }
 
-func (app *BootstrapApp) dbCleanupRoutine() {
+func (app *BootstrapApp) dbCleanupRoutine(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 
@@ -360,14 +373,14 @@ func (app *BootstrapApp) dbCleanupRoutine() {
 		case <-ticker.C:
 			app.log.App.Debug().Msg("Running database cleanup")
 
-			err := app.queries.DeleteExpiredSessions(app.ctx, time.Now().Unix())
+			err := app.queries.DeleteExpiredSessions(ctx, time.Now().Unix())
 
 			if err != nil {
 				app.log.App.Error().Err(err).Msg("Failed to delete expired sessions")
 			}
 
 			app.log.App.Debug().Msg("Database cleanup completed")
-		case <-app.ctx.Done():
+		case <-ctx.Done():
 			app.log.App.Debug().Msg("Stopping database cleanup routine")
 			ticker.Stop()
 			return

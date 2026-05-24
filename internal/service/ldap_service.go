@@ -9,14 +9,14 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	ldapgo "github.com/go-ldap/ldap/v3"
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
 type LdapService struct {
-	log     *logger.Logger
-	config  model.Config
-	context context.Context
+	log    *logger.Logger
+	config model.Config
 
 	conn  *ldapgo.Conn
 	mutex sync.RWMutex
@@ -26,17 +26,15 @@ type LdapService struct {
 func NewLdapService(
 	log *logger.Logger,
 	config model.Config,
-	ctx context.Context,
-	wg *sync.WaitGroup,
+	dg *ding.Ding,
 ) (*LdapService, error) {
 	if config.LDAP.Address == "" {
 		return nil, nil
 	}
 
 	ldap := &LdapService{
-		log:     log,
-		config:  config,
-		context: ctx,
+		log:    log,
+		config: config,
 	}
 
 	// Check whether authentication with client certificate is possible
@@ -69,7 +67,7 @@ func NewLdapService(
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
-	wg.Go(func() {
+	dg.Go(func(ctx context.Context) {
 		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
 
 		ticker := time.NewTicker(5 * time.Minute)
@@ -87,12 +85,12 @@ func NewLdapService(
 					}
 					ldap.log.App.Info().Msg("Successfully reconnected to LDAP server")
 				}
-			case <-ldap.context.Done():
+			case <-ctx.Done():
 				ldap.log.App.Debug().Msg("LDAP service context cancelled, stopping heartbeat")
 				return
 			}
 		}
-	})
+	}, ding.RingMajor)
 
 	return ldap, nil
 }

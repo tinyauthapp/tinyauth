@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"strings"
-	"sync"
 
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -24,7 +24,7 @@ type DockerService struct {
 func NewDockerService(
 	log *logger.Logger,
 	ctx context.Context,
-	wg *sync.WaitGroup,
+	dg *ding.Ding,
 ) (*DockerService, error) {
 
 	client, err := client.NewClientWithOpts(client.FromEnv)
@@ -50,7 +50,7 @@ func NewDockerService(
 	service.isConnected = true
 	service.log.App.Debug().Msg("Docker connected successfully")
 
-	wg.Go(service.watchAndClose)
+	dg.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }
@@ -108,8 +108,8 @@ func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 	return nil, nil
 }
 
-func (docker *DockerService) watchAndClose() {
-	<-docker.context.Done()
+func (docker *DockerService) watchAndClose(ctx context.Context) {
+	<-ctx.Done()
 	docker.log.App.Debug().Msg("Closing Docker client")
 	if docker.client != nil {
 		err := docker.client.Close()

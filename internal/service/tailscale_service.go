@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"tailscale.com/client/local"
@@ -25,7 +26,6 @@ type TailscaleWhoisResponse struct {
 
 type TailscaleService struct {
 	log    *logger.Logger
-	wg     *sync.WaitGroup
 	config model.Config
 	ctx    context.Context
 
@@ -35,7 +35,7 @@ type TailscaleService struct {
 	mu  sync.Mutex
 }
 
-func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, wg *sync.WaitGroup) (*TailscaleService, error) {
+func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, dg *ding.Ding) (*TailscaleService, error) {
 	if !config.Tailscale.Enabled {
 		return nil, nil
 	}
@@ -67,7 +67,6 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 
 	service := &TailscaleService{
 		log:    log,
-		wg:     wg,
 		config: config,
 		ctx:    ctx,
 		srv:    srv,
@@ -84,13 +83,13 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 		return nil, fmt.Errorf("failed to connect to tailscale network: %w", err)
 	}
 
-	wg.Go(service.watchAndClose)
+	dg.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }
 
-func (ts *TailscaleService) watchAndClose() {
-	<-ts.ctx.Done()
+func (ts *TailscaleService) watchAndClose(ctx context.Context) {
+	<-ctx.Done()
 	ts.log.App.Debug().Msg("Shutting down Tailscale service")
 	ts.mu.Lock()
 	srv := ts.srv
