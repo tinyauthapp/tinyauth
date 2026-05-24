@@ -23,6 +23,9 @@ func TestIsEmailWhitelistedUsesProviderSpecificList(t *testing.T) {
 				"pocketid": {
 					Whitelist: []string{"pocket@example.com"},
 				},
+				"gitlab": {
+					Whitelist: []string{},
+				},
 			},
 		},
 	}
@@ -31,4 +34,6 @@ func TestIsEmailWhitelistedUsesProviderSpecificList(t *testing.T) {
 	assert.False(t, auth.IsEmailWhitelisted("github", "pocket@example.com"))
 	assert.True(t, auth.IsEmailWhitelisted("pocketid", "pocket@example.com"))
 	assert.True(t, auth.IsEmailWhitelisted("google", "global@example.com"))
+	assert.True(t, auth.IsEmailWhitelisted("gitlab", "global@example.com"))
+	assert.False(t, auth.IsEmailWhitelisted("gitlab", "unknown@example.com"))
 }
