@@ -357,7 +357,6 @@ func TestProxyController(t *testing.T) {
 	ctx := context.TODO()
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil)
 	aclsService := service.NewAccessControlsService(log, cfg, nil)
 
 	policyEngine, err := service.NewPolicyEngine(cfg, log)
@@ -382,6 +381,8 @@ func TestProxyController(t *testing.T) {
 	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
 		Log: log,
 	})
+
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil, policyEngine)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

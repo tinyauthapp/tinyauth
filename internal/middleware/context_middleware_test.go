@@ -254,8 +254,11 @@ func TestContextMiddleware(t *testing.T) {
 
 	store := memory.New()
 
+	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	require.NoError(t, err)
+
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil)
+	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil, policyEngine)
 
 	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
 

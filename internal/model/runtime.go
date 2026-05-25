@@ -14,6 +14,7 @@ type RuntimeConfig struct {
 	ConfiguredProviders    []Provider
 	OIDCClients            []OIDCClientConfig
 	TrustedDomains         []string
+	Policy                 Policy
 }
 
 type Provider struct {
@@ -21,3 +22,10 @@ type Provider struct {
 	ID    string `json:"id"`
 	OAuth bool   `json:"oauth"`
 }
+
+type Policy string
+
+const (
+	PolicyAllow Policy = "allow"
+	PolicyDeny  Policy = "deny"
+)

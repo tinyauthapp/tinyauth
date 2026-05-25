@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -37,16 +38,16 @@ func TestPolicyEngine(t *testing.T) {
 	assert.Error(t, err)
 
 	// Engine should initialize with 'allow' policy
-	cfg.Auth.ACLs.Policy = string(service.PolicyAllow)
+	cfg.Auth.ACLs.Policy = string(model.PolicyAllow)
 	engine, err := service.NewPolicyEngine(cfg, log)
 	assert.NoError(t, err)
-	assert.Equal(t, service.PolicyAllow, engine.Policy())
+	assert.Equal(t, model.PolicyAllow, engine.Policy())
 
 	// Engine should initialize with 'deny' policy
-	cfg.Auth.ACLs.Policy = string(service.PolicyDeny)
+	cfg.Auth.ACLs.Policy = string(model.PolicyDeny)
 	engine, err = service.NewPolicyEngine(cfg, log)
 	assert.NoError(t, err)
-	assert.Equal(t, service.PolicyDeny, engine.Policy())
+	assert.Equal(t, model.PolicyDeny, engine.Policy())
 
 	// Engine should allow adding rules
 	engine, err = service.NewPolicyEngine(cfg, log)
@@ -56,7 +57,7 @@ func TestPolicyEngine(t *testing.T) {
 	assert.True(t, ok)
 
 	// Begin allow policy tests
-	cfg.Auth.ACLs.Policy = string(service.PolicyAllow)
+	cfg.Auth.ACLs.Policy = string(model.PolicyAllow)
 	engine, err = service.NewPolicyEngine(cfg, log)
 	assert.NoError(t, err)
 	engine.RegisterRule("test-rule", testRule)
@@ -74,7 +75,7 @@ func TestPolicyEngine(t *testing.T) {
 	assert.Equal(t, true, engine.Evaluate("test-rule", ctx))
 
 	// Begin deny policy tests
-	cfg.Auth.ACLs.Policy = string(service.PolicyDeny)
+	cfg.Auth.ACLs.Policy = string(model.PolicyDeny)
 	engine, err = service.NewPolicyEngine(cfg, log)
 	assert.NoError(t, err)
 	engine.RegisterRule("test-rule", testRule)
