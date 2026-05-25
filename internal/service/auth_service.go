@@ -290,9 +290,13 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 
 // We could also directly access the policyEngine.effectToAccess but
 // I believe it's better to use the exported functions instead
-func (auth *AuthService) IsEmailWhitelisted(email string) bool {
+func (auth *AuthService) IsEmailWhitelisted(provider string, email string) bool {
 	return auth.policyEngine.EvaluateFunc(func() Effect {
-		match, err := utils.CheckFilter(strings.Join(auth.runtime.OAuthWhitelist, ","), email)
+		whitelist := auth.runtime.OAuthWhitelist
+		if providerConfig, ok := auth.runtime.OAuthProviders[provider]; ok && len(providerConfig.Whitelist) > 0 {
+			whitelist = providerConfig.Whitelist
+		}
+		match, err := utils.CheckFilter(strings.Join(whitelist, ","), email)
 		if err != nil {
 			if err == utils.ErrFilterEmpty {
 				return EffectAbstain
