@@ -183,9 +183,23 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.IsEmailWhitelisted(user.Email) {
+	svc, err := controller.auth.GetOAuthService(sessionIdCookie)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth service for session")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
+	if svc.ID() != req.Provider {
+		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, svc.ID())
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
+	if !controller.auth.IsEmailWhitelisted(svc.ID(), user.Email) {
 		controller.log.App.Warn().Str("email", user.Email).Msg("Email not whitelisted, denying access")
-		controller.log.AuditLoginFailure(user.Email, req.Provider, c.ClientIP(), "email not whitelisted")
+		controller.log.AuditLoginFailure(user.Email, svc.ID(), c.ClientIP(), "email not whitelisted")
 
 		queries, err := query.Values(UnauthorizedQuery{
 			Username: user.Email,
@@ -228,20 +242,6 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	} else {
 		controller.log.App.Debug().Msg("No preferred username from OAuth provider, generating from email")
 		username = strings.Replace(user.Email, "@", "_", 1)
-	}
-
-	svc, err := controller.auth.GetOAuthService(sessionIdCookie)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to get OAuth service for session")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
-		return
-	}
-
-	if svc.ID() != req.Provider {
-		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, svc.ID())
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
-		return
 	}
 
 	sessionCookie := repository.Session{

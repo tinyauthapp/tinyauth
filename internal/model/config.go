@@ -228,6 +228,8 @@ type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`
 	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret"`
 	ClientSecretFile string   `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile"`
+	Whitelist        []string `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist"`
+	WhitelistFile    string   `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile"`
 	Scopes           []string `description:"OAuth scopes." yaml:"scopes"`
 	RedirectURL      string   `description:"OAuth redirect URL." yaml:"redirectUrl"`
 	AuthURL          string   `description:"OAuth authorization URL." yaml:"authUrl"`

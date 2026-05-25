@@ -205,7 +205,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ID)
 		}
 
-		if !m.auth.IsEmailWhitelisted(userContext.OAuth.Email) {
+		if !m.auth.IsEmailWhitelisted(userContext.OAuth.ID, userContext.OAuth.Email) {
 			m.auth.DeleteSession(ctx, uuid)
 			return nil, nil, fmt.Errorf("email from session cookie not whitelisted: %s", userContext.OAuth.Email)
 		}
@@ -250,6 +250,10 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 	switch search.Type {
 	case model.UserLocal:
 		user := m.auth.GetLocalUser(username)
+
+		if user == nil {
+			return nil, nil, fmt.Errorf("user not found locally: %s", username)
+		}
 
 		if user.TOTPSecret != "" {
 			return nil, nil, fmt.Errorf("user with totp not allowed to login via basic auth: %s", username)

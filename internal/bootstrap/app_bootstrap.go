@@ -135,6 +135,13 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
 	for id, provider := range app.runtime.OAuthProviders {
+		providerWhitelist, err := utils.GetStringList(provider.Whitelist, provider.WhitelistFile)
+		if err != nil {
+			return fmt.Errorf("failed to load oauth whitelist for provider %s: %w", id, err)
+		}
+
+		provider.Whitelist = providerWhitelist
+
 		secret := utils.GetSecret(provider.ClientSecret, provider.ClientSecretFile)
 		provider.ClientSecret = secret
 		provider.ClientSecretFile = ""
