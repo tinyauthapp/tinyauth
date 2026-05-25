@@ -11,7 +11,6 @@ type RuntimeConfig struct {
 	LocalUsers             []LocalUser
 	OAuthProviders         map[string]OAuthServiceConfig
 	OAuthWhitelist         []string
-	OAuthUsernameOverrides map[string]string
 	ConfiguredProviders    []Provider
 	OIDCClients            []OIDCClientConfig
 	TrustedDomains         []string

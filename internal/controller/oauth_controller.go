@@ -215,9 +215,14 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
+	userAttribs := controller.getUserAttributes(user.Email)
+
 	var name string
 
-	if strings.TrimSpace(user.Name) != "" {
+	if userAttribs.Name != "" {
+		controller.log.App.Debug().Msg("Using name from Auth user attributes")
+		name = userAttribs.Name
+	} else if strings.TrimSpace(user.Name) != "" {
 		controller.log.App.Debug().Msg("Using name from OAuth provider")
 		name = user.Name
 	} else {
@@ -232,10 +237,9 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	var username string
 
-	override, exists := controller.auth.GetUsernameOverride(user.Email)
-	if exists {
-		controller.log.App.Debug().Msg("Using username override from OAuth config")
-		username = override
+	if userAttribs.PreferredUsername != "" {
+		controller.log.App.Debug().Msg("Using preferred username from Auth user attributes")
+		username = userAttribs.PreferredUsername
 	} else if strings.TrimSpace(user.PreferredUsername) != "" {
 		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
 		username = user.PreferredUsername
@@ -310,4 +314,9 @@ func (controller *OAuthController) getCookieDomain() string {
 		return "." + controller.runtime.CookieDomain
 	}
 	return controller.runtime.CookieDomain
+}
+
+func (controller *OAuthController) getUserAttributes(email string) model.UserAttributes {
+	attribs := controller.config.Auth.UserAttributes[email]
+	return attribs
 }
