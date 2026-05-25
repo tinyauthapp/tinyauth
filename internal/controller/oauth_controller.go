@@ -327,6 +327,8 @@ func (controller *OAuthController) getCookieDomain() string {
 }
 
 func (controller *OAuthController) getUserAttributes(email string) model.UserAttributes {
+	email = strings.ReplaceAll(email, "@", "-")
+	email = strings.ReplaceAll(email, ".", "-")
 	attribs := controller.config.Auth.UserAttributes[email]
 	return attribs
 }
