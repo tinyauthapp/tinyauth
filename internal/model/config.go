@@ -133,6 +133,7 @@ type UserAttributes struct {
 	MiddleName        string       `description:"Middle name of the user." yaml:"middleName"`
 	Nickname          string       `description:"Nickname of the user." yaml:"nickname"`
 	PreferredUsername string       `description:"Preferred username of the user." yaml:"preferredUsername"`
+	Groups            []string     `description:"List of groups the user belongs to." yaml:"groups"`
 	Profile           string       `description:"URL of the user's profile page." yaml:"profile"`
 	Picture           string       `description:"URL of the user's profile picture." yaml:"picture"`
 	Website           string       `description:"URL of the user's website." yaml:"website"`

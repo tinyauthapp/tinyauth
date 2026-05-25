@@ -248,12 +248,22 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		username = strings.Replace(user.Email, "@", "_", 1)
 	}
 
+	var groups string
+
+	if userAttribs.Groups != nil {
+		groups = strings.Join(userAttribs.Groups, ",")
+		controller.log.App.Debug().Msgf("Using groups from Auth user attributes: %s", groups)
+	} else {
+		controller.log.App.Debug().Msg("Using groups from OAuth provider")
+		groups = utils.CoalesceToString(user.Groups)
+	}
+
 	sessionCookie := repository.Session{
 		Username:    username,
 		Name:        name,
 		Email:       user.Email,
 		Provider:    svc.ID(),
-		OAuthGroups: utils.CoalesceToString(user.Groups),
+		OAuthGroups: groups,
 		OAuthName:   svc.Name(),
 		OAuthSub:    user.Sub,
 	}
