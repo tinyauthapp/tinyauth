@@ -16,6 +16,8 @@ type DBTX interface {
 	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
 }
 
+// New returns a *Queries configured to use the provided DBTX for executing database operations.
+// The returned *Queries will use db as its database handle for all query method calls.
 func New(db DBTX) *Queries {
 	return &Queries{db: db}
 }

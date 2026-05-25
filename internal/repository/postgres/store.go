@@ -14,7 +14,7 @@ type Store struct {
 	q *Queries
 }
 
-// NewStore wraps a *Queries to satisfy repository.Store.
+// NewStore returns a repository.Store backed by the provided *Queries.
 func NewStore(q *Queries) repository.Store {
 	return &Store{q: q}
 }
@@ -23,6 +23,8 @@ var errorMap = map[error]error{
 	sql.ErrNoRows: repository.ErrNotFound,
 }
 
+// mapErr maps known database errors to repository-level errors using the package-level errorMap.
+// It uses errors.Is to match (so wrapped errors are recognized) and returns the original error if no mapping applies.
 func mapErr(err error) error {
 	for from, to := range errorMap {
 		if errors.Is(err, from) {
