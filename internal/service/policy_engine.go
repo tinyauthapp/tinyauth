@@ -8,6 +8,13 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
+type Policy string
+
+const (
+	PolicyAllow Policy = "allow"
+	PolicyDeny  Policy = "deny"
+)
+
 type Effect int
 
 const (
@@ -30,7 +37,7 @@ type ACLContext struct {
 type PolicyEngine struct {
 	log    *logger.Logger
 	rules  map[RuleName]Rule
-	policy model.Policy
+	policy Policy
 }
 
 func NewPolicyEngine(config model.Config, log *logger.Logger) (*PolicyEngine, error) {
@@ -40,12 +47,12 @@ func NewPolicyEngine(config model.Config, log *logger.Logger) (*PolicyEngine, er
 	}
 
 	switch config.Auth.ACLs.Policy {
-	case string(model.PolicyAllow):
+	case string(PolicyAllow):
 		log.App.Debug().Msg("Using 'allow' ACL policy: access to apps will be allowed by default unless explicitly blocked")
-		engine.policy = model.PolicyAllow
-	case string(model.PolicyDeny):
+		engine.policy = PolicyAllow
+	case string(PolicyDeny):
 		log.App.Debug().Msg("Using 'deny' ACL policy: access to apps will be blocked by default unless explicitly allowed")
-		engine.policy = model.PolicyDeny
+		engine.policy = PolicyDeny
 	default:
 		return nil, fmt.Errorf("invalid acl policy: %s", config.Auth.ACLs.Policy)
 	}
@@ -77,7 +84,7 @@ func (engine *PolicyEngine) effectToAccess(effect Effect) bool {
 		return false
 	default:
 		// If the effect is abstain, we fall back to the default policy
-		return engine.policy == model.PolicyAllow
+		return engine.policy == PolicyAllow
 	}
 }
 
@@ -94,7 +101,7 @@ func (engine *PolicyEngine) Evaluate(name RuleName, ctx *ACLContext) bool {
 	return access
 }
 
-func (engine *PolicyEngine) Policy() model.Policy {
+func (engine *PolicyEngine) Policy() Policy {
 	return engine.policy
 }
 

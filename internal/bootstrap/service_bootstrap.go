@@ -39,8 +39,6 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to initialize policy engine: %w", err)
 	}
 
-	app.runtime.Policy = app.services.policyEngine.Policy()
-
 	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
 	app.services.oauthBrokerService = oauthBrokerService
 
