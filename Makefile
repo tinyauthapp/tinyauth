@@ -8,6 +8,7 @@ TAG_NAME := $(shell git describe --abbrev=0 --exact-match 2> /dev/null || echo "
 COMMIT_HASH := $(shell git rev-parse HEAD)
 BUILD_TIMESTAMP := $(shell date '+%Y-%m-%dT%H:%M:%S')
 BIN_NAME := tinyauth-$(GOARCH)
+LDFLAGS := -s -w
 
 # Development vars
 DEV_COMPOSE := $(shell test -f "docker-compose.test.yml" && echo "docker-compose.test.yml" || echo "docker-compose.dev.yml" )
@@ -36,7 +37,7 @@ webui: clean-webui
 
 # Build the binary
 binary: webui
-	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "-s -w \
+	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "${LDFLAGS} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.Version=${TAG_NAME} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" \
