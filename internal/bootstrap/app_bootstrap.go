@@ -27,9 +27,9 @@ import (
 )
 
 // Shutdown order for go routines
-// 1. Lifecycle routines (e.g. database cleanup, heartbeat) - ding.RingMinor
+// 1. Janitor routines (e.g. database cleanup, heartbeat) - ding.RingMinor
 // 2. HTTP server listeners - ding.RingNormal
-// 3. Services (e.g. auth service, ldap service, tailscale service) - ding.RingMajor
+// 3. Networking layers, user and label providers (e.g. ailscale service, kubernetes service) - ding.RingMajor
 // 4. Database connection - ding.RingCritical
 
 type Services struct {
