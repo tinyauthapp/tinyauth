@@ -22,7 +22,7 @@ require (
 	github.com/weppos/publicsuffix-go v0.50.3
 	golang.org/x/crypto v0.52.0
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/tools v0.44.0
+	golang.org/x/tools v0.45.0
 	k8s.io/apimachinery v0.36.1
 	k8s.io/client-go v0.36.1
 	modernc.org/sqlite v1.50.1
@@ -156,7 +156,7 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
