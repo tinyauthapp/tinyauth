@@ -27,6 +27,7 @@ FROM golang:1.26-alpine3.23 AS builder
 ARG VERSION
 ARG COMMIT_HASH
 ARG BUILD_TIMESTAMP
+ARG LDFLAGS
 
 WORKDIR /tinyauth
 
@@ -39,7 +40,7 @@ COPY ./cmd ./cmd
 COPY ./internal ./internal
 COPY --from=frontend-builder /frontend/dist ./internal/assets/dist
 
-RUN CGO_ENABLED=0 go build -ldflags "-s -w \
+RUN CGO_ENABLED=0 go build -ldflags "${LDFLAGS} \
     -X github.com/tinyauthapp/tinyauth/internal/model.Version=${VERSION} \
     -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
     -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" ./cmd/tinyauth

@@ -76,10 +76,11 @@ type AuthService struct {
 	runtime model.RuntimeConfig
 	context context.Context
 
-	ldap        *LdapService
-	queries     repository.Store
-	oauthBroker *OAuthBrokerService
-	tailscale   *TailscaleService
+	ldap         *LdapService
+	queries      repository.Store
+	oauthBroker  *OAuthBrokerService
+	tailscale    *TailscaleService
+	policyEngine *PolicyEngine
 
 	loginAttempts        map[string]*LoginAttempt
 	ldapGroupsCache      map[string]*LdapGroupsCache
@@ -102,6 +103,7 @@ func NewAuthService(
 	queries repository.Store,
 	oauthBroker *OAuthBrokerService,
 	tailscale *TailscaleService,
+	policy *PolicyEngine,
 ) *AuthService {
 	service := &AuthService{
 		log:                  log,
@@ -115,6 +117,7 @@ func NewAuthService(
 		queries:              queries,
 		oauthBroker:          oauthBroker,
 		tailscale:            tailscale,
+		policyEngine:         policy,
 	}
 
 	dg.Go(service.cleanupOAuthSessions, ding.RingMinor)
@@ -286,13 +289,27 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 	}
 }
 
-func (auth *AuthService) IsEmailWhitelisted(email string) bool {
-	match, err := utils.CheckFilter(strings.Join(auth.runtime.OAuthWhitelist, ","), email)
-	if err != nil {
-		auth.log.App.Warn().Err(err).Str("email", email).Msg("Invalid email filter pattern")
-		return false
-	}
-	return match
+// We could also directly access the policyEngine.effectToAccess but
+// I believe it's better to use the exported functions instead
+func (auth *AuthService) IsEmailWhitelisted(provider string, email string) bool {
+	return auth.policyEngine.EvaluateFunc(func() Effect {
+		whitelist := auth.runtime.OAuthWhitelist
+		if providerConfig, ok := auth.runtime.OAuthProviders[provider]; ok && len(providerConfig.Whitelist) > 0 {
+			whitelist = providerConfig.Whitelist
+		}
+		match, err := utils.CheckFilter(strings.Join(whitelist, ","), email)
+		if err != nil {
+			if err == utils.ErrFilterEmpty {
+				return EffectAbstain
+			}
+			auth.log.App.Error().Err(err).Str("email", email).Msg("Failed to evaluate email whitelist filter, defaulting to deny")
+			return EffectDeny
+		}
+		if match {
+			return EffectAllow
+		}
+		return EffectDeny
+	})
 }
 
 func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {

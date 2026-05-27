@@ -22,6 +22,16 @@ func TestUserAllowedRule(t *testing.T) {
 		expected Effect
 	}{
 		{
+			name: "denies when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectDeny,
+		},
+		{
 			name: "abstains when ACLs are nil",
 			ctx: &ACLContext{
 				ACLs: nil,
@@ -31,16 +41,6 @@ func TestUserAllowedRule(t *testing.T) {
 						BaseContext: model.BaseContext{Username: "alice"},
 					},
 				},
-			},
-			expected: EffectAbstain,
-		},
-		{
-			name: "abstains when user context is nil",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					OAuth: model.AppOAuth{Whitelist: "alice"},
-				},
-				UserContext: nil,
 			},
 			expected: EffectAbstain,
 		},
@@ -78,7 +78,7 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains for OAuth user when whitelist filter is invalid",
+			name: "denies for OAuth user when whitelist filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Whitelist: "/[/"},
@@ -90,7 +90,7 @@ func TestUserAllowedRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 		{
 			name: "denies local user when username matches block list",
@@ -123,10 +123,25 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectAllow,
 		},
 		{
-			name: "abstains when block list filter is invalid",
+			name: "denies when block list filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Users: model.AppUsers{Block: "/[/"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "abstains when allow list is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Allow: ""},
 				},
 				UserContext: &model.UserContext{
 					Provider: model.ProviderLocal,
@@ -168,7 +183,7 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when allow list filter is invalid",
+			name: "denies when allow list filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Users: model.AppUsers{Allow: "/[/"},
@@ -180,7 +195,7 @@ func TestUserAllowedRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 
@@ -203,7 +218,17 @@ func TestOAuthGroupRule(t *testing.T) {
 		expected Effect
 	}{
 		{
-			name: "abstains when ACLs are nil",
+			name: "denies when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "allows when ACLs are nil",
 			ctx: &ACLContext{
 				ACLs: nil,
 				UserContext: &model.UserContext{
@@ -213,20 +238,10 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
 		},
 		{
-			name: "abstains when user context is nil",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					OAuth: model.AppOAuth{Whitelist: "alice"},
-				},
-				UserContext: nil,
-			},
-			expected: EffectAbstain,
-		},
-		{
-			name: "abstains when user is not OAuth",
+			name: "allows when user is not OAuth",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Groups: "admins"},
@@ -238,7 +253,22 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when group filter is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Groups: ""},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderOAuth,
+					OAuth: &model.OAuthContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
 		},
 		{
 			name: "allows when provider is an override provider regardless of groups",
@@ -305,7 +335,7 @@ func TestOAuthGroupRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when groups filter is invalid",
+			name: "denies when groups filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Groups: "/[/"},
@@ -318,7 +348,7 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 
@@ -341,22 +371,30 @@ func TestLDAPGroupRule(t *testing.T) {
 		expected Effect
 	}{
 		{
-			name:     "abstains when context is nil",
-			ctx:      nil,
-			expected: EffectAbstain,
-		},
-		{
-			name: "abstains when user context is nil",
+			name: "denies when user context is nil",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Whitelist: "alice"},
 				},
 				UserContext: nil,
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 		{
-			name: "abstains when user is not LDAP",
+			name: "allows when acls are nil",
+			ctx: &ACLContext{
+				ACLs: nil,
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when user is not LDAP",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					LDAP: model.AppLDAP{Groups: "admins"},
@@ -368,7 +406,22 @@ func TestLDAPGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when group filter is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					LDAP: model.AppLDAP{Groups: ""},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLDAP,
+					LDAP: &model.LDAPContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
 		},
 		{
 			name: "allows LDAP user when a group matches",
@@ -416,7 +469,7 @@ func TestLDAPGroupRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when groups filter is invalid",
+			name: "denies when groups filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					LDAP: model.AppLDAP{Groups: "/[/"},
@@ -428,7 +481,7 @@ func TestLDAPGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 

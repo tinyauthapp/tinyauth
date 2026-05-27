@@ -9,6 +9,12 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
+// For LDAP and OAuth groups and IP allow/deny, we default to allow even with a deny policy.
+// This is because we can't force the user to use groups in LDAP and OAuth if they would like to use
+// a deny policy. As for IP checks, we can't reliably get the client IP (most of Tinyauth instances are
+// behind a Docker bridge network) so to make it easier for users to use a deny policy without
+// issues with IPs we allow by default.
+
 type RuleName string
 
 const (
@@ -25,7 +31,11 @@ type UserAllowedRule struct {
 }
 
 func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil || ctx.UserContext == nil {
+	if ctx.UserContext == nil {
+		return EffectDeny
+	}
+
+	if ctx.ACLs == nil {
 		return EffectAbstain
 	}
 
@@ -34,7 +44,7 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 		match, err := utils.CheckFilter(ctx.ACLs.OAuth.Whitelist, ctx.UserContext.OAuth.Email)
 		if err != nil {
 			rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.OAuth.Email).Msg("Invalid entry in OAuth whitelist")
-			return EffectAbstain
+			return EffectDeny
 		}
 		if match {
 			rule.Log.App.Debug().Str("email", ctx.UserContext.OAuth.Email).Msg("User is in OAuth whitelist, allowing access")
@@ -48,7 +58,7 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 		match, err := utils.CheckFilter(ctx.ACLs.Users.Block, ctx.UserContext.GetUsername())
 		if err != nil {
 			rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.GetUsername()).Msg("Invalid entry in users block list")
-			return EffectAbstain
+			return EffectDeny
 		}
 		if match {
 			rule.Log.App.Debug().Str("username", ctx.UserContext.GetUsername()).Msg("User is in users block list, denying access")
@@ -62,8 +72,11 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 	match, err := utils.CheckFilter(ctx.ACLs.Users.Allow, ctx.UserContext.GetUsername())
 
 	if err != nil {
+		if err == utils.ErrFilterEmpty {
+			return EffectAbstain
+		}
 		rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.GetUsername()).Msg("Invalid entry in users allow list")
-		return EffectAbstain
+		return EffectDeny
 	}
 
 	if match {
@@ -80,13 +93,22 @@ type OAuthGroupRule struct {
 }
 
 func (rule *OAuthGroupRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx.ACLs == nil || ctx.UserContext == nil {
-		return EffectAbstain
+	if ctx.UserContext == nil {
+		return EffectDeny
+	}
+
+	if ctx.ACLs == nil {
+		return EffectAllow
 	}
 
 	if !ctx.UserContext.IsOAuth() {
 		rule.Log.App.Debug().Msg("User is not an OAuth user, skipping OAuth group check")
-		return EffectAbstain
+		return EffectAllow
+	}
+
+	if len(ctx.ACLs.OAuth.Groups) == 0 {
+		rule.Log.App.Debug().Msg("No OAuth groups specified in ACLs, allowing access")
+		return EffectAllow
 	}
 
 	if _, ok := model.OverrideProviders[ctx.UserContext.OAuth.ID]; ok {
@@ -97,7 +119,8 @@ func (rule *OAuthGroupRule) Evaluate(ctx *ACLContext) Effect {
 	for _, group := range ctx.UserContext.OAuth.Groups {
 		match, err := utils.CheckFilter(ctx.ACLs.OAuth.Groups, strings.TrimSpace(group))
 		if err != nil {
-			return EffectAbstain
+			rule.Log.App.Warn().Err(err).Str("item", group).Msg("Invalid entry in OAuth groups ACL")
+			return EffectDeny
 		}
 		if match {
 			rule.Log.App.Trace().Str("group", group).Str("required", ctx.ACLs.OAuth.Groups).Msg("User group matched, allowing access")
@@ -114,19 +137,29 @@ type LDAPGroupRule struct {
 }
 
 func (rule *LDAPGroupRule) Evaluate(ctx *ACLContext) Effect {
-	if ctx == nil || ctx.UserContext == nil || ctx.ACLs == nil {
-		return EffectAbstain
+	if ctx.UserContext == nil {
+		return EffectDeny
+	}
+
+	if ctx.ACLs == nil {
+		return EffectAllow
 	}
 
 	if !ctx.UserContext.IsLDAP() {
 		rule.Log.App.Debug().Msg("User is not an LDAP user, skipping LDAP group check")
-		return EffectAbstain
+		return EffectAllow
+	}
+
+	if len(ctx.ACLs.LDAP.Groups) == 0 {
+		rule.Log.App.Debug().Msg("No LDAP groups specified in ACLs, allowing access")
+		return EffectAllow
 	}
 
 	for _, group := range ctx.UserContext.LDAP.Groups {
 		match, err := utils.CheckFilter(ctx.ACLs.LDAP.Groups, strings.TrimSpace(group))
 		if err != nil {
-			return EffectAbstain
+			rule.Log.App.Warn().Err(err).Str("item", group).Msg("Invalid entry in LDAP groups ACL")
+			return EffectDeny
 		}
 		if match {
 			rule.Log.App.Trace().Str("group", group).Str("required", ctx.ACLs.LDAP.Groups).Msg("User group matched, allowing access")

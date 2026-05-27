@@ -62,9 +62,6 @@ func NewDefaultConfiguration() *Config {
 			PrivateKeyPath: "./tinyauth_oidc_key",
 			PublicKeyPath:  "./tinyauth_oidc_key.pub",
 		},
-		Experimental: ExperimentalConfig{
-			ConfigFile: "",
-		},
 		Tailscale: TailscaleConfig{
 			Dir: "./tailscale_state",
 		},
@@ -88,11 +85,12 @@ type Config struct {
 	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
 	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
+	ConfigFile    string             `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {
-	Driver string `description:"The database driver to use. Valid values: sqlite, memory." yaml:"driver"`
-	Path   string `description:"The path to the SQLite database, including file name. Only used when driver is sqlite." yaml:"path"`
+	Driver string `description:"The database driver to use. Valid values: sqlite, postgres, memory." yaml:"driver"`
+	Path   string `description:"The path to the SQLite database file, or connection URL when driver is postgres." yaml:"path"`
 }
 
 type AnalyticsConfig struct {
@@ -208,9 +206,8 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level"`
 }
 
-type ExperimentalConfig struct {
-	ConfigFile string `description:"Path to config file." yaml:"-"`
-}
+// no experimental features
+type ExperimentalConfig struct{}
 
 type TailscaleConfig struct {
 	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled"`
@@ -226,6 +223,8 @@ type OAuthServiceConfig struct {
 	ClientID         string   `description:"OAuth client ID." yaml:"clientId"`
 	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret"`
 	ClientSecretFile string   `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile"`
+	Whitelist        []string `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist"`
+	WhitelistFile    string   `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile"`
 	Scopes           []string `description:"OAuth scopes." yaml:"scopes"`
 	RedirectURL      string   `description:"OAuth redirect URL." yaml:"redirectUrl"`
 	AuthURL          string   `description:"OAuth authorization URL." yaml:"authUrl"`

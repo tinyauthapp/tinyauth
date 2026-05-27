@@ -108,3 +108,7 @@ func (engine *PolicyEngine) Policy() Policy {
 func (engine *PolicyEngine) Rules() map[RuleName]Rule {
 	return engine.rules
 }
+
+func (engine *PolicyEngine) EvaluateFunc(f func() Effect) bool {
+	return engine.effectToAccess(f())
+}

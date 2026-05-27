@@ -28,3 +28,16 @@ sql:
             go_type: "string"
           - column: "oidc_codes.code_challenge"
             go_type: "string"
+  - engine: "postgresql"
+    queries: "sql/postgres/*_queries.sql"
+    schema: "sql/postgres/*_schemas.sql"
+    gen:
+      go:
+        package: "postgres"
+        out: "internal/repository/postgres"
+        rename:
+          uuid: "UUID"
+          oauth_groups: "OAuthGroups"
+          oauth_name: "OAuthName"
+          oauth_sub: "OAuthSub"
+          redirect_uri: "RedirectURI"
