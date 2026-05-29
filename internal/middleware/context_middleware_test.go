@@ -263,7 +263,7 @@ func TestContextMiddleware(t *testing.T) {
 	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
 
 	for _, test := range tests {
-		authService.ClearRateLimitsTestingOnly()
+		authService.ClearLoginAttempts()
 		t.Run(test.description, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 

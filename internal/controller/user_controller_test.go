@@ -422,7 +422,7 @@ func TestUserController(t *testing.T) {
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
-		authService.ClearRateLimitsTestingOnly()
+		authService.ClearLoginAttempts()
 	}
 
 	for _, test := range tests {
