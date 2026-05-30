@@ -128,7 +128,7 @@ func NewAuthService(
 				service.caches.oauth.Sweep()
 				service.caches.login.Sweep()
 				service.caches.ldap.Sweep()
-			case <-service.ctx.Done():
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -231,8 +231,7 @@ func (auth *AuthService) GetLDAPUser(userDN string) (*model.LDAPUser, error) {
 }
 
 func (auth *AuthService) IsAccountLocked(identifier string) (bool, int) {
-	if auth.lockdown.active {
-		remaining := int(time.Until(auth.lockdown.until).Seconds())
+	if locked, remaining := auth.IsInLockdown(); locked {
 		return true, remaining
 	}
 
@@ -259,42 +258,48 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 	}
 
 	if auth.caches.login.Size() >= MaxLoginAttemptRecords {
-		if auth.lockdown.active {
+		if locked, _ := auth.IsInLockdown(); locked {
 			return
 		}
 		go auth.lockdownMode()
 		return
 	}
 
-	ok := auth.caches.login.Mutate(identifier, func(la LoginAttempt) (LoginAttempt, bool) {
-		la.LastAttempt = time.Now()
-		if success {
-			la.FailedAttempts = 0
-			la.LockedUntil = time.Time{}
-			return la, false
-		}
-		la.FailedAttempts++
-		if la.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
-			la.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
-			auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", la.FailedAttempts).Msg("Account locked due to too many failed login attempts")
-		}
-		return la, true
-	})
+	auth.caches.login.WithLock(func(actions CacheStoreActions[LoginAttempt]) {
+		entry, ok := actions.Get(identifier)
 
-	if !ok {
-		// No existing record, create a new one
-		attempt := LoginAttempt{
-			LastAttempt: time.Now(),
+		if !ok {
+			attempt := LoginAttempt{
+				LastAttempt: time.Now(),
+			}
+			if !success {
+				attempt.FailedAttempts = 1
+				if attempt.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
+					attempt.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
+					auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", attempt.FailedAttempts).Msg("Account locked due to too many failed login attempts")
+				}
+			}
+			// match current tinyauth behavior which doesn't expire rate limits
+			actions.Set(identifier, attempt, 0)
+			return
 		}
-		if !success {
-			attempt.FailedAttempts = 1
-			if attempt.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
-				attempt.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
-				auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", attempt.FailedAttempts).Msg("Account locked due to too many failed login attempts")
+
+		entry.LastAttempt = time.Now()
+
+		if success {
+			entry.FailedAttempts = 0
+			entry.LockedUntil = time.Time{}
+		} else {
+			entry.FailedAttempts++
+
+			if entry.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
+				entry.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
+				auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", entry.FailedAttempts).Msg("Account locked due to too many failed login attempts")
 			}
 		}
-		auth.caches.login.Set(identifier, attempt, 0) // match current tinyauth behavior which doesn't expire rate limits
-	}
+
+		actions.Set(identifier, entry, 0)
+	})
 }
 
 // We could also directly access the policyEngine.effectToAccess but
@@ -551,10 +556,10 @@ func (auth *AuthService) GetOAuthURL(sessionId string) (string, error) {
 }
 
 func (auth *AuthService) GetOAuthToken(sessionId string, code string) (*oauth2.Token, error) {
-	session, err := auth.GetOAuthPendingSession(sessionId)
+	session, ok := auth.caches.oauth.Get(sessionId)
 
-	if err != nil {
-		return nil, err
+	if !ok {
+		return nil, fmt.Errorf("oauth session not found: %s", sessionId)
 	}
 
 	token, err := (*session.Service).GetToken(code, session.Verifier)
@@ -565,7 +570,12 @@ func (auth *AuthService) GetOAuthToken(sessionId string, code string) (*oauth2.T
 
 	session.Token = token
 
-	auth.caches.oauth.Set(sessionId, *session, time.Minute*10)
+	// ttl 0 means keep current expiration
+	ok = auth.caches.oauth.Update(sessionId, session, 0)
+
+	if !ok {
+		return nil, fmt.Errorf("failed to update oauth session with token: %s", sessionId)
+	}
 
 	return token, nil
 }
@@ -657,6 +667,16 @@ func (auth *AuthService) lockdownMode() {
 	auth.lockdown.cancelFunc = nil
 
 	auth.lockdown.mu.Unlock()
+}
+
+func (auth *AuthService) IsInLockdown() (bool, int) {
+	auth.lockdown.mu.RLock()
+	defer auth.lockdown.mu.RUnlock()
+	if auth.lockdown.active {
+		remaining := int(time.Until(auth.lockdown.until).Seconds())
+		return true, remaining
+	}
+	return false, 0
 }
 
 // mostly a testing function, not useful for anything else

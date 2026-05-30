@@ -1,9 +1,17 @@
 package service
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
+
+type CacheStoreActions[T any] struct {
+	Set    func(key string, value T, ttl time.Duration)
+	Get    func(key string) (T, bool)
+	Delete func(key string)
+	Update func(key string, value T, ttl time.Duration) bool
+}
 
 type cacheEntry[T any] struct {
 	value     T
@@ -12,6 +20,7 @@ type cacheEntry[T any] struct {
 
 type CacheStore[T any] struct {
 	cache   map[string]cacheEntry[T]
+	order   []string
 	mu      sync.RWMutex
 	maxSize int
 }
@@ -19,14 +28,57 @@ type CacheStore[T any] struct {
 func NewCacheStore[T any](maxSize int) *CacheStore[T] {
 	return &CacheStore[T]{
 		cache:   make(map[string]cacheEntry[T]),
+		order:   make([]string, 0),
 		maxSize: maxSize,
 	}
 }
 
-func (cs *CacheStore[T]) Set(key string, value T, ttl time.Duration) {
+// With lock allows performing multiple operations on the cache store atomically.
+// The provided mutate function receives a set of actions (Set, Get, Delete) that
+// can be used to manipulate the cache store within the locked context.
+func (cs *CacheStore[T]) WithLock(mutate func(actions CacheStoreActions[T])) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	actions := CacheStoreActions[T]{
+		Set:    cs.setCallback,
+		Get:    cs.getCallback,
+		Delete: cs.deleteCallback,
+		Update: cs.updateCallback,
+	}
+	mutate(actions)
+}
 
+func (cs *CacheStore[T]) updateCallback(key string, value T, ttl time.Duration) bool {
+	if currentEntry, exists := cs.cache[key]; exists {
+		if currentEntry.expiresAt != nil && time.Now().After(*currentEntry.expiresAt) {
+			return false
+		}
+
+		entry := cacheEntry[T]{
+			value:     value,
+			expiresAt: currentEntry.expiresAt,
+		}
+
+		if ttl > 0 {
+			expiration := time.Now().Add(ttl)
+			entry.expiresAt = &expiration
+		}
+
+		cs.cache[key] = entry
+
+		return true
+	}
+
+	return false
+}
+
+func (cs *CacheStore[T]) Update(key string, value T, ttl time.Duration) bool {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.updateCallback(key, value, ttl)
+}
+
+func (cs *CacheStore[T]) setCallback(key string, value T, ttl time.Duration) {
 	if cs.maxSize > 0 {
 		if _, exists := cs.cache[key]; !exists && len(cs.cache) >= cs.maxSize {
 			cs.evictOne()
@@ -44,12 +96,17 @@ func (cs *CacheStore[T]) Set(key string, value T, ttl time.Duration) {
 		value:     value,
 		expiresAt: expiresAt,
 	}
+
+	cs.order = append(cs.order, key)
 }
 
-func (cs *CacheStore[T]) Get(key string) (T, bool) {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
+func (cs *CacheStore[T]) Set(key string, value T, ttl time.Duration) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.setCallback(key, value, ttl)
+}
 
+func (cs *CacheStore[T]) getCallback(key string) (T, bool) {
 	entry, exists := cs.cache[key]
 
 	if !exists {
@@ -65,79 +122,31 @@ func (cs *CacheStore[T]) Get(key string) (T, bool) {
 	return entry.value, true
 }
 
+func (cs *CacheStore[T]) Get(key string) (T, bool) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.getCallback(key)
+}
+
+func (cs *CacheStore[T]) deleteCallback(key string) {
+	delete(cs.cache, key)
+	keyIdx := slices.Index(cs.order, key)
+	if keyIdx != -1 {
+		cs.order = append(cs.order[:keyIdx], cs.order[keyIdx+1:]...)
+	}
+}
+
 func (cs *CacheStore[T]) Delete(key string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	delete(cs.cache, key)
-}
-
-func (cs *CacheStore[T]) Mutate(key string, mutator func(T) (T, bool)) bool {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
-	entry, exists := cs.cache[key]
-
-	if !exists {
-		return false
-	}
-
-	if entry.expiresAt != nil && time.Now().After(*entry.expiresAt) {
-		delete(cs.cache, key)
-		return false
-	}
-
-	newValue, shouldKeep := mutator(entry.value)
-
-	if !shouldKeep {
-		delete(cs.cache, key)
-		return true
-	}
-
-	cs.cache[key] = cacheEntry[T]{
-		value:     newValue,
-		expiresAt: entry.expiresAt,
-	}
-
-	return true
-}
-
-func (cs *CacheStore[T]) MutateWithTTL(key string, mutator func(T) (T, time.Duration, bool)) bool {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
-	entry, exists := cs.cache[key]
-
-	if !exists {
-		return false
-	}
-
-	if entry.expiresAt != nil && time.Now().After(*entry.expiresAt) {
-		delete(cs.cache, key)
-		return false
-	}
-
-	newValue, ttl, shouldKeep := mutator(entry.value)
-
-	if !shouldKeep {
-		delete(cs.cache, key)
-		return true
-	}
-
-	expiresAt := time.Now().Add(ttl)
-
-	cs.cache[key] = cacheEntry[T]{
-		value:     newValue,
-		expiresAt: &expiresAt,
-	}
-
-	return true
+	cs.deleteCallback(key)
 }
 
 func (cs *CacheStore[T]) Sweep() {
 	cs.mu.Lock()
 	for key, entry := range cs.cache {
 		if entry.expiresAt != nil && time.Now().After(*entry.expiresAt) {
-			delete(cs.cache, key)
+			cs.deleteCallback(key)
 		}
 	}
 	cs.mu.Unlock()
@@ -158,9 +167,17 @@ func (cs *CacheStore[T]) evictOne() bool {
 		}
 	}
 
+	// If we found an oldest key, evict it else we delete the first key in the order list
 	if oldestKey != "" {
 		delete(cs.cache, oldestKey)
 		return true
+	} else {
+		if len(cs.order) > 0 {
+			firstKey := cs.order[0]
+			cs.order = cs.order[1:]
+			delete(cs.cache, firstKey)
+			return true
+		}
 	}
 
 	return false
@@ -176,4 +193,5 @@ func (cs *CacheStore[T]) Clear() {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cs.cache = make(map[string]cacheEntry[T])
+	cs.order = make([]string, 0)
 }
