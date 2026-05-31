@@ -97,7 +97,9 @@ func (cs *CacheStore[T]) setCallback(key string, value T, ttl time.Duration) {
 		expiresAt: expiresAt,
 	}
 
-	cs.order = append(cs.order, key)
+	if !slices.Contains(cs.order, key) {
+		cs.order = append(cs.order, key)
+	}
 }
 
 func (cs *CacheStore[T]) Set(key string, value T, ttl time.Duration) {
@@ -159,7 +161,7 @@ func (cs *CacheStore[T]) evictOne() bool {
 
 	for k, e := range cs.cache {
 		if e.expiresAt != nil && now.After(*e.expiresAt) {
-			delete(cs.cache, k)
+			cs.deleteCallback(k)
 			return true
 		}
 		if e.expiresAt != nil && (oldestExp == nil || e.expiresAt.Before(*oldestExp)) {
@@ -169,13 +171,11 @@ func (cs *CacheStore[T]) evictOne() bool {
 
 	// If we found an oldest key, evict it else we delete the first key in the order list
 	if oldestKey != "" {
-		delete(cs.cache, oldestKey)
+		cs.deleteCallback(oldestKey)
 		return true
 	} else {
 		if len(cs.order) > 0 {
-			firstKey := cs.order[0]
-			cs.order = cs.order[1:]
-			delete(cs.cache, firstKey)
+			cs.deleteCallback(cs.order[0])
 			return true
 		}
 	}
