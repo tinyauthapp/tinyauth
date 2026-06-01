@@ -327,12 +327,27 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		entry, ok := controller.oidc.GetCodeEntry(controller.oidc.Hash(req.Code), client.ClientID)
 
 		if !ok {
+			// ensure no code reuse
+			usedCodeSub, ok := controller.oidc.IsCodeUsed(controller.oidc.Hash(req.Code))
+
+			if ok {
+				controller.log.App.Warn().Msg("Code reuse detected")
+				controller.oidc.DeleteSessionBySub(c, usedCodeSub)
+				c.JSON(400, gin.H{
+					"error": "invalid_grant",
+				})
+				return
+			}
+
 			controller.log.App.Warn().Msg("Code not found")
 			c.JSON(400, gin.H{
 				"error": "invalid_grant",
 			})
 			return
 		}
+
+		// mark code as used to prevent reuse
+		controller.oidc.MarkCodeAsUsed(controller.oidc.Hash(req.Code), entry.Userinfo.Sub)
 
 		if entry.RedirectURI != req.RedirectURI {
 			controller.log.App.Warn().Msg("Redirect URI does not match")

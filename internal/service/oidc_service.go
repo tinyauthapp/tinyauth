@@ -126,6 +126,10 @@ type AuthorizeCodeEntry struct {
 	Userinfo      UserinfoResponse
 }
 
+type UsedCodeEntry struct {
+	Sub string
+}
+
 type OIDCService struct {
 	log     *logger.Logger
 	config  model.Config
@@ -138,7 +142,8 @@ type OIDCService struct {
 	issuer     string
 
 	caches struct {
-		code *CacheStore[AuthorizeCodeEntry]
+		code     *CacheStore[AuthorizeCodeEntry]
+		usedCode *CacheStore[UsedCodeEntry]
 	}
 }
 
@@ -305,7 +310,9 @@ func NewOIDCService(
 
 	// Create caches
 	codeCash := NewCacheStore[AuthorizeCodeEntry](256)
+	usedCode := NewCacheStore[UsedCodeEntry](256)
 	service.caches.code = codeCash
+	service.caches.usedCode = usedCode
 
 	// Start cache cleanup routine
 	dg.Go(func(ctx context.Context) {
@@ -316,6 +323,7 @@ func NewOIDCService(
 			select {
 			case <-ticker.C:
 				service.caches.code.Sweep()
+				service.caches.usedCode.Sweep()
 			case <-ctx.Done():
 				return
 			}
@@ -406,7 +414,7 @@ func (service *OIDCService) CreateCode(req AuthorizeRequest, userContext model.U
 	}
 
 	// Store the code in the cache
-	service.caches.code.Set(entry.CodeHash, entry, 10*time.Minute)
+	service.caches.code.Set(entry.CodeHash, entry, 1*time.Minute)
 
 	return code
 }
@@ -816,4 +824,25 @@ func (service *OIDCService) hashAndEncodePKCE(codeVerifier string) string {
 // but if username or client name changes then sub changes too.
 func (service *OIDCService) CreateSub(userContext model.UserContext, clientId string) string {
 	return utils.GenerateUUID(fmt.Sprintf("%s:%s", userContext.GetUsername(), clientId))
+}
+
+func (service *OIDCService) IsCodeUsed(codeHash string) (string, bool) {
+	entry, ok := service.caches.usedCode.Get(codeHash)
+
+	if !ok {
+		return "", false
+	}
+
+	return entry.Sub, true
+}
+
+func (service *OIDCService) MarkCodeAsUsed(codeHash string, sub string) {
+	entry := UsedCodeEntry{
+		Sub: sub,
+	}
+	service.caches.usedCode.Set(codeHash, entry, 2*time.Minute)
+}
+
+func (service *OIDCService) DeleteSessionBySub(ctx context.Context, sub string) error {
+	return service.queries.DeleteOIDCSessionBySub(ctx, sub)
 }
