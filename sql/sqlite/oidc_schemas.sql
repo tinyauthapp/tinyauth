@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS "oidc_sessions" (
     "client_id" TEXT NOT NULL,
     "token_expires_at" INTEGER NOT NULL,
     "refresh_token_expires_at" INTEGER NOT NULL,
-    "nonce" TEXT DEFAULT "",
+    "nonce" TEXT NOT NULL DEFAULT "",
     "userinfo_json" TEXT NOT NULL
 );

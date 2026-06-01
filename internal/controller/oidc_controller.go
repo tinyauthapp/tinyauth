@@ -332,7 +332,10 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 			if ok {
 				controller.log.App.Warn().Msg("Code reuse detected")
-				controller.oidc.DeleteSessionBySub(c, usedCodeSub)
+				err := controller.oidc.DeleteSessionBySub(c, usedCodeSub)
+				if err != nil {
+					controller.log.App.Error().Err(err).Msg("Failed to delete session for reused code")
+				}
 				c.JSON(400, gin.H{
 					"error": "invalid_grant",
 				})

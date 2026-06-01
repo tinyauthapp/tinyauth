@@ -684,7 +684,7 @@ func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash str
 		// since there is no way for the client to access anything anymore
 		if entry.RefreshTokenExpiresAt < time.Now().Unix() {
 			// Deletes by sub
-			err := service.queries.DeleteSession(ctx, entry.Sub)
+			err := service.queries.DeleteOIDCSessionBySub(ctx, entry.Sub)
 			if err != nil {
 				return nil, err
 			}
