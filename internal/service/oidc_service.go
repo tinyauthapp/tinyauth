@@ -465,18 +465,28 @@ func (service *OIDCService) ValidateGrantType(grantType string) error {
 }
 
 func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*AuthorizeCodeEntry, bool) {
-	entry, ok := service.caches.code.Get(codeHash)
+	var entry AuthorizeCodeEntry
+	var ok bool
+
+	service.caches.code.WithLock(func(actions CacheStoreActions[AuthorizeCodeEntry]) {
+		entry, ok = service.caches.code.Get(codeHash)
+
+		if !ok {
+			return
+		}
+
+		if entry.ClientID != clientId {
+			ok = false
+			return
+		}
+
+		// Since the code can only be used once, we delete it from the cache after retrieving it
+		service.caches.code.Delete(codeHash)
+	})
 
 	if !ok {
 		return nil, false
 	}
-
-	if entry.ClientID != clientId {
-		return nil, false
-	}
-
-	// Since the code can only be used once, we delete it from the cache after retrieving it
-	service.caches.code.Delete(codeHash)
 
 	return &entry, true
 }
