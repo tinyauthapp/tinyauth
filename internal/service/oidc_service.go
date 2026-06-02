@@ -469,7 +469,7 @@ func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*Aut
 	var ok bool
 
 	service.caches.code.WithLock(func(actions CacheStoreActions[AuthorizeCodeEntry]) {
-		entry, ok = service.caches.code.Get(codeHash)
+		entry, ok = actions.Get(codeHash)
 
 		if !ok {
 			return
@@ -481,7 +481,7 @@ func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*Aut
 		}
 
 		// Since the code can only be used once, we delete it from the cache after retrieving it
-		service.caches.code.Delete(codeHash)
+		actions.Delete(codeHash)
 	})
 
 	if !ok {
