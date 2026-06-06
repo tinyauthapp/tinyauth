@@ -1,5 +1,5 @@
 # Site builder
-FROM node:26.2-alpine3.23 AS frontend-builder
+FROM node:26.3-alpine3.23 AS frontend-builder
 
 WORKDIR /frontend
 
