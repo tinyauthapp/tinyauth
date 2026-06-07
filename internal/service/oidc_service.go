@@ -108,14 +108,14 @@ type TokenResponse struct {
 
 type AuthorizeRequest struct {
 	jwt.Claims
-	Scope               string `form:"scope" binding:"required" json:"scope"`
-	ResponseType        string `form:"response_type" binding:"required" json:"response_type"`
-	ClientID            string `form:"client_id" binding:"required" json:"client_id"`
-	RedirectURI         string `form:"redirect_uri" binding:"required" json:"redirect_uri"`
-	State               string `form:"state" json:"state"`
-	Nonce               string `form:"nonce" json:"nonce"`
-	CodeChallenge       string `form:"code_challenge" json:"code_challenge"`
-	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method"`
+	Scope               string `form:"scope" binding:"required" json:"scope" url:"scope"`
+	ResponseType        string `form:"response_type" binding:"required" json:"response_type" url:"response_type"`
+	ClientID            string `form:"client_id" binding:"required" json:"client_id" url:"client_id"`
+	RedirectURI         string `form:"redirect_uri" binding:"required" json:"redirect_uri" url:"redirect_uri"`
+	State               string `form:"state" json:"state" url:"state"`
+	Nonce               string `form:"nonce" json:"nonce" url:"nonce"`
+	CodeChallenge       string `form:"code_challenge" json:"code_challenge" url:"code_challenge"`
+	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method" url:"code_challenge_method"`
 }
 
 type AuthorizeCodeEntry struct {
