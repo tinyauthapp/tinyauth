@@ -20,9 +20,10 @@ import {
   recompileScreenParams,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
+import { useLoginFor } from "@/lib/hooks/login-for";
 
 export const TotpPage = () => {
-  const { totp } = useUserContext();
+  const { totp, auth } = useUserContext();
   const { t } = useTranslation();
   const { search } = useLocation();
   const formId = useId();
@@ -32,6 +33,10 @@ export const TotpPage = () => {
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
   const compiledParams = recompileScreenParams(screenParams);
+  const loginForUrl = useLoginFor({
+    login_for: screenParams.login_for,
+    compiledParams,
+  });
 
   const totpMutation = useMutation({
     mutationFn: (values: TotpSchema) => axios.post("/api/user/totp", values),
@@ -42,11 +47,7 @@ export const TotpPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        if (screenParams.login_for === "oidc") {
-          window.location.replace(`/oidc/authorize${compiledParams}`);
-        } else {
-          window.location.replace(`/continue${compiledParams}`);
-        }
+        window.location.replace(loginForUrl);
       }, 500);
     },
     onError: () => {
@@ -65,7 +66,10 @@ export const TotpPage = () => {
   }, [redirectTimer]);
 
   if (!totp.pending) {
-    return <Navigate to="/" replace />;
+    if (auth.authenticated) {
+      return <Navigate to={loginForUrl} replace />;
+    }
+    return <Navigate to="/login" replace />;
   }
 
   return (

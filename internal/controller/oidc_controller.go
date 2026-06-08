@@ -68,10 +68,10 @@ type ClientCredentials struct {
 }
 
 type AuthorizeScreenParams struct {
-	LoginFor   string `url:"login_for"`
-	OIDCTicket string `url:"oidc_ticket"`
-	OIDCScope  string `url:"oidc_scope"`
-	OIDCName   string `url:"oidc_name"`
+	LoginFor   FrontendLoginFor `url:"login_for"`
+	OIDCTicket string           `url:"oidc_ticket"`
+	OIDCScope  string           `url:"oidc_scope"`
+	OIDCName   string           `url:"oidc_name"`
 }
 
 type AuthorizeCompleteRequest struct {
@@ -186,7 +186,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 	ticket := controller.oidc.CreateAuthorizeRequestTicket(req)
 
 	queries, err := query.Values(AuthorizeScreenParams{
-		LoginFor:   "oidc",
+		LoginFor:   FrontendLoginForOIDC,
 		OIDCTicket: ticket,
 		OIDCScope:  req.Scope,
 		OIDCName:   client.Name,

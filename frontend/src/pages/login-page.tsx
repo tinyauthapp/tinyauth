@@ -29,6 +29,7 @@ import {
   recompileScreenParams,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
+import { useLoginFor } from "@/lib/hooks/login-for";
 
 const iconMap: Record<string, React.ReactNode> = {
   google: <GoogleIcon />,
@@ -62,12 +63,15 @@ export const LoginPage = () => {
 
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const isOidc = screenParams.login_for === "oidc";
   const compiledParams = recompileScreenParams(screenParams);
+  const loginForUrl = useLoginFor({
+    login_for: screenParams.login_for,
+    compiledParams,
+  });
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
     providers.find((provider) => provider.id === oauth.autoRedirect) !==
-      undefined && screenParams.redirect_url !== undefined,
+      undefined && screenParams.redirect_uri !== undefined,
   );
 
   const oauthProviders = providers.filter(
@@ -126,11 +130,7 @@ export const LoginPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        if (screenParams.login_for === "oidc") {
-          window.location.replace(`/oidc/authorize${compiledParams}`);
-        } else {
-          window.location.replace(`/continue${compiledParams}`);
-        }
+        window.location.replace(loginForUrl);
       }, 500);
     },
     onError: (error: AxiosError) => {
@@ -153,7 +153,7 @@ export const LoginPage = () => {
         });
 
         redirectTimer.current = window.setTimeout(() => {
-          window.location.replace(`/continue${compiledParams}`);
+          window.location.replace(loginForUrl);
         }, 500);
       },
       onError: () => {
@@ -168,7 +168,7 @@ export const LoginPage = () => {
       !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
-      screenParams.redirect_url !== undefined
+      screenParams.login_for !== undefined
     ) {
       hasAutoRedirectedRef.current = true;
       oauthMutate(oauth.autoRedirect);
@@ -179,7 +179,7 @@ export const LoginPage = () => {
     hasAutoRedirectedRef,
     oauth.autoRedirect,
     isOauthAutoRedirect,
-    screenParams.redirect_url,
+    screenParams.login_for,
   ]);
 
   useEffect(() => {
@@ -194,16 +194,8 @@ export const LoginPage = () => {
     };
   }, [redirectTimer, redirectButtonTimer]);
 
-  if (auth.authenticated && isOidc) {
-    return <Navigate to={`/authorize${compiledParams}`} replace />;
-  }
-
-  if (auth.authenticated && screenParams.redirect_url !== undefined) {
-    return <Navigate to={`/continue${compiledParams}`} replace />;
-  }
-
   if (auth.authenticated) {
-    return <Navigate to="/logout" replace />;
+    return <Navigate to={loginForUrl} replace />;
   }
 
   if (isOauthAutoRedirect) {

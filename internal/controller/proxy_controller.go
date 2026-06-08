@@ -275,6 +275,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	queries, err := query.Values(RedirectQuery{
 		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.Path),
+		LoginFor:    FrontendLoginForApp,
 	})
 
 	if err != nil {

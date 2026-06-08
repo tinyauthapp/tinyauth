@@ -15,12 +15,21 @@ import { Navigate } from "react-router";
 import { toast } from "sonner";
 import { type UseMutationResult } from "@tanstack/react-query";
 import { type AxiosResponse } from "axios";
+import { useLocation } from "react-router";
+import {
+  useScreenParams,
+  recompileScreenParams,
+} from "@/lib/hooks/screen-params";
 
 export const LogoutPage = () => {
   const { auth, oauth, tailscale } = useUserContext();
   const { t } = useTranslation();
+  const { search } = useLocation();
 
   const redirectTimer = useRef<number | null>(null);
+  const searchParams = new URLSearchParams(search);
+  const screenParams = useScreenParams(searchParams);
+  const compiledParams = recompileScreenParams(screenParams);
 
   const logoutMutation = useMutation({
     mutationFn: () => axios.post("/api/user/logout"),
@@ -31,7 +40,7 @@ export const LogoutPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        window.location.replace("/login");
+        window.location.replace(`/login${compiledParams}`);
       }, 500);
     },
     onError: () => {
@@ -50,7 +59,7 @@ export const LogoutPage = () => {
   }, [redirectTimer]);
 
   if (!auth.authenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
   if (oauth.active) {

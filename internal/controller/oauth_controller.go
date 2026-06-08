@@ -279,6 +279,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	if oauthPendingSession.CallbackParams.RedirectURI != "" {
 		queries, err := query.Values(RedirectQuery{
 			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
+			LoginFor:    FrontendLoginForApp,
 		})
 
 		if err != nil {
@@ -295,7 +296,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 }
 
 func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {
-	return params.LoginFor == "oidc"
+	return params.LoginFor == string(FrontendLoginForOIDC)
 }
 
 func (controller *OAuthController) getCookieDomain() string {

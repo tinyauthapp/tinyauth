@@ -180,7 +180,7 @@ export const AuthorizePage = () => {
           {t("authorizeTitle")}
         </Button>
         <Button
-          onClick={() => navigate("/")}
+          onClick={() => navigate(`/logout${compiledParams}`)}
           disabled={authorizeMutation.isPending}
           variant="outline"
         >
