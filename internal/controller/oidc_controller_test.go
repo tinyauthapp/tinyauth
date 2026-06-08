@@ -85,7 +85,7 @@ func TestOIDCController(t *testing.T) {
 				assert.Equal(t, http.StatusFound, recorder.Code)
 				location := recorder.Header().Get("Location")
 				assert.Contains(t, location, oidcService.GetIssuer()+"/error")
-				assert.Contains(t, location, url.QueryEscape("The client provided invalid query parameters"))
+				assert.Contains(t, location, url.QueryEscape("The client ID is invalid"))
 			},
 		},
 		{
