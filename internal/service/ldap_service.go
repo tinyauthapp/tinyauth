@@ -63,7 +63,9 @@ func NewLdapService(
 
 	_, err := ldap.connect()
 
+	// Warn: This will hang the tinyauth startup for a good 45 seconds until it fails
 	if err != nil {
+		err = ldap.reconnect(10 * time.Second)
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
@@ -79,7 +81,7 @@ func NewLdapService(
 				err := ldap.heartbeat()
 				if err != nil {
 					ldap.log.App.Warn().Err(err).Msg("LDAP connection heartbeat failed, attempting to reconnect")
-					if reconnectErr := ldap.reconnect(); reconnectErr != nil {
+					if reconnectErr := ldap.reconnect(5 * time.Second); reconnectErr != nil {
 						ldap.log.App.Error().Err(reconnectErr).Msg("Failed to reconnect to LDAP server")
 						continue
 					}
@@ -247,11 +249,11 @@ func (ldap *LdapService) heartbeat() error {
 	return nil
 }
 
-func (ldap *LdapService) reconnect() error {
+func (ldap *LdapService) reconnect(interval time.Duration) error {
 	ldap.log.App.Info().Msg("Attempting to reconnect to LDAP server")
 
 	exp := backoff.NewExponentialBackOff()
-	exp.InitialInterval = 500 * time.Millisecond
+	exp.InitialInterval = interval
 	exp.RandomizationFactor = 0.1
 	exp.Multiplier = 1.5
 	exp.Reset()
