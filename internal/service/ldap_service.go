@@ -11,6 +11,7 @@ import (
 	ldapgo "github.com/go-ldap/ldap/v3"
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
