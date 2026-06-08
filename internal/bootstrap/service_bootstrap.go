@@ -8,7 +8,7 @@ import (
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService, err := service.NewLdapService(app.log, app.config, app.ding)
+	ldapService, err := service.NewLdapService(app.log, app.config, app.ctx, app.ding)
 
 	if err != nil {
 		app.log.App.Warn().Err(err).Msg("Failed to initialize LDAP connection, will continue without it")

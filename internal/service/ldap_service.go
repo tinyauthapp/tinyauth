@@ -17,6 +17,7 @@ import (
 type LdapService struct {
 	log    *logger.Logger
 	config model.Config
+	ctx    context.Context
 
 	conn  *ldapgo.Conn
 	mutex sync.RWMutex
@@ -26,6 +27,7 @@ type LdapService struct {
 func NewLdapService(
 	log *logger.Logger,
 	config model.Config,
+	ctx context.Context,
 	dg *ding.Ding,
 ) (*LdapService, error) {
 	if config.LDAP.Address == "" {
@@ -35,6 +37,7 @@ func NewLdapService(
 	ldap := &LdapService{
 		log:    log,
 		config: config,
+		ctx:    ctx,
 	}
 
 	// Check whether authentication with client certificate is possible
@@ -259,7 +262,9 @@ func (ldap *LdapService) reconnect(interval time.Duration) error {
 	exp.Reset()
 
 	operation := func() (*ldapgo.Conn, error) {
-		ldap.conn.Close()
+		if ldap.conn != nil {
+			ldap.conn.Close()
+		}
 		conn, err := ldap.connect()
 		if err != nil {
 			return nil, err
@@ -267,7 +272,7 @@ func (ldap *LdapService) reconnect(interval time.Duration) error {
 		return conn, nil
 	}
 
-	_, err := backoff.Retry(context.TODO(), operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
+	_, err := backoff.Retry(ldap.ctx, operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
 
 	if err != nil {
 		return err
