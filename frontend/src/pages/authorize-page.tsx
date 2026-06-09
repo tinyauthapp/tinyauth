@@ -135,9 +135,7 @@ export const AuthorizePage = () => {
       <CardHeader className="mb-2">
         <div className="flex flex-col gap-3 items-center justify-center text-center">
           <div className="bg-accent-foreground box-content text-muted text-xl font-bold font-sans rounded-lg size-8 p-2 flex items-center justify-center">
-            {screenParams.oidc_name !== undefined
-              ? screenParams.oidc_name.slice(0, 1)
-              : "U"}
+            {screenParams.oidc_name ? screenParams.oidc_name.slice(0, 1) : "U"}
           </div>
           <CardTitle className="text-xl">
             {t("authorizeCardTitle", {

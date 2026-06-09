@@ -28,7 +28,7 @@ export function useScreenParams(params: URLSearchParams): ScreenParams {
 export function recompileScreenParams(params: ScreenParams): string {
   const p = new URLSearchParams(
     Object.fromEntries(
-      Object.entries(params).filter(([, v]) => v != null),
+      Object.entries(params).filter(([, v]) => v !== undefined),
     ) as Record<string, string>,
   ).toString();
 

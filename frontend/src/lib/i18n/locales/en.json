@@ -71,7 +71,7 @@
   "authorizeSuccessTitle": "Authorized",
   "authorizeSuccessSubtitle": "You will be redirected to the app in a few seconds.",
   "authorizeErrorClientInfo": "An error occurred while loading the client information. Please try again later.",
-  "authorizeErrorMissingParams": "The following parameters are missing: {{missingParams}}",
+  "authorizeErrorInvalidParams": "The request is missing required parameters or has invalid parameters. Please check the URL and try again.",
   "openidScopeName": "OpenID Connect",
   "openidScopeDescription": "Allows the app to access your OpenID Connect information.",
   "emailScopeName": "Email",
