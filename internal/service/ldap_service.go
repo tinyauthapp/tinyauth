@@ -33,6 +33,10 @@ func NewLdapService(
 		return nil, nil
 	}
 
+	secret := utils.GetSecret(config.LDAP.BindPassword, config.LDAP.BindPasswordFile)
+	config.LDAP.BindPassword = secret
+	config.LDAP.BindPasswordFile = ""
+
 	ldap := &LdapService{
 		log:    log,
 		config: config,
@@ -61,10 +65,6 @@ func NewLdapService(
 			}
 		*/
 	}
-
-	secret := utils.GetSecret(config.LDAP.BindPassword, config.LDAP.BindPasswordFile)
-	config.LDAP.BindPassword = secret
-	config.LDAP.BindPasswordFile = ""
 
 	_, err := ldap.connect()
 
