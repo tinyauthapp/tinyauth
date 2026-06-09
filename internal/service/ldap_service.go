@@ -62,6 +62,10 @@ func NewLdapService(
 		*/
 	}
 
+	secret := utils.GetSecret(config.LDAP.BindPassword, config.LDAP.BindPasswordFile)
+	config.LDAP.BindPassword = secret
+	config.LDAP.BindPasswordFile = ""
+
 	_, err := ldap.connect()
 
 	if err != nil {
@@ -213,9 +217,6 @@ func (ldap *LdapService) BindService(rebind bool) error {
 	if ldap.cert != nil {
 		return ldap.conn.ExternalBind()
 	}
-	secret := utils.GetSecret(ldap.config.LDAP.BindPassword, ldap.config.LDAP.BindPasswordFile)
-	ldap.config.LDAP.BindPassword = secret
-	ldap.config.LDAP.BindPasswordFile = ""
 	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.config.LDAP.BindPassword)
 }
 
