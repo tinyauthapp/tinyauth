@@ -94,3 +94,47 @@ func (s *Store) DeleteExpiredOIDCSessions(_ context.Context, arg repository.Dele
 	}
 	return nil
 }
+
+func (s *Store) CreateOIDCConsent(_ context.Context, arg repository.CreateOIDCConsentParams) (repository.OidcConsent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.oidcConsent[arg.UUID]; ok {
+		return repository.OidcConsent{}, fmt.Errorf("UNIQUE constraint failed: oidc_consent.uuid")
+	}
+	consent := repository.OidcConsent{
+		UUID:     arg.UUID,
+		ClientID: arg.ClientID,
+		Scopes:   arg.Scopes,
+	}
+	s.oidcConsent[arg.UUID] = consent
+	return consent, nil
+}
+
+func (s *Store) GetOIDCConsentByUUID(_ context.Context, uuid string) (repository.OidcConsent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	consent, ok := s.oidcConsent[uuid]
+	if !ok {
+		return repository.OidcConsent{}, repository.ErrNotFound
+	}
+	return consent, nil
+}
+
+func (s *Store) UpdateOIDCConsent(_ context.Context, arg repository.UpdateOIDCConsentParams) (repository.OidcConsent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	consent, ok := s.oidcConsent[arg.UUID]
+	if !ok {
+		return repository.OidcConsent{}, repository.ErrNotFound
+	}
+	consent.Scopes = arg.Scopes
+	s.oidcConsent[arg.UUID] = consent
+	return consent, nil
+}
+
+func (s *Store) DeleteOIDCConsentByUUID(_ context.Context, uuid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.oidcConsent, uuid)
+	return nil
+}

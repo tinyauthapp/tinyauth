@@ -1,7 +1,17 @@
 package repository
 
+import "time"
+
 // Shared model and parameter types for all storage drivers.
 // sqlc-generated driver packages use these via the conversion layer in their store.go.
+
+type OidcConsent struct {
+	UUID      string
+	ClientID  string
+	Scopes    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
 type Session struct {
 	UUID        string
@@ -83,4 +93,15 @@ type UpdateOIDCSessionParams struct {
 type DeleteExpiredOIDCSessionsParams struct {
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
+}
+
+type CreateOIDCConsentParams struct {
+	UUID     string
+	ClientID string
+	Scopes   string
+}
+
+type UpdateOIDCConsentParams struct {
+	Scopes string
+	UUID   string
 }

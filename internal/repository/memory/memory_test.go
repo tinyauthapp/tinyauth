@@ -277,6 +277,78 @@ func TestMemoryStore(t *testing.T) {
 				assert.NoError(t, err)
 			},
 		},
+		{
+			description: "Create and get OIDC consent",
+			run: func(t *testing.T, s repository.Store) {
+				consent, err := s.CreateOIDCConsent(ctx, repository.CreateOIDCConsentParams{
+					UUID:     "uuid-1",
+					ClientID: "client-1",
+					Scopes:   "openid profile",
+				})
+				require.NoError(t, err)
+				assert.Equal(t, "uuid-1", consent.UUID)
+				assert.Equal(t, "client-1", consent.ClientID)
+				assert.Equal(t, "openid profile", consent.Scopes)
+
+				got, err := s.GetOIDCConsentByUUID(ctx, "uuid-1")
+				require.NoError(t, err)
+				assert.Equal(t, consent, got)
+			},
+		},
+		{
+			description: "Get OIDC consent by UUID not found",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.GetOIDCConsentByUUID(ctx, "missing")
+				assert.ErrorIs(t, err, repository.ErrNotFound)
+			},
+		},
+		{
+			description: "Create OIDC consent unique UUID constraint",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.CreateOIDCConsent(ctx, repository.CreateOIDCConsentParams{UUID: "uuid-1", ClientID: "client-1", Scopes: "openid"})
+				require.NoError(t, err)
+
+				_, err = s.CreateOIDCConsent(ctx, repository.CreateOIDCConsentParams{UUID: "uuid-1", ClientID: "client-2", Scopes: "profile"})
+				assert.ErrorContains(t, err, "UNIQUE constraint failed: oidc_consent.uuid")
+			},
+		},
+		{
+			description: "Update OIDC consent",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.CreateOIDCConsent(ctx, repository.CreateOIDCConsentParams{UUID: "uuid-1", ClientID: "client-1", Scopes: "openid"})
+				require.NoError(t, err)
+
+				updated, err := s.UpdateOIDCConsent(ctx, repository.UpdateOIDCConsentParams{
+					UUID:   "uuid-1",
+					Scopes: "profile email",
+				})
+				require.NoError(t, err)
+				assert.Equal(t, "profile email", updated.Scopes)
+
+				got, err := s.GetOIDCConsentByUUID(ctx, "uuid-1")
+				require.NoError(t, err)
+				assert.Equal(t, updated, got)
+			},
+		},
+		{
+			description: "Update OIDC consent not found",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.UpdateOIDCConsent(ctx, repository.UpdateOIDCConsentParams{UUID: "missing"})
+				assert.ErrorIs(t, err, repository.ErrNotFound)
+			},
+		},
+		{
+			description: "Delete OIDC consent by UUID",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.CreateOIDCConsent(ctx, repository.CreateOIDCConsentParams{UUID: "uuid-1", ClientID: "client-1", Scopes: "openid"})
+				require.NoError(t, err)
+
+				require.NoError(t, s.DeleteOIDCConsentByUUID(ctx, "uuid-1"))
+
+				_, err = s.GetOIDCConsentByUUID(ctx, "uuid-1")
+				assert.ErrorIs(t, err, repository.ErrNotFound)
+			},
+		},
 	}
 
 	for _, test := range tests {

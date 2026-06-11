@@ -46,3 +46,28 @@ UPDATE "oidc_sessions" SET
     "userinfo_json" = ?
 WHERE "sub" = ?
 RETURNING *;
+
+-- name: CreateOIDCConsent :one
+INSERT INTO "oidc_consent" (
+    "uuid",
+    "client_id",
+    "scopes"
+) VALUES (
+    ?, ?, ?
+)
+RETURNING *;
+
+-- name: GetOIDCConsentByUUID :one
+SELECT * FROM "oidc_consent"
+WHERE "uuid" = ?;
+
+-- name: UpdateOIDCConsent :one
+UPDATE "oidc_consent" SET
+    "scopes" = ?,
+    "updated_at" = CURRENT_TIMESTAMP
+WHERE "uuid" = ?
+RETURNING *;
+
+-- name: DeleteOIDCConsentByUUID :exec
+DELETE FROM "oidc_consent"
+WHERE "uuid" = ?;
