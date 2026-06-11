@@ -58,8 +58,8 @@ func (app *BootstrapApp) setupRouter() error {
 	apiRouter := engine.Group("/api")
 
 	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, apiRouter)
+	controller.NewOAuthController(app.log, app.config, app.runtime, &app.helpers, apiRouter, app.services.authService)
+	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, &app.helpers, app.config, apiRouter, &engine.RouterGroup)
 	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService, app.services.policyEngine)
 	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
 	controller.NewResourcesController(app.config, &engine.RouterGroup)

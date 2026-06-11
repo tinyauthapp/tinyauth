@@ -150,7 +150,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 				Email:       email,
 				Provider:    "local",
 				TotpPending: true,
-			})
+			}, c.RemoteIP())
 
 			if err != nil {
 				controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Failed to create pending TOTP session")
@@ -195,7 +195,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		}
 	}
 
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie, c.RemoteIP())
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Failed to create session cookie after successful login")
@@ -246,7 +246,7 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		return
 	}
 
-	cookie, err := controller.auth.DeleteSession(c, uuid)
+	cookie, err := controller.auth.DeleteSession(c, uuid, c.RemoteIP())
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
@@ -350,7 +350,7 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
 
 	if err == nil {
-		_, err = controller.auth.DeleteSession(c, uuid)
+		_, err = controller.auth.DeleteSession(c, uuid, c.RemoteIP())
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to delete pending TOTP session after successful verification")
 		}
@@ -374,7 +374,7 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		sessionCookie.Email = user.Attributes.Email
 	}
 
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie, c.RemoteIP())
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful TOTP verification")
@@ -424,7 +424,7 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 		Provider: "tailscale",
 	}
 
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie, c.RemoteIP())
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful Tailscale login")

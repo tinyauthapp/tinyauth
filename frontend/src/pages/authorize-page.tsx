@@ -1,5 +1,5 @@
 import { useUserContext } from "@/context/user-context";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router";
 import { useLocation } from "react-router";
 import {
@@ -10,11 +10,9 @@ import {
   CardFooter,
   CardContent,
 } from "@/components/ui/card";
-import { getOidcClientInfoSchema } from "@/schemas/oidc-schemas";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 import { toast } from "sonner";
-import { useOIDCParams } from "@/lib/hooks/oidc";
 import { useTranslation } from "react-i18next";
 import { TFunction } from "i18next";
 import { Mail, MapPin, Phone, Shield, User, Users } from "lucide-react";
@@ -23,6 +21,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  recompileScreenParams,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
+import { useEffect } from "react";
 
 type Scope = {
   id: string;
@@ -84,90 +87,96 @@ export const AuthorizePage = () => {
   const scopeMap = createScopeMap(t);
 
   const searchParams = new URLSearchParams(search);
-  const oidcParams = useOIDCParams(searchParams);
+  const screenParams = useScreenParams(searchParams);
+  const isOidc = screenParams.login_for === "oidc";
+  const compiledParams = recompileScreenParams(screenParams);
 
-  const getClientInfo = useQuery({
-    queryKey: ["client", oidcParams.values.client_id],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/oidc/clients/${encodeURIComponent(oidcParams.values.client_id)}`,
-      );
-      const data = await getOidcClientInfoSchema.parseAsync(await res.json());
-      return data;
-    },
-    enabled: oidcParams.isOidc,
-  });
+  const { mutate: authorizeMutate, isPending: authorizeIsPending } =
+    useMutation({
+      mutationFn: () => {
+        return axios.post("/api/oidc/authorize-complete", {
+          ticket: screenParams.oidc_ticket,
+        });
+      },
+      mutationKey: ["authorize", screenParams.oidc_ticket],
+      onSuccess: (data) => {
+        toast.info(t("authorizeSuccessTitle"), {
+          description: t("authorizeSuccessSubtitle"),
+        });
+        window.location.replace(data.data.redirect_uri);
+      },
+      onError: (error) => {
+        window.location.replace(
+          `/error?error=${encodeURIComponent(error.message)}`,
+        );
+      },
+    });
 
-  const authorizeMutation = useMutation({
-    mutationFn: () => {
-      return axios.post("/api/oidc/authorize", {
-        ...oidcParams.values,
-      });
-    },
-    mutationKey: ["authorize", oidcParams.values.client_id],
-    onSuccess: (data) => {
-      toast.info(t("authorizeSuccessTitle"), {
-        description: t("authorizeSuccessSubtitle"),
-      });
-      window.location.replace(data.data.redirect_uri);
-    },
-    onError: (error) => {
-      window.location.replace(
-        `/error?error=${encodeURIComponent(error.message)}`,
-      );
-    },
-  });
+  useEffect(() => {
+    if (
+      !isOidc ||
+      screenParams.oidc_ticket === undefined ||
+      screenParams.oidc_scope === undefined ||
+      !auth.authenticated
+    ) {
+      return;
+    }
 
-  if (oidcParams.issues.length > 0) {
+    if (screenParams.oidc_show_consent === false) {
+      authorizeMutate();
+    }
+  }, [
+    isOidc,
+    screenParams.oidc_ticket,
+    screenParams.oidc_scope,
+    screenParams.oidc_show_consent,
+    auth.authenticated,
+    authorizeMutate,
+  ]);
+
+  if (
+    !isOidc ||
+    screenParams.oidc_ticket === undefined ||
+    screenParams.oidc_scope === undefined
+  ) {
     return (
       <Navigate
-        to={`/error?error=${encodeURIComponent(t("authorizeErrorMissingParams", { missingParams: oidcParams.issues.join(", ") }))}`}
+        to={`/error?error=${encodeURIComponent(t("authorizeErrorInvalidParams"))}`}
         replace
       />
     );
   }
 
   if (!auth.authenticated) {
-    return <Navigate to={`/login?${oidcParams.compiled}`} replace />;
-  }
-
-  if (getClientInfo.isLoading) {
-    return (
-      <Card className="gap-0">
-        <CardHeader>
-          <CardTitle className="text-xl">
-            {t("authorizeLoadingTitle")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CardDescription>{t("authorizeLoadingSubtitle")}</CardDescription>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (getClientInfo.isError) {
-    return (
-      <Navigate
-        to={`/error?error=${encodeURIComponent(t("authorizeErrorClientInfo"))}`}
-        replace
-      />
-    );
+    return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
   const scopes =
-    oidcParams.values.scope.split(" ").filter((s) => s.trim() !== "") || [];
+    screenParams.oidc_scope.split(" ").filter((s) => s.trim() !== "") || [];
+
+  if (screenParams.oidc_show_consent === false) {
+    return (
+      <Card>
+        <CardHeader className="gap-1.5">
+          <CardTitle className="text-xl">Authorizing</CardTitle>
+          <CardDescription>
+            You will soon be redirected to your application...
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card>
       <CardHeader className="mb-2">
         <div className="flex flex-col gap-3 items-center justify-center text-center">
           <div className="bg-accent-foreground box-content text-muted text-xl font-bold font-sans rounded-lg size-8 p-2 flex items-center justify-center">
-            {getClientInfo.data?.name.slice(0, 1) || "U"}
+            {screenParams.oidc_name ? screenParams.oidc_name.slice(0, 1) : "U"}
           </div>
           <CardTitle className="text-xl">
             {t("authorizeCardTitle", {
-              app: getClientInfo.data?.name || "Unknown",
+              app: screenParams.oidc_name || "Unknown",
             })}
           </CardTitle>
           <CardDescription className="text-sm max-w-sm">
@@ -199,15 +208,12 @@ export const AuthorizePage = () => {
         </CardContent>
       )}
       <CardFooter className="flex flex-col items-stretch gap-3">
-        <Button
-          onClick={() => authorizeMutation.mutate()}
-          loading={authorizeMutation.isPending}
-        >
+        <Button onClick={() => authorizeMutate()} loading={authorizeIsPending}>
           {t("authorizeTitle")}
         </Button>
         <Button
-          onClick={() => navigate("/")}
-          disabled={authorizeMutation.isPending}
+          onClick={() => navigate(`/logout${compiledParams}`)}
+          disabled={authorizeIsPending}
           variant="outline"
         >
           {t("cancelTitle")}

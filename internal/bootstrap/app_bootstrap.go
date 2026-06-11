@@ -47,6 +47,7 @@ type Services struct {
 type BootstrapApp struct {
 	config    model.Config
 	runtime   model.RuntimeConfig
+	helpers   model.RuntimeHelpers
 	services  Services
 	log       *logger.Logger
 	ctx       context.Context
@@ -185,9 +186,8 @@ func (app *BootstrapApp) Setup() error {
 	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 
 	app.runtime.SessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
-	app.runtime.CSRFCookieName = fmt.Sprintf("%s-%s", model.CSRFCookieName, cookieId)
-	app.runtime.RedirectCookieName = fmt.Sprintf("%s-%s", model.RedirectCookieName, cookieId)
 	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
+	app.runtime.ConsentCookieName = fmt.Sprintf("%s-%s", model.ConsentCookieName, cookieId)
 
 	// database
 	store, err := app.SetupStore()
@@ -263,6 +263,9 @@ func (app *BootstrapApp) Setup() error {
 	if app.services.tailscaleService != nil {
 		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
 	}
+
+	// runtime helpers
+	app.helpers.GetCookieDomain = app.getCookieDomain
 
 	// setup router
 	err = app.setupRouter()

@@ -30,17 +30,14 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 )
 
-// slightly modified version of the AuthorizeRequest from the OIDC service to basically accept all
-// parameters and pass them to the authorize page if needed
-type OAuthURLParams struct {
-	Scope               string `form:"scope" url:"scope"`
-	ResponseType        string `form:"response_type" url:"response_type"`
-	ClientID            string `form:"client_id" url:"client_id"`
-	RedirectURI         string `form:"redirect_uri" url:"redirect_uri"`
-	State               string `form:"state" url:"state"`
-	Nonce               string `form:"nonce" url:"nonce"`
-	CodeChallenge       string `form:"code_challenge" url:"code_challenge"`
-	CodeChallengeMethod string `form:"code_challenge_method" url:"code_challenge_method"`
+// We either store params for redirecting to an app after OAuth login,
+// or for redirecting back to the authorize screen to continue OIDC
+type OAuthCallbackParams struct {
+	LoginFor    string `form:"login_for" url:"login_for"`
+	OIDCTicket  string `form:"oidc_ticket" url:"oidc_ticket"`
+	OIDCScope   string `form:"oidc_scope" url:"oidc_scope"`
+	OIDCName    string `form:"oidc_name" url:"oidc_name"`
+	RedirectURI string `form:"redirect_uri" url:"redirect_uri"`
 }
 
 type OAuthPendingSession struct {
@@ -49,7 +46,7 @@ type OAuthPendingSession struct {
 	Token          *oauth2.Token
 	Service        *OAuthServiceImpl
 	ExpiresAt      time.Time
-	CallbackParams OAuthURLParams
+	CallbackParams OAuthCallbackParams
 }
 
 type LoginAttempt struct {
@@ -62,6 +59,7 @@ type AuthService struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
+	helpers *model.RuntimeHelpers
 	ctx     context.Context
 
 	ldap         *LdapService
@@ -89,6 +87,7 @@ func NewAuthService(
 	log *logger.Logger,
 	config model.Config,
 	runtime model.RuntimeConfig,
+	helpers *model.RuntimeHelpers,
 	ctx context.Context,
 	dg *ding.Ding,
 	ldap *LdapService,
@@ -100,6 +99,7 @@ func NewAuthService(
 	service := &AuthService{
 		log:          log,
 		runtime:      runtime,
+		helpers:      helpers,
 		ctx:          ctx,
 		config:       config,
 		ldap:         ldap,
@@ -325,7 +325,7 @@ func (auth *AuthService) IsEmailWhitelisted(provider string, email string) bool 
 	})
 }
 
-func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session) (*http.Cookie, error) {
+func (auth *AuthService) CreateSession(ctx context.Context, data repository.Session, ip string) (*http.Cookie, error) {
 	if data.Provider == "tailscale" && auth.tailscale == nil {
 		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
 	}
@@ -366,33 +366,17 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		return nil, fmt.Errorf("failed to create session entry: %w", err)
 	}
 
-	if data.Provider == "tailscale" {
-		auth.log.App.Trace().Str("url", fmt.Sprintf("https://%s", auth.tailscale.GetHostname())).Msg("Extracting root domain from Tailscale hostname")
+	cookieDomain, err := auth.helpers.GetCookieDomain(ctx, ip)
 
-		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", auth.tailscale.GetHostname()))
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cookie domain for tailscale user: %w", err)
-		}
-
-		return &http.Cookie{
-			Name:     auth.runtime.SessionCookieName,
-			Value:    session.UUID,
-			Path:     "/",
-			Domain:   fmt.Sprintf(".%s", tsCookieDomain),
-			Expires:  expiresAt,
-			MaxAge:   int(time.Until(expiresAt).Seconds()),
-			Secure:   auth.config.Auth.SecureCookie,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		}, nil
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine cookie domain: %w", err)
 	}
 
 	return &http.Cookie{
 		Name:     auth.runtime.SessionCookieName,
 		Value:    session.UUID,
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   cookieDomain,
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		Secure:   auth.config.Auth.SecureCookie,
@@ -401,11 +385,15 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 	}, nil
 }
 
-func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http.Cookie, error) {
+func (auth *AuthService) RefreshSession(ctx context.Context, uuid string, ip string) (*http.Cookie, error) {
 	session, err := auth.queries.GetSession(ctx, uuid)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve session: %w", err)
+	}
+
+	if session.Provider == "tailscale" && auth.tailscale == nil {
+		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
 	}
 
 	currentTime := time.Now().Unix()
@@ -441,11 +429,17 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 		return nil, fmt.Errorf("failed to update session expiry: %w", err)
 	}
 
+	cookieDomain, err := auth.helpers.GetCookieDomain(ctx, ip)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine cookie domain: %w", err)
+	}
+
 	return &http.Cookie{
 		Name:     auth.runtime.SessionCookieName,
 		Value:    session.UUID,
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   cookieDomain,
 		Expires:  time.Now().Add(time.Duration(newExpiry-currentTime) * time.Second),
 		MaxAge:   int(newExpiry - currentTime),
 		Secure:   auth.config.Auth.SecureCookie,
@@ -455,18 +449,24 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 
 }
 
-func (auth *AuthService) DeleteSession(ctx context.Context, uuid string) (*http.Cookie, error) {
+func (auth *AuthService) DeleteSession(ctx context.Context, uuid string, ip string) (*http.Cookie, error) {
 	err := auth.queries.DeleteSession(ctx, uuid)
 
 	if err != nil {
 		auth.log.App.Error().Err(err).Str("uuid", uuid).Msg("Failed to delete session from database")
 	}
 
+	cookieDomain, err := auth.helpers.GetCookieDomain(ctx, ip)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine cookie domain: %w", err)
+	}
+
 	return &http.Cookie{
 		Name:     auth.runtime.SessionCookieName,
 		Value:    "",
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   cookieDomain,
 		Expires:  time.Now(),
 		MaxAge:   -1,
 		Secure:   auth.config.Auth.SecureCookie,
@@ -516,17 +516,17 @@ func (auth *AuthService) LDAPAuthConfigured() bool {
 	return auth.ldap != nil
 }
 
-func (auth *AuthService) NewOAuthSession(serviceName string, params OAuthURLParams) (string, OAuthPendingSession, error) {
+func (auth *AuthService) NewOAuthSession(serviceName string, params OAuthCallbackParams) (string, error) {
 	service, ok := auth.oauthBroker.GetService(serviceName)
 
 	if !ok {
-		return "", OAuthPendingSession{}, fmt.Errorf("oauth service not found: %s", serviceName)
+		return "", fmt.Errorf("oauth service not found: %s", serviceName)
 	}
 
 	sessionId, err := uuid.NewRandom()
 
 	if err != nil {
-		return "", OAuthPendingSession{}, fmt.Errorf("failed to generate session ID: %w", err)
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
 	}
 
 	state := service.NewRandom()
@@ -542,7 +542,7 @@ func (auth *AuthService) NewOAuthSession(serviceName string, params OAuthURLPara
 
 	auth.caches.oauth.Set(sessionId.String(), session, time.Minute*10)
 
-	return sessionId.String(), session, nil
+	return sessionId.String(), nil
 }
 
 func (auth *AuthService) GetOAuthURL(sessionId string) (string, error) {

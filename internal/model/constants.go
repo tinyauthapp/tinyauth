@@ -18,8 +18,7 @@ var OverrideProviders = map[string]string{
 }
 
 const SessionCookieName = "tinyauth-session"
-const CSRFCookieName = "tinyauth-csrf"
-const RedirectCookieName = "tinyauth-redirect"
 const OAuthSessionCookieName = "tinyauth-oauth"
+const ConsentCookieName = "tinyauth-consent"
 
 const GracefulShutdownTimeout = 5 // seconds

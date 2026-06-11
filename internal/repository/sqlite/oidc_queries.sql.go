@@ -9,6 +9,36 @@ import (
 	"context"
 )
 
+const createOIDCConsent = `-- name: CreateOIDCConsent :one
+INSERT INTO "oidc_consent" (
+    "uuid",
+    "client_id",
+    "scopes"
+) VALUES (
+    ?, ?, ?
+)
+RETURNING uuid, client_id, scopes, created_at, updated_at
+`
+
+type CreateOIDCConsentParams struct {
+	UUID     string
+	ClientID string
+	Scopes   string
+}
+
+func (q *Queries) CreateOIDCConsent(ctx context.Context, arg CreateOIDCConsentParams) (OidcConsent, error) {
+	row := q.db.QueryRowContext(ctx, createOIDCConsent, arg.UUID, arg.ClientID, arg.Scopes)
+	var i OidcConsent
+	err := row.Scan(
+		&i.UUID,
+		&i.ClientID,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createOIDCSession = `-- name: CreateOIDCSession :one
 INSERT INTO "oidc_sessions" (
     "sub",
@@ -80,6 +110,16 @@ func (q *Queries) DeleteExpiredOIDCSessions(ctx context.Context, arg DeleteExpir
 	return err
 }
 
+const deleteOIDCConsentByUUID = `-- name: DeleteOIDCConsentByUUID :exec
+DELETE FROM "oidc_consent"
+WHERE "uuid" = ?
+`
+
+func (q *Queries) DeleteOIDCConsentByUUID(ctx context.Context, uuid string) error {
+	_, err := q.db.ExecContext(ctx, deleteOIDCConsentByUUID, uuid)
+	return err
+}
+
 const deleteOIDCSessionBySub = `-- name: DeleteOIDCSessionBySub :exec
 DELETE FROM "oidc_sessions"
 WHERE "sub" = ?
@@ -88,6 +128,24 @@ WHERE "sub" = ?
 func (q *Queries) DeleteOIDCSessionBySub(ctx context.Context, sub string) error {
 	_, err := q.db.ExecContext(ctx, deleteOIDCSessionBySub, sub)
 	return err
+}
+
+const getOIDCConsentByUUID = `-- name: GetOIDCConsentByUUID :one
+SELECT uuid, client_id, scopes, created_at, updated_at FROM "oidc_consent"
+WHERE "uuid" = ?
+`
+
+func (q *Queries) GetOIDCConsentByUUID(ctx context.Context, uuid string) (OidcConsent, error) {
+	row := q.db.QueryRowContext(ctx, getOIDCConsentByUUID, uuid)
+	var i OidcConsent
+	err := row.Scan(
+		&i.UUID,
+		&i.ClientID,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getOIDCSessionByAccessTokenHash = `-- name: GetOIDCSessionByAccessTokenHash :one
@@ -152,6 +210,32 @@ func (q *Queries) GetOIDCSessionBySub(ctx context.Context, sub string) (OidcSess
 		&i.RefreshTokenExpiresAt,
 		&i.Nonce,
 		&i.UserinfoJson,
+	)
+	return i, err
+}
+
+const updateOIDCConsent = `-- name: UpdateOIDCConsent :one
+UPDATE "oidc_consent" SET
+    "scopes" = ?,
+    "updated_at" = CURRENT_TIMESTAMP
+WHERE "uuid" = ?
+RETURNING uuid, client_id, scopes, created_at, updated_at
+`
+
+type UpdateOIDCConsentParams struct {
+	Scopes string
+	UUID   string
+}
+
+func (q *Queries) UpdateOIDCConsent(ctx context.Context, arg UpdateOIDCConsentParams) (OidcConsent, error) {
+	row := q.db.QueryRowContext(ctx, updateOIDCConsent, arg.Scopes, arg.UUID)
+	var i OidcConsent
+	err := row.Scan(
+		&i.UUID,
+		&i.ClientID,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

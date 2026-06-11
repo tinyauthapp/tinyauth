@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -132,4 +133,12 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 	}
 
 	return config, runtime
+}
+
+func CreateTestHelpers() *model.RuntimeHelpers {
+	return &model.RuntimeHelpers{
+		GetCookieDomain: func(ctx context.Context, ip string) (string, error) {
+			return "example.com", nil
+		},
+	}
 }

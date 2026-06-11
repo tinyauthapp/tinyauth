@@ -67,15 +67,24 @@ func run() error {
 		Overlay: map[string][]byte{outPath: stub},
 	}
 
-	driverTypePkg, err := loadOnePkg(cfg, *driverPkg)
+	repoPkgPath := parentPkg(*driverPkg)
+
+	pkgs, err := loadMultiplePkgs(cfg, *driverPkg, repoPkgPath)
+
 	if err != nil {
-		return fmt.Errorf("load driver package: %w", err)
+		return fmt.Errorf("load packages: %w", err)
 	}
 
-	repoPkgPath := parentPkg(*driverPkg)
-	repoTypePkg, err := loadOnePkg(cfg, repoPkgPath)
-	if err != nil {
-		return fmt.Errorf("load repo package: %w", err)
+	driverTypePkg, ok := pkgs[*driverPkg]
+
+	if !ok {
+		return fmt.Errorf("driver package %s not found in loaded packages", *driverPkg)
+	}
+
+	repoTypePkg, ok := pkgs[repoPkgPath]
+
+	if !ok {
+		return fmt.Errorf("repository package %s not found in loaded packages", repoPkgPath)
 	}
 
 	if err := validateStructShapes(driverTypePkg, repoTypePkg); err != nil {
@@ -106,25 +115,25 @@ func run() error {
 	return nil
 }
 
-// loadOnePkg loads a single package via cfg and returns its *types.Package,
-// or an error if the package fails to load or has type errors.
-func loadOnePkg(cfg *packages.Config, importPath string) (*types.Package, error) {
-	pkgs, err := packages.Load(cfg, importPath)
+// loadMultiplePkgs loads multiple packages via cfg and returns a map of import path → *types.Package,
+// or an error if any package fails to load or has type errors.
+func loadMultiplePkgs(cfg *packages.Config, importPaths ...string) (map[string]*types.Package, error) {
+	pkgs, err := packages.Load(cfg, importPaths...)
 	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", importPath, err)
+		return nil, fmt.Errorf("load %v: %w", importPaths, err)
 	}
-	if len(pkgs) != 1 {
-		return nil, fmt.Errorf("expected 1 package for %s, got %d", importPath, len(pkgs))
-	}
-	pkg := pkgs[0]
-	if len(pkg.Errors) > 0 {
-		msgs := make([]string, len(pkg.Errors))
-		for i, e := range pkg.Errors {
-			msgs[i] = e.Error()
+	out := make(map[string]*types.Package)
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			msgs := make([]string, len(pkg.Errors))
+			for i, e := range pkg.Errors {
+				msgs[i] = e.Error()
+			}
+			return nil, fmt.Errorf("package %s has errors:\n  %s", pkg.PkgPath, strings.Join(msgs, "\n  "))
 		}
-		return nil, fmt.Errorf("package %s has errors:\n  %s", importPath, strings.Join(msgs, "\n  "))
+		out[pkg.PkgPath] = pkg.Types
 	}
-	return pkg.Types, nil
+	return out, nil
 }
 
 // parentPkg returns the parent import path (everything before the last /).

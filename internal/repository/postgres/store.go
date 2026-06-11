@@ -32,6 +32,14 @@ func mapErr(err error) error {
 	return err
 }
 
+func (s *Store) CreateOIDCConsent(ctx context.Context, arg repository.CreateOIDCConsentParams) (repository.OidcConsent, error) {
+	r, err := s.q.CreateOIDCConsent(ctx, CreateOIDCConsentParams(arg))
+	if err != nil {
+		return repository.OidcConsent{}, mapErr(err)
+	}
+	return repository.OidcConsent(r), nil
+}
+
 func (s *Store) CreateOIDCSession(ctx context.Context, arg repository.CreateOIDCSessionParams) (repository.OidcSession, error) {
 	r, err := s.q.CreateOIDCSession(ctx, CreateOIDCSessionParams(arg))
 	if err != nil {
@@ -56,12 +64,24 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context, expiry int64) error {
 	return mapErr(s.q.DeleteExpiredSessions(ctx, expiry))
 }
 
+func (s *Store) DeleteOIDCConsentByUUID(ctx context.Context, uuid string) error {
+	return mapErr(s.q.DeleteOIDCConsentByUUID(ctx, uuid))
+}
+
 func (s *Store) DeleteOIDCSessionBySub(ctx context.Context, sub string) error {
 	return mapErr(s.q.DeleteOIDCSessionBySub(ctx, sub))
 }
 
 func (s *Store) DeleteSession(ctx context.Context, uuid string) error {
 	return mapErr(s.q.DeleteSession(ctx, uuid))
+}
+
+func (s *Store) GetOIDCConsentByUUID(ctx context.Context, uuid string) (repository.OidcConsent, error) {
+	r, err := s.q.GetOIDCConsentByUUID(ctx, uuid)
+	if err != nil {
+		return repository.OidcConsent{}, mapErr(err)
+	}
+	return repository.OidcConsent(r), nil
 }
 
 func (s *Store) GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (repository.OidcSession, error) {
@@ -94,6 +114,14 @@ func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session
 		return repository.Session{}, mapErr(err)
 	}
 	return repository.Session(r), nil
+}
+
+func (s *Store) UpdateOIDCConsent(ctx context.Context, arg repository.UpdateOIDCConsentParams) (repository.OidcConsent, error) {
+	r, err := s.q.UpdateOIDCConsent(ctx, UpdateOIDCConsentParams(arg))
+	if err != nil {
+		return repository.OidcConsent{}, mapErr(err)
+	}
+	return repository.OidcConsent(r), nil
 }
 
 func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDCSessionParams) (repository.OidcSession, error) {

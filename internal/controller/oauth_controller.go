@@ -24,6 +24,7 @@ type OAuthController struct {
 	log     *logger.Logger
 	config  model.Config
 	runtime model.RuntimeConfig
+	helpers *model.RuntimeHelpers
 	auth    *service.AuthService
 }
 
@@ -31,6 +32,7 @@ func NewOAuthController(
 	log *logger.Logger,
 	config model.Config,
 	runtimeConfig model.RuntimeConfig,
+	helpers *model.RuntimeHelpers,
 	router *gin.RouterGroup,
 	auth *service.AuthService,
 ) *OAuthController {
@@ -38,6 +40,7 @@ func NewOAuthController(
 		log:     log,
 		config:  config,
 		runtime: runtimeConfig,
+		helpers: helpers,
 		auth:    auth,
 	}
 
@@ -61,7 +64,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	var reqParams service.OAuthURLParams
+	var reqParams service.OAuthCallbackParams
 
 	err = c.BindQuery(&reqParams)
 
@@ -83,7 +86,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		}
 	}
 
-	sessionId, _, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
+	sessionId, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create new OAuth session")
@@ -105,7 +108,18 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.runtime.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
+	cookieDomain, err := controller.helpers.GetCookieDomain(c, c.RemoteIP())
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to determine cookie domain")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	c.SetCookie(controller.runtime.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", cookieDomain, controller.config.Auth.SecureCookie, true)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -135,7 +149,15 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.runtime.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
+	cookieDomain, err := controller.helpers.GetCookieDomain(c, c.RemoteIP())
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to determine cookie domain")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
+	c.SetCookie(controller.runtime.OAuthSessionCookieName, "", -1, "/", cookieDomain, controller.config.Auth.SecureCookie, true)
 
 	oauthPendingSession, err := controller.auth.GetOAuthPendingSession(sessionIdCookie)
 
@@ -252,7 +274,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	controller.log.App.Debug().Msg("Creating session cookie for user")
 
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	cookie, err := controller.auth.CreateSession(c, sessionCookie, c.RemoteIP())
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create session cookie")
@@ -272,13 +294,14 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/authorize?%s", controller.runtime.AppURL, queries.Encode()))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/oidc/authorize?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
 	if oauthPendingSession.CallbackParams.RedirectURI != "" {
 		queries, err := query.Values(RedirectQuery{
 			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
+			LoginFor:    FrontendLoginForApp,
 		})
 
 		if err != nil {
@@ -294,16 +317,6 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, controller.runtime.AppURL)
 }
 
-func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) bool {
-	return params.Scope != "" &&
-		params.ResponseType != "" &&
-		params.ClientID != "" &&
-		params.RedirectURI != ""
-}
-
-func (controller *OAuthController) getCookieDomain() string {
-	if controller.config.Auth.SubdomainsEnabled {
-		return "." + controller.runtime.CookieDomain
-	}
-	return controller.runtime.CookieDomain
+func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {
+	return params.LoginFor == string(FrontendLoginForOIDC)
 }

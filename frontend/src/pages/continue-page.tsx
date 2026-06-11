@@ -12,6 +12,10 @@ import { Trans, useTranslation } from "react-i18next";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRedirectUri } from "@/lib/hooks/redirect-uri";
+import {
+  recompileScreenParams,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
 
 export const ContinuePage = () => {
   const { app, ui } = useAppContext();
@@ -25,7 +29,10 @@ export const ContinuePage = () => {
   const hasRedirected = useRef(false);
 
   const searchParams = new URLSearchParams(search);
-  const redirectUri = searchParams.get("redirect_uri");
+  const screenParams = useScreenParams(searchParams);
+  const redirectUri = screenParams.redirect_uri;
+  const isAppLogin = screenParams.login_for === "app";
+  const recompiledParams = recompileScreenParams(screenParams);
 
   const { url, valid, trusted, allowedProto, httpsDowngrade } = useRedirectUri(
     redirectUri,
@@ -43,7 +50,8 @@ export const ContinuePage = () => {
     auth.authenticated &&
     hasValidRedirect &&
     !showUntrustedWarning &&
-    !showInsecureWarning;
+    !showInsecureWarning &&
+    isAppLogin;
 
   const redirectToTarget = useCallback(() => {
     if (!urlHref || hasRedirected.current) {
@@ -79,15 +87,10 @@ export const ContinuePage = () => {
   }, [shouldAutoRedirect, redirectToTarget]);
 
   if (!auth.authenticated) {
-    return (
-      <Navigate
-        to={`/login${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
-        replace
-      />
-    );
+    return <Navigate to={`/login${recompiledParams}`} replace />;
   }
 
-  if (!hasValidRedirect) {
+  if (!hasValidRedirect || !isAppLogin) {
     return <Navigate to="/logout" replace />;
   }
 

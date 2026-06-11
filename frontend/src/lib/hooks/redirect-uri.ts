@@ -7,7 +7,7 @@ type IuseRedirectUri = {
 };
 
 export const useRedirectUri = (
-  redirect_uri: string | null,
+  redirect_uri: string | undefined,
   cookieDomain: string,
 ): IuseRedirectUri => {
   let isValid = false;
@@ -15,7 +15,7 @@ export const useRedirectUri = (
   let isAllowedProto = false;
   let isHttpsDowngrade = false;
 
-  if (!redirect_uri) {
+  if (redirect_uri === undefined) {
     return {
       valid: isValid,
       trusted: isTrusted,

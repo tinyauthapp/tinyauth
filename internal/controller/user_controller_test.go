@@ -29,6 +29,8 @@ func TestUserController(t *testing.T) {
 
 	cfg, runtime := test.CreateTestConfigs(t)
 
+	helpers := test.CreateTestHelpers()
+
 	totpCtx := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
 			Authenticated: false,
@@ -418,7 +420,7 @@ func TestUserController(t *testing.T) {
 	require.NoError(t, err)
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	authService := service.NewAuthService(log, cfg, runtime, helpers, ctx, dg, nil, store, broker, nil, policyEngine)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test

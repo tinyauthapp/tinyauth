@@ -3,6 +3,7 @@ package controller_test
 import (
 	"context"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,8 @@ func TestProxyController(t *testing.T) {
 	log.Init()
 
 	cfg, runtime := test.CreateTestConfigs(t)
+
+	helpers := test.CreateTestHelpers()
 
 	const browserUserAgent = `
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
@@ -76,7 +79,9 @@ func TestProxyController(t *testing.T) {
 
 				assert.Equal(t, 307, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2F", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -89,7 +94,9 @@ func TestProxyController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, 401, recorder.Code)
 				location := recorder.Header().Get("x-tinyauth-location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2F", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -103,7 +110,9 @@ func TestProxyController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, 307, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2Fhello", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/hello"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -119,7 +128,9 @@ func TestProxyController(t *testing.T) {
 
 				assert.Equal(t, 307, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2F", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -134,7 +145,9 @@ func TestProxyController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, 401, recorder.Code)
 				location := recorder.Header().Get("x-tinyauth-location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2F", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -150,7 +163,9 @@ func TestProxyController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, 307, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Equal(t, "https://tinyauth.example.com/login?redirect_uri=https%3A%2F%2Ftest.example.com%2Fhello", location)
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
 		},
 		{
@@ -382,7 +397,7 @@ func TestProxyController(t *testing.T) {
 		Log: log,
 	})
 
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	authService := service.NewAuthService(log, cfg, runtime, helpers, ctx, dg, nil, store, broker, nil, policyEngine)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {

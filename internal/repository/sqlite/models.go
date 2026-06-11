@@ -4,6 +4,18 @@
 
 package sqlite
 
+import (
+	"time"
+)
+
+type OidcConsent struct {
+	UUID      string
+	ClientID  string
+	Scopes    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type OidcSession struct {
 	Sub                   string
 	AccessTokenHash       string

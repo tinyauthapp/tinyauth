@@ -20,6 +20,8 @@ import (
 	"slices"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -106,14 +108,15 @@ type TokenResponse struct {
 }
 
 type AuthorizeRequest struct {
-	Scope               string `json:"scope" binding:"required"`
-	ResponseType        string `json:"response_type" binding:"required"`
-	ClientID            string `json:"client_id" binding:"required"`
-	RedirectURI         string `json:"redirect_uri" binding:"required"`
-	State               string `json:"state"`
-	Nonce               string `json:"nonce"`
-	CodeChallenge       string `json:"code_challenge"`
-	CodeChallengeMethod string `json:"code_challenge_method"`
+	jwt.Claims
+	Scope               string `form:"scope" json:"scope" url:"scope"`
+	ResponseType        string `form:"response_type" json:"response_type" url:"response_type"`
+	ClientID            string `form:"client_id" json:"client_id" url:"client_id"`
+	RedirectURI         string `form:"redirect_uri" json:"redirect_uri" url:"redirect_uri"`
+	State               string `form:"state" json:"state" url:"state"`
+	Nonce               string `form:"nonce" json:"nonce" url:"nonce"`
+	CodeChallenge       string `form:"code_challenge" json:"code_challenge" url:"code_challenge"`
+	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method" url:"code_challenge_method"`
 }
 
 type AuthorizeCodeEntry struct {
@@ -142,8 +145,9 @@ type OIDCService struct {
 	issuer     string
 
 	caches struct {
-		code     *CacheStore[AuthorizeCodeEntry]
-		usedCode *CacheStore[UsedCodeEntry]
+		code      *CacheStore[AuthorizeCodeEntry]
+		usedCode  *CacheStore[UsedCodeEntry]
+		authorize *CacheStore[AuthorizeRequest]
 	}
 }
 
@@ -311,8 +315,11 @@ func NewOIDCService(
 	// Create caches
 	codeCash := NewCacheStore[AuthorizeCodeEntry](256)
 	usedCode := NewCacheStore[UsedCodeEntry](256)
+	authorize := NewCacheStore[AuthorizeRequest](256)
+
 	service.caches.code = codeCash
 	service.caches.usedCode = usedCode
+	service.caches.authorize = authorize
 
 	// Start cache cleanup routine
 	dg.Go(func(ctx context.Context) {
@@ -324,6 +331,7 @@ func NewOIDCService(
 			case <-ticker.C:
 				service.caches.code.Sweep()
 				service.caches.usedCode.Sweep()
+				service.caches.authorize.Sweep()
 			case <-ctx.Done():
 				return
 			}
@@ -855,4 +863,89 @@ func (service *OIDCService) MarkCodeAsUsed(codeHash string, sub string) {
 
 func (service *OIDCService) DeleteSessionBySub(ctx context.Context, sub string) error {
 	return service.queries.DeleteOIDCSessionBySub(ctx, sub)
+}
+
+func (service *OIDCService) CreateAuthorizeRequestTicket(req AuthorizeRequest) string {
+	ticket := utils.GenerateString(32)
+
+	service.caches.authorize.Set(ticket, req, 10*time.Minute)
+
+	return ticket
+}
+
+func (service *OIDCService) GetAuthorizeRequestByTicket(ticket string) (*AuthorizeRequest, bool) {
+	entry, ok := service.caches.authorize.Get(ticket)
+
+	if !ok {
+		return nil, false
+	}
+
+	return &entry, true
+}
+
+func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
+	service.caches.authorize.Delete(ticket)
+}
+
+// TODO: support signed request objects in the future
+func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRequest, error) {
+	var req AuthorizeRequest
+
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &req)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authorize request jwt: %w", err)
+	}
+
+	claims, ok := token.Claims.(*AuthorizeRequest)
+
+	if !ok {
+		return nil, errors.New("failed to parse claims from authorize request jwt")
+	}
+
+	return claims, nil
+}
+
+func (service *OIDCService) CreateConsentEntry(ctx context.Context, clientId string, scope string) (string, error) {
+	u := uuid.New()
+
+	entry := repository.CreateOIDCConsentParams{
+		UUID:     u.String(),
+		ClientID: clientId,
+		Scopes:   scope,
+	}
+
+	_, err := service.queries.CreateOIDCConsent(ctx, entry)
+
+	if err != nil {
+		return "", err
+	}
+
+	return entry.UUID, nil
+}
+
+func (service *OIDCService) GetConsentEntry(ctx context.Context, uuid string) (*repository.OidcConsent, error) {
+	entry, err := service.queries.GetOIDCConsentByUUID(ctx, uuid)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &entry, nil
+}
+
+func (service *OIDCService) DeleteConsentEntry(ctx context.Context, uuid string) error {
+	return service.queries.DeleteOIDCConsentByUUID(ctx, uuid)
+}
+
+func (service *OIDCService) UpdateConsentEntry(ctx context.Context, uuid string, scopes string) error {
+	_, err := service.queries.UpdateOIDCConsent(ctx, repository.UpdateOIDCConsentParams{
+		UUID:   uuid,
+		Scopes: scopes,
+	})
+
+	return err
 }

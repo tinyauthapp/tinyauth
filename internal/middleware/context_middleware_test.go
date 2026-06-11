@@ -27,6 +27,8 @@ func TestContextMiddleware(t *testing.T) {
 
 	cfg, runtime := test.CreateTestConfigs(t)
 
+	helpers := test.CreateTestHelpers()
+
 	basicAuthHeader := func(username, password string) string {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 	}
@@ -258,7 +260,7 @@ func TestContextMiddleware(t *testing.T) {
 	require.NoError(t, err)
 
 	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	authService := service.NewAuthService(log, cfg, runtime, helpers, ctx, dg, nil, store, broker, nil, policyEngine)
 
 	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
 
