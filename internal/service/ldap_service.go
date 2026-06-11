@@ -18,6 +18,7 @@ import (
 type LdapService struct {
 	log    *logger.Logger
 	config model.Config
+	ctx    context.Context
 
 	conn  *ldapgo.Conn
 	mutex sync.RWMutex
@@ -27,6 +28,7 @@ type LdapService struct {
 func NewLdapService(
 	log *logger.Logger,
 	config model.Config,
+	ctx context.Context,
 	dg *ding.Ding,
 ) (*LdapService, error) {
 	if config.LDAP.Address == "" {
@@ -40,6 +42,7 @@ func NewLdapService(
 	ldap := &LdapService{
 		log:    log,
 		config: config,
+		ctx:    ctx,
 	}
 
 	// Check whether authentication with client certificate is possible
@@ -68,7 +71,9 @@ func NewLdapService(
 
 	_, err := ldap.connect()
 
+	// Warn: This will hang the tinyauth startup for a good 45 seconds until it fails
 	if err != nil {
+		err = ldap.reconnect(10 * time.Second)
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
@@ -84,7 +89,7 @@ func NewLdapService(
 				err := ldap.heartbeat()
 				if err != nil {
 					ldap.log.App.Warn().Err(err).Msg("LDAP connection heartbeat failed, attempting to reconnect")
-					if reconnectErr := ldap.reconnect(); reconnectErr != nil {
+					if reconnectErr := ldap.reconnect(5 * time.Second); reconnectErr != nil {
 						ldap.log.App.Error().Err(reconnectErr).Msg("Failed to reconnect to LDAP server")
 						continue
 					}
@@ -252,17 +257,19 @@ func (ldap *LdapService) heartbeat() error {
 	return nil
 }
 
-func (ldap *LdapService) reconnect() error {
+func (ldap *LdapService) reconnect(interval time.Duration) error {
 	ldap.log.App.Info().Msg("Attempting to reconnect to LDAP server")
 
 	exp := backoff.NewExponentialBackOff()
-	exp.InitialInterval = 500 * time.Millisecond
+	exp.InitialInterval = interval
 	exp.RandomizationFactor = 0.1
 	exp.Multiplier = 1.5
 	exp.Reset()
 
 	operation := func() (*ldapgo.Conn, error) {
-		ldap.conn.Close()
+		if ldap.conn != nil {
+			ldap.conn.Close()
+		}
 		conn, err := ldap.connect()
 		if err != nil {
 			return nil, err
@@ -270,7 +277,7 @@ func (ldap *LdapService) reconnect() error {
 		return conn, nil
 	}
 
-	_, err := backoff.Retry(context.TODO(), operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
+	_, err := backoff.Retry(ldap.ctx, operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
 
 	if err != nil {
 		return err
