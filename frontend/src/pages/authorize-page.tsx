@@ -110,11 +110,7 @@ export const AuthorizePage = () => {
     },
   });
 
-  if (
-    !isOidc ||
-    screenParams.oidc_ticket === undefined ||
-    screenParams.oidc_scope === undefined
-  ) {
+  if (!isOidc || !screenParams.oidc_ticket || !screenParams.oidc_scope) {
     return (
       <Navigate
         to={`/error?error=${encodeURIComponent(t("authorizeErrorInvalidParams"))}`}

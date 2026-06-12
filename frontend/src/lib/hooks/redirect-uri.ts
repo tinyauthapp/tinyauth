@@ -15,7 +15,7 @@ export const useRedirectUri = (
   let isAllowedProto = false;
   let isHttpsDowngrade = false;
 
-  if (redirect_uri === undefined) {
+  if (!redirect_uri) {
     return {
       valid: isValid,
       trusted: isTrusted,

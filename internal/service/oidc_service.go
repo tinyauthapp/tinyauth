@@ -107,7 +107,6 @@ type TokenResponse struct {
 }
 
 type AuthorizeRequest struct {
-	jwt.Claims
 	Scope               string `form:"scope" json:"scope" url:"scope"`
 	ResponseType        string `form:"response_type" json:"response_type" url:"response_type"`
 	ClientID            string `form:"client_id" json:"client_id" url:"client_id"`
@@ -888,19 +887,32 @@ func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
 
 // TODO: support signed request objects in the future
 func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRequest, error) {
-	var req AuthorizeRequest
+	var claims jwt.MapClaims
 
-	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &req)
-
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse authorize request jwt: %w", err)
 	}
 
-	claims, ok := token.Claims.(*AuthorizeRequest)
+	alg, ok := token.Header["alg"].(string)
 
-	if !ok {
-		return nil, errors.New("failed to parse claims from authorize request jwt")
+	if !ok || alg != "none" || string(token.Signature) != "" {
+		return nil, fmt.Errorf("only unsigned jwts are supported for authorize requests")
 	}
 
-	return claims, nil
+	get := func(k string) string {
+		v, _ := claims[k].(string)
+		return v
+	}
+
+	return &AuthorizeRequest{
+		Scope:               get("scope"),
+		ResponseType:        get("response_type"),
+		ClientID:            get("client_id"),
+		RedirectURI:         get("redirect_uri"),
+		State:               get("state"),
+		Nonce:               get("nonce"),
+		CodeChallenge:       get("code_challenge"),
+		CodeChallengeMethod: get("code_challenge_method"),
+	}, nil
 }

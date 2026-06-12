@@ -168,7 +168,8 @@ export const LoginPage = () => {
       !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
-      screenParams.login_for !== undefined
+      screenParams.redirect_uri &&
+      screenParams.login_for
     ) {
       hasAutoRedirectedRef.current = true;
       oauthMutate(oauth.autoRedirect);
@@ -180,6 +181,7 @@ export const LoginPage = () => {
     oauth.autoRedirect,
     isOauthAutoRedirect,
     screenParams.login_for,
+    screenParams.redirect_uri,
   ]);
 
   useEffect(() => {
