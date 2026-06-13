@@ -15,7 +15,7 @@ type LabelProvider interface {
 type AccessControlsService struct {
 	log           *logger.Logger
 	config        *model.Config
-	labelProvider *LabelProvider
+	labelProvider LabelProvider
 }
 
 type AccessControlServiceInput struct {
@@ -23,7 +23,7 @@ type AccessControlServiceInput struct {
 
 	Log           *logger.Logger
 	Config        *model.Config
-	LabelProvider *LabelProvider `optional:"true"`
+	LabelProvider LabelProvider `optional:"true"`
 }
 
 func NewAccessControlsService(i AccessControlServiceInput) *AccessControlsService {
@@ -63,8 +63,8 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 	}
 
 	// If we have a label provider configured, try to get ACLs from it
-	if service.labelProvider != nil && *service.labelProvider != nil {
-		return (*service.labelProvider).GetLabels(domain)
+	if service.labelProvider != nil {
+		return service.labelProvider.GetLabels(domain)
 	}
 
 	// no labels

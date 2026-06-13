@@ -15,10 +15,15 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to setup policy engine: %w", err)
 	}
 
-	err = app.dig.Provide(app.getLabelProvider)
+	labelProvider, err := app.getLabelProvider()
+
 	if err != nil {
-		return fmt.Errorf("failed to provide label provider: %w", err)
+		return fmt.Errorf("failed to get label provider: %w", err)
 	}
+
+	err = app.dig.Provide(func() service.LabelProvider {
+		return labelProvider
+	})
 
 	err = app.dig.Provide(service.NewLdapService)
 	if err != nil {
@@ -105,6 +110,15 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to invoke kubernetes service: %w", err)
+			}
+
+			// Kubernetes will fail to initialize with an error if it cannot connect to the cluster
+			// but just to be safe, we check if the service is nil and log a warning if it is
+			if app.services.kubernetesService == nil {
+				if app.config.LabelProvider == "kubernetes" {
+					app.log.App.Warn().Msg("Kubernetes label provider selected but Kubernetes is not available, will continue without it")
+				}
+				return nil, nil
 			}
 
 			return app.services.kubernetesService, nil
