@@ -229,7 +229,7 @@ func (app *BootstrapApp) Setup() error {
 		Queries repository.Store
 	}
 
-	app.dig.Provide(func() utilityProvider {
+	err = app.dig.Provide(func() utilityProvider {
 		return utilityProvider{
 			Log:     app.log,
 			Config:  &app.config,
@@ -239,6 +239,10 @@ func (app *BootstrapApp) Setup() error {
 			Queries: app.queries,
 		}
 	})
+
+	if err != nil {
+		return fmt.Errorf("failed to provide utilities to container: %w", err)
+	}
 
 	// services
 	err = app.setupServices()

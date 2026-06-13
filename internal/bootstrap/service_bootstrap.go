@@ -9,19 +9,46 @@ import (
 )
 
 func (app *BootstrapApp) setupServices() error {
-	app.setupPolicyEngine()
+	err := app.setupPolicyEngine()
 
-	app.dig.Provide(func() *service.PolicyEngine {
-		return app.services.policyEngine
-	})
+	if err != nil {
+		return fmt.Errorf("failed to setup policy engine: %w", err)
+	}
 
-	app.dig.Provide(app.getLabelProvider)
-	app.dig.Provide(service.NewLdapService)
-	app.dig.Provide(service.NewTailscaleService)
-	app.dig.Provide(service.NewAccessControlsService)
-	app.dig.Provide(service.NewOAuthBrokerService)
-	app.dig.Provide(service.NewAuthService)
-	app.dig.Provide(service.NewOIDCService)
+	err = app.dig.Provide(app.getLabelProvider)
+	if err != nil {
+		return fmt.Errorf("failed to provide label provider: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewLdapService)
+	if err != nil {
+		return fmt.Errorf("failed to provide ldap service: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewTailscaleService)
+	if err != nil {
+		return fmt.Errorf("failed to provide tailscale service: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewAccessControlsService)
+	if err != nil {
+		return fmt.Errorf("failed to provide access controls service: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewOAuthBrokerService)
+	if err != nil {
+		return fmt.Errorf("failed to provide oauth broker service: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewAuthService)
+	if err != nil {
+		return fmt.Errorf("failed to provide auth service: %w", err)
+	}
+
+	err = app.dig.Provide(service.NewOIDCService)
+	if err != nil {
+		return fmt.Errorf("failed to provide oidc service: %w", err)
+	}
 
 	type svcInput struct {
 		dig.In
@@ -34,7 +61,7 @@ func (app *BootstrapApp) setupServices() error {
 		TailscaleService     *service.TailscaleService
 	}
 
-	err := app.dig.Invoke(func(i svcInput) error {
+	err = app.dig.Invoke(func(i svcInput) error {
 		app.services = Services{
 			accessControlService: i.AccessControlService,
 			authService:          i.AuthService,
@@ -45,7 +72,11 @@ func (app *BootstrapApp) setupServices() error {
 		return nil
 	})
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to invoke services: %w", err)
+	}
+
+	return nil
 }
 
 func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
@@ -61,24 +92,40 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		if useKubernetes {
 			app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-			app.dig.Provide(service.NewKubernetesService)
+			err := app.dig.Provide(service.NewKubernetesService)
 
-			app.dig.Invoke(func(k *service.KubernetesService) error {
+			if err != nil {
+				return nil, fmt.Errorf("failed to provide kubernetes service: %w", err)
+			}
+
+			err = app.dig.Invoke(func(k *service.KubernetesService) error {
 				app.services.kubernetesService = k
 				return nil
 			})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to invoke kubernetes service: %w", err)
+			}
 
 			return app.services.kubernetesService, nil
 		}
 
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		app.dig.Provide(service.NewDockerService)
+		err := app.dig.Provide(service.NewDockerService)
 
-		app.dig.Invoke(func(d *service.DockerService) error {
+		if err != nil {
+			return nil, fmt.Errorf("failed to provide docker service: %w", err)
+		}
+
+		err = app.dig.Invoke(func(d *service.DockerService) error {
 			app.services.dockerService = d
 			return nil
 		})
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to invoke docker service: %w", err)
+		}
 
 		if app.services.dockerService == nil {
 			if app.config.LabelProvider == "docker" {
@@ -93,10 +140,14 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 	}
 }
 
-func (app *BootstrapApp) setupPolicyEngine() {
-	app.dig.Provide(service.NewPolicyEngine)
+func (app *BootstrapApp) setupPolicyEngine() error {
+	err := app.dig.Provide(service.NewPolicyEngine)
 
-	app.dig.Invoke(func(policyEngine *service.PolicyEngine) error {
+	if err != nil {
+		return fmt.Errorf("failed to create policy engine: %w", err)
+	}
+
+	err = app.dig.Invoke(func(policyEngine *service.PolicyEngine) error {
 		policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
 			Log: app.log,
 		})
@@ -119,4 +170,6 @@ func (app *BootstrapApp) setupPolicyEngine() {
 		})
 		return nil
 	})
+
+	return err
 }

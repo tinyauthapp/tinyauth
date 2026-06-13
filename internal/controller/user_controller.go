@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
@@ -27,23 +28,27 @@ type TotpRequest struct {
 
 type UserController struct {
 	log     *logger.Logger
-	runtime model.RuntimeConfig
+	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
 
-func NewUserController(
-	log *logger.Logger,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-	auth *service.AuthService,
-) *UserController {
+type UserControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	AuthService   *service.AuthService
+}
+
+func NewUserController(i UserControllerInput) *UserController {
 	controller := &UserController{
-		log:     log,
-		runtime: runtimeConfig,
-		auth:    auth,
+		log:     i.Log,
+		runtime: i.RuntimeConfig,
+		auth:    i.AuthService,
 	}
 
-	userGroup := router.Group("/user")
+	userGroup := i.RouterGroup.Group("/user")
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
 	userGroup.POST("/totp", controller.totpHandler)
