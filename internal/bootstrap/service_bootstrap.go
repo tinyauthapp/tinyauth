@@ -25,6 +25,10 @@ func (app *BootstrapApp) setupServices() error {
 		return labelProvider
 	})
 
+	if err != nil {
+		return fmt.Errorf("failed to provide label provider: %w", err)
+	}
+
 	err = app.dig.Provide(service.NewLdapService)
 	if err != nil {
 		return fmt.Errorf("failed to provide ldap service: %w", err)
