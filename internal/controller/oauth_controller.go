@@ -215,9 +215,14 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
+	userAttribs := controller.getUserAttributes(user.Email)
+
 	var name string
 
-	if strings.TrimSpace(user.Name) != "" {
+	if userAttribs.Name != "" {
+		controller.log.App.Debug().Msg("Using name from Auth user attributes")
+		name = userAttribs.Name
+	} else if strings.TrimSpace(user.Name) != "" {
 		controller.log.App.Debug().Msg("Using name from OAuth provider")
 		name = user.Name
 	} else {
@@ -232,7 +237,10 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	var username string
 
-	if strings.TrimSpace(user.PreferredUsername) != "" {
+	if userAttribs.PreferredUsername != "" {
+		controller.log.App.Debug().Msg("Using preferred username from Auth user attributes")
+		username = userAttribs.PreferredUsername
+	} else if strings.TrimSpace(user.PreferredUsername) != "" {
 		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
 		username = user.PreferredUsername
 	} else {
@@ -240,12 +248,22 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		username = strings.Replace(user.Email, "@", "_", 1)
 	}
 
+	var groups string
+
+	if userAttribs.Groups != nil {
+		groups = strings.Join(userAttribs.Groups, ",")
+		controller.log.App.Debug().Msgf("Using groups from Auth user attributes: %s", groups)
+	} else {
+		controller.log.App.Debug().Msg("Using groups from OAuth provider")
+		groups = utils.CoalesceToString(user.Groups)
+	}
+
 	sessionCookie := repository.Session{
 		Username:    username,
 		Name:        name,
 		Email:       user.Email,
 		Provider:    svc.ID(),
-		OAuthGroups: utils.CoalesceToString(user.Groups),
+		OAuthGroups: groups,
 		OAuthName:   svc.Name(),
 		OAuthSub:    user.Sub,
 	}
@@ -306,4 +324,11 @@ func (controller *OAuthController) getCookieDomain() string {
 		return "." + controller.runtime.CookieDomain
 	}
 	return controller.runtime.CookieDomain
+}
+
+func (controller *OAuthController) getUserAttributes(email string) model.UserAttributes {
+	email = strings.ReplaceAll(email, "@", "-")
+	email = strings.ReplaceAll(email, ".", "-")
+	attribs := controller.config.Auth.UserAttributes[email]
+	return attribs
 }
