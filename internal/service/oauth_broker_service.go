@@ -33,22 +33,20 @@ var presets = map[string]func(config model.OAuthServiceConfig, ctx context.Conte
 }
 
 func NewOAuthBrokerService(
-	log *logger.Logger,
-	configs map[string]model.OAuthServiceConfig,
-	ctx context.Context,
+	deps *ServiceDependencies,
 ) *OAuthBrokerService {
 	service := &OAuthBrokerService{
-		log:      log,
+		log:      deps.Log,
 		services: make(map[string]OAuthServiceImpl),
-		configs:  configs,
+		configs:  deps.RuntimeConfig.OAuthProviders,
 	}
 
-	for name, cfg := range configs {
+	for name, cfg := range service.configs {
 		if presetFunc, exists := presets[name]; exists {
-			service.services[name] = presetFunc(cfg, ctx)
+			service.services[name] = presetFunc(cfg, deps.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from preset")
 		} else {
-			service.services[name] = NewOAuthService(cfg, name, ctx)
+			service.services[name] = NewOAuthService(cfg, name, deps.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from custom config")
 		}
 	}

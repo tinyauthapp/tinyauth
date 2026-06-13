@@ -8,13 +8,23 @@ import (
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService, err := service.NewLdapService(app.log, app.config, app.ding)
+	app.deps.service = &service.ServiceDependencies{
+		Log:           app.log,
+		StaticConfig:  &app.config,
+		RuntimeConfig: &app.runtime,
+		Ctx:           app.ctx,
+		Ding:          app.ding,
+		Services:      &app.services,
+		Queries:       &app.queries,
+	}
+
+	ldap, err := service.NewLdapService(app.deps.service)
 
 	if err != nil {
 		app.log.App.Warn().Err(err).Msg("Failed to initialize LDAP connection, will continue without it")
 	}
 
-	app.services.ldapService = ldapService
+	app.services.LDAPService = ldap
 
 	labelProvider, err := app.getLabelProvider()
 
@@ -22,16 +32,18 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to initialize label provider: %w", err)
 	}
 
-	tailscaleService, err := service.NewTailscaleService(app.log, app.config, app.ctx, app.ding)
+	app.deps.service.LabelProvider = labelProvider
+
+	tailscaleService, err := service.NewTailscaleService(app.deps.service)
 
 	if err != nil {
 		app.log.App.Warn().Err(err).Msg("Failed to initialize Tailscale connection, will continue without it")
 	}
 
-	app.services.tailscaleService = tailscaleService
+	app.services.TailscaleService = tailscaleService
 
-	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
-	app.services.accessControlService = accessControlsService
+	accessControlsService := service.NewAccessControlsService(app.deps.service)
+	app.services.AccessControlService = accessControlsService
 
 	err = app.setupPolicyEngine()
 
@@ -39,19 +51,19 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to initialize policy engine: %w", err)
 	}
 
-	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
-	app.services.oauthBrokerService = oauthBrokerService
+	oauthBrokerService := service.NewOAuthBrokerService(app.deps.service)
+	app.services.OAuthBrokerService = oauthBrokerService
 
-	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, app.ding, app.services.ldapService, app.queries, app.services.oauthBrokerService, app.services.tailscaleService, app.services.policyEngine)
-	app.services.authService = authService
+	authService := service.NewAuthService(app.deps.service)
+	app.services.AuthService = authService
 
-	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ding)
+	oidcService, err := service.NewOIDCService(app.deps.service)
 
 	if err != nil {
 		return fmt.Errorf("failed to initialize oidc service: %w", err)
 	}
 
-	app.services.oidcService = oidcService
+	app.services.OIDCService = oidcService
 
 	return nil
 }
@@ -69,19 +81,19 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		if useKubernetes {
 			app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-			kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, app.ding)
+			kubernetesService, err := service.NewKubernetesService(app.deps.service)
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
 			}
 
-			app.services.kubernetesService = kubernetesService
+			app.services.KubernetesService = kubernetesService
 			return kubernetesService, nil
 		}
 
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService, err := service.NewDockerService(app.log, app.ctx, app.ding)
+		dockerService, err := service.NewDockerService(app.deps.service)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize docker service: %w", err)
@@ -94,7 +106,7 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 			return nil, nil
 		}
 
-		app.services.dockerService = dockerService
+		app.services.DockerService = dockerService
 		return dockerService, nil
 	default:
 		return nil, fmt.Errorf("invalid label provider: %s", app.config.LabelProvider)
@@ -102,7 +114,7 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 }
 
 func (app *BootstrapApp) setupPolicyEngine() error {
-	policyEngine, err := service.NewPolicyEngine(app.config, app.log)
+	policyEngine, err := service.NewPolicyEngine(app.deps.service)
 
 	if err != nil {
 		return fmt.Errorf("failed to initialize policy engine: %w", err)
@@ -129,6 +141,6 @@ func (app *BootstrapApp) setupPolicyEngine() error {
 		Config: app.config,
 	})
 
-	app.services.policyEngine = policyEngine
+	app.services.PolicyEngine = policyEngine
 	return nil
 }

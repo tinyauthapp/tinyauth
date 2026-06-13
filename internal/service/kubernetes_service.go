@@ -49,9 +49,7 @@ type KubernetesService struct {
 }
 
 func NewKubernetesService(
-	log *logger.Logger,
-	ctx context.Context,
-	dg *ding.Ding,
+	deps *ServiceDependencies,
 ) (*KubernetesService, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
@@ -69,31 +67,31 @@ func NewKubernetesService(
 		Resource: "ingresses",
 	}
 
-	accessCtx, accessCancel := context.WithTimeout(ctx, 5*time.Second)
+	accessCtx, accessCancel := context.WithTimeout(deps.Ctx, 5*time.Second)
 	defer accessCancel()
 
 	_, err = client.Resource(gvr).List(accessCtx, metav1.ListOptions{Limit: 1})
 	if err != nil {
-		log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
+		deps.Log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
 		return nil, fmt.Errorf("failed to access ingress api: %w", err)
 	}
 
-	log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
+	deps.Log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
 
 	service := &KubernetesService{
-		log:          log,
+		log:          deps.Log,
 		client:       client,
 		ingressApps:  make(map[ingressKey][]ingressApp),
 		domainIndex:  make(map[string]ingressAppKey),
 		appNameIndex: make(map[string]ingressAppKey),
 	}
 
-	dg.Go(func(ctx context.Context) {
+	deps.Ding.Go(func(ctx context.Context) {
 		service.watchGVR(gvr, ctx)
 	}, ding.RingMajor)
 
 	service.started = true
-	log.App.Debug().Msg("Kubernetes label provider started successfully")
+	deps.Log.App.Debug().Msg("Kubernetes label provider started successfully")
 
 	return service, nil
 }

@@ -25,7 +25,7 @@ type TailscaleWhoisResponse struct {
 
 type TailscaleService struct {
 	log    *logger.Logger
-	config model.Config
+	config *model.Config
 	ctx    context.Context
 
 	srv *tsnet.Server
@@ -34,22 +34,24 @@ type TailscaleService struct {
 	mu  sync.Mutex
 }
 
-func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, dg *ding.Ding) (*TailscaleService, error) {
-	if !config.Tailscale.Enabled {
+func NewTailscaleService(
+	deps *ServiceDependencies,
+) (*TailscaleService, error) {
+	if !deps.StaticConfig.Tailscale.Enabled {
 		return nil, nil
 	}
 
 	srv := new(tsnet.Server)
 
 	// node options
-	srv.Dir = config.Tailscale.Dir
-	srv.Hostname = config.Tailscale.Hostname
-	srv.AuthKey = config.Tailscale.AuthKey
-	srv.Ephemeral = config.Tailscale.Ephemeral
+	srv.Dir = deps.StaticConfig.Tailscale.Dir
+	srv.Hostname = deps.StaticConfig.Tailscale.Hostname
+	srv.AuthKey = deps.StaticConfig.Tailscale.AuthKey
+	srv.Ephemeral = deps.StaticConfig.Tailscale.Ephemeral
 
 	// redirect logs to zerolog
-	srv.Logf = log.App.Printf
-	srv.UserLogf = log.App.Printf
+	srv.Logf = deps.Log.App.Printf
+	srv.UserLogf = deps.Log.App.Printf
 
 	err := srv.Start()
 
@@ -65,14 +67,14 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 	}
 
 	service := &TailscaleService{
-		log:    log,
-		config: config,
-		ctx:    ctx,
+		log:    deps.Log,
+		config: deps.StaticConfig,
+		ctx:    deps.Ctx,
 		srv:    srv,
 		lc:     lc,
 	}
 
-	connectCtx, cancel := context.WithTimeout(ctx, 2*time.Minute) // large enough timeout to allow for user to manually authenticate with link if needed
+	connectCtx, cancel := context.WithTimeout(deps.Ctx, 2*time.Minute) // large enough timeout to allow for user to manually authenticate with link if needed
 	defer cancel()
 
 	err = service.waitForConn(connectCtx)
@@ -82,7 +84,7 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 		return nil, fmt.Errorf("failed to connect to tailscale network: %w", err)
 	}
 
-	dg.Go(service.watchAndClose, ding.RingMajor)
+	deps.Ding.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }

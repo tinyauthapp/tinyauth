@@ -57,8 +57,8 @@ type LoginAttempt struct {
 
 type AuthService struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	ctx     context.Context
 
 	ldap         *LdapService
@@ -83,27 +83,18 @@ type AuthService struct {
 }
 
 func NewAuthService(
-	log *logger.Logger,
-	config model.Config,
-	runtime model.RuntimeConfig,
-	ctx context.Context,
-	dg *ding.Ding,
-	ldap *LdapService,
-	queries repository.Store,
-	oauthBroker *OAuthBrokerService,
-	tailscale *TailscaleService,
-	policy *PolicyEngine,
+	deps *ServiceDependencies,
 ) *AuthService {
 	service := &AuthService{
-		log:          log,
-		runtime:      runtime,
-		ctx:          ctx,
-		config:       config,
-		ldap:         ldap,
-		queries:      queries,
-		oauthBroker:  oauthBroker,
-		tailscale:    tailscale,
-		policyEngine: policy,
+		log:          deps.Log,
+		runtime:      deps.RuntimeConfig,
+		ctx:          deps.Ctx,
+		config:       deps.StaticConfig,
+		ldap:         deps.Services.LDAPService,
+		queries:      *deps.Queries,
+		oauthBroker:  deps.Services.OAuthBrokerService,
+		tailscale:    deps.Services.TailscaleService,
+		policyEngine: deps.Services.PolicyEngine,
 	}
 
 	// caches setup
@@ -115,7 +106,7 @@ func NewAuthService(
 	service.caches.login = loginCache
 	service.caches.ldap = ldapCache
 
-	dg.Go(func(ctx context.Context) {
+	deps.Ding.Go(func(ctx context.Context) {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 

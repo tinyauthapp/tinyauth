@@ -133,8 +133,8 @@ type UsedCodeEntry struct {
 
 type OIDCService struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	queries repository.Store
 
 	clients    map[string]model.OIDCClientConfig
@@ -150,18 +150,15 @@ type OIDCService struct {
 }
 
 func NewOIDCService(
-	log *logger.Logger,
-	config model.Config,
-	runtime model.RuntimeConfig,
-	queries repository.Store,
-	dg *ding.Ding) (*OIDCService, error) {
+	deps *ServiceDependencies,
+) (*OIDCService, error) {
 	// If not configured, skip init
-	if len(runtime.OIDCClients) == 0 {
+	if len(deps.RuntimeConfig.OIDCClients) == 0 {
 		return nil, nil
 	}
 
 	// Ensure issuer is https
-	uissuer, err := url.Parse(runtime.AppURL)
+	uissuer, err := url.Parse(deps.RuntimeConfig.AppURL)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse app url: %w", err)
@@ -174,14 +171,14 @@ func NewOIDCService(
 	issuer := fmt.Sprintf("%s://%s", uissuer.Scheme, uissuer.Host)
 
 	// Create/load private and public keys
-	if strings.TrimSpace(config.OIDC.PrivateKeyPath) == "" ||
-		strings.TrimSpace(config.OIDC.PublicKeyPath) == "" {
+	if strings.TrimSpace(deps.StaticConfig.OIDC.PrivateKeyPath) == "" ||
+		strings.TrimSpace(deps.StaticConfig.OIDC.PublicKeyPath) == "" {
 		return nil, errors.New("private key path and public key path are required")
 	}
 
 	var privateKey *rsa.PrivateKey
 
-	fprivateKey, err := os.ReadFile(config.OIDC.PrivateKeyPath)
+	fprivateKey, err := os.ReadFile(deps.StaticConfig.OIDC.PrivateKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -200,8 +197,8 @@ func NewOIDCService(
 			Type:  "RSA PRIVATE KEY",
 			Bytes: der,
 		})
-		log.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
-		err = os.WriteFile(config.OIDC.PrivateKeyPath, encoded, 0600)
+		deps.Log.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
+		err = os.WriteFile(deps.StaticConfig.OIDC.PrivateKeyPath, encoded, 0600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write private key to file: %w", err)
 		}
@@ -210,7 +207,7 @@ func NewOIDCService(
 		if block == nil {
 			return nil, errors.New("failed to decode private key")
 		}
-		log.App.Trace().Str("type", block.Type).Msg("Loaded private key")
+		deps.Log.App.Trace().Str("type", block.Type).Msg("Loaded private key")
 		privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
@@ -219,7 +216,7 @@ func NewOIDCService(
 
 	var publicKey crypto.PublicKey
 
-	fpublicKey, err := os.ReadFile(config.OIDC.PublicKeyPath)
+	fpublicKey, err := os.ReadFile(deps.StaticConfig.OIDC.PublicKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("failed to read public key: %w", err)
@@ -235,8 +232,8 @@ func NewOIDCService(
 			Type:  "RSA PUBLIC KEY",
 			Bytes: der,
 		})
-		log.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
-		err = os.WriteFile(config.OIDC.PublicKeyPath, encoded, 0644)
+		deps.Log.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
+		err = os.WriteFile(deps.StaticConfig.OIDC.PublicKeyPath, encoded, 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +242,7 @@ func NewOIDCService(
 		if block == nil {
 			return nil, errors.New("failed to decode public key")
 		}
-		log.App.Trace().Str("type", block.Type).Msg("Loaded public key")
+		deps.Log.App.Trace().Str("type", block.Type).Msg("Loaded public key")
 		switch block.Type {
 		case "RSA PUBLIC KEY":
 			publicKey, err = x509.ParsePKCS1PublicKey(block.Bytes)
@@ -275,7 +272,7 @@ func NewOIDCService(
 	// We will reorganize the client into a map with the client ID as the key
 	clients := make(map[string]model.OIDCClientConfig)
 
-	for id, client := range config.OIDC.Clients {
+	for id, client := range deps.StaticConfig.OIDC.Clients {
 		client.ID = id
 		if client.Name == "" {
 			client.Name = utils.Capitalize(client.ID)
@@ -291,15 +288,15 @@ func NewOIDCService(
 		}
 		client.ClientSecretFile = ""
 		clients[id] = client
-		log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
+		deps.Log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
 	}
 
 	// Initialize the service
 	service := &OIDCService{
-		log:     log,
-		config:  config,
-		runtime: runtime,
-		queries: queries,
+		log:     deps.Log,
+		config:  deps.StaticConfig,
+		runtime: deps.RuntimeConfig,
+		queries: *deps.Queries,
 
 		clients:    clients,
 		privateKey: privateKey,
@@ -308,7 +305,7 @@ func NewOIDCService(
 	}
 
 	// Start cleanup routine
-	dg.Go(service.cleanupRoutine, ding.RingMinor)
+	deps.Ding.Go(service.cleanupRoutine, ding.RingMinor)
 
 	// Create caches
 	codeCash := NewCacheStore[AuthorizeCodeEntry](256)
@@ -320,7 +317,7 @@ func NewOIDCService(
 	service.caches.authorize = authorize
 
 	// Start cache cleanup routine
-	dg.Go(func(ctx context.Context) {
+	deps.Ding.Go(func(ctx context.Context) {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 

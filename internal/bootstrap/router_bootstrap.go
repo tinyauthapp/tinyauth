@@ -40,7 +40,7 @@ func (app *BootstrapApp) setupRouter() error {
 		}
 	}
 
-	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService, app.services.tailscaleService)
+	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.AuthService, app.services.OAuthBrokerService, app.services.TailscaleService)
 	engine.Use(contextMiddleware.Middleware())
 
 	uiMiddleware, err := middleware.NewUIMiddleware()
@@ -58,13 +58,13 @@ func (app *BootstrapApp) setupRouter() error {
 	apiRouter := engine.Group("/api")
 
 	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, apiRouter, &engine.RouterGroup)
-	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService, app.services.policyEngine)
-	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
+	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.AuthService)
+	controller.NewOIDCController(app.log, app.services.OIDCService, app.runtime, apiRouter, &engine.RouterGroup)
+	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.AccessControlService, app.services.AuthService, app.services.PolicyEngine)
+	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.AuthService)
 	controller.NewResourcesController(app.config, &engine.RouterGroup)
 	controller.NewHealthController(apiRouter)
-	controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
+	controller.NewWellKnownController(app.services.OIDCService, &engine.RouterGroup)
 
 	app.router = engine
 	return nil
@@ -99,7 +99,7 @@ func (app *BootstrapApp) calculateListenerPolicy() []Listener {
 	l := []Listener{}
 
 	if !app.config.Server.ConcurrentListenersEnabled {
-		if app.services.tailscaleService != nil {
+		if app.services.TailscaleService != nil {
 			l = append(l, ListenerTailscale)
 			return l
 		}
@@ -117,7 +117,7 @@ func (app *BootstrapApp) calculateListenerPolicy() []Listener {
 		l = append(l, ListenerUnix)
 	}
 
-	if app.services.tailscaleService != nil {
+	if app.services.TailscaleService != nil {
 		l = append(l, ListenerTailscale)
 	}
 
@@ -186,9 +186,9 @@ func (app *BootstrapApp) serveUnix(ctx context.Context) error {
 }
 
 func (app *BootstrapApp) serveTailscale(ctx context.Context) error {
-	app.log.App.Info().Msgf("Starting Tailscale server on %s", fmt.Sprintf("https://%s", app.services.tailscaleService.GetHostname()))
+	app.log.App.Info().Msgf("Starting Tailscale server on %s", fmt.Sprintf("https://%s", app.services.TailscaleService.GetHostname()))
 
-	listener, err := app.services.tailscaleService.CreateListener()
+	listener, err := app.services.TailscaleService.CreateListener()
 
 	if err != nil {
 		return fmt.Errorf("failed to create tailscale listener: %w", err)

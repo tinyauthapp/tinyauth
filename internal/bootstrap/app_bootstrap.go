@@ -31,23 +31,10 @@ import (
 // 2. HTTP server listeners - ding.RingNormal
 // 3. Networking layers, user and label providers (e.g. ailscale service, kubernetes service) - ding.RingMajor
 // 4. Database connection - ding.RingCritical
-
-type Services struct {
-	accessControlService *service.AccessControlsService
-	authService          *service.AuthService
-	dockerService        *service.DockerService
-	kubernetesService    *service.KubernetesService
-	ldapService          *service.LdapService
-	oauthBrokerService   *service.OAuthBrokerService
-	oidcService          *service.OIDCService
-	tailscaleService     *service.TailscaleService
-	policyEngine         *service.PolicyEngine
-}
-
 type BootstrapApp struct {
 	config    model.Config
 	runtime   model.RuntimeConfig
-	services  Services
+	services  service.Services
 	log       *logger.Logger
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -56,6 +43,9 @@ type BootstrapApp struct {
 	db        *sql.DB
 	ding      *ding.Ding
 	listeners []Listener
+	deps      struct {
+		service *service.ServiceDependencies
+	}
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -233,7 +223,7 @@ func (app *BootstrapApp) Setup() error {
 		return configuredProviders[i].Name < configuredProviders[j].Name
 	})
 
-	if app.services.authService.LocalAuthConfigured() {
+	if app.services.AuthService.LocalAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
 			Name:  "Local",
 			ID:    "local",
@@ -241,7 +231,7 @@ func (app *BootstrapApp) Setup() error {
 		})
 	}
 
-	if app.services.authService.LDAPAuthConfigured() {
+	if app.services.AuthService.LDAPAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
 			Name:  "LDAP",
 			ID:    "ldap",
@@ -260,8 +250,8 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.ConfiguredProviders = configuredProviders
 
 	// throw in tailscale if it's configured just before setting up the controllers
-	if app.services.tailscaleService != nil {
-		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
+	if app.services.TailscaleService != nil {
+		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.TailscaleService.GetHostname())
 	}
 
 	// setup router

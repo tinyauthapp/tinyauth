@@ -17,40 +17,38 @@ import (
 
 type LdapService struct {
 	log    *logger.Logger
-	config model.Config
+	config *model.Config
 
-	conn  *ldapgo.Conn
-	mutex sync.RWMutex
-	cert  *tls.Certificate
+	conn       *ldapgo.Conn
+	mutex      sync.RWMutex
+	cert       *tls.Certificate
+	ldapBindPw string
 }
 
 func NewLdapService(
-	log *logger.Logger,
-	config model.Config,
-	dg *ding.Ding,
+	deps *ServiceDependencies,
 ) (*LdapService, error) {
-	if config.LDAP.Address == "" {
+	if deps.StaticConfig.LDAP.Address == "" {
 		return nil, nil
 	}
 
-	secret := utils.GetSecret(config.LDAP.BindPassword, config.LDAP.BindPasswordFile)
-	config.LDAP.BindPassword = secret
-	config.LDAP.BindPasswordFile = ""
+	ldapBindPw := utils.GetSecret(deps.StaticConfig.LDAP.BindPassword, deps.StaticConfig.LDAP.BindPasswordFile)
 
 	ldap := &LdapService{
-		log:    log,
-		config: config,
+		log:        deps.Log,
+		config:     deps.StaticConfig,
+		ldapBindPw: ldapBindPw,
 	}
 
 	// Check whether authentication with client certificate is possible
-	if config.LDAP.AuthCert != "" && config.LDAP.AuthKey != "" {
-		cert, err := tls.LoadX509KeyPair(config.LDAP.AuthCert, config.LDAP.AuthKey)
+	if deps.StaticConfig.LDAP.AuthCert != "" && deps.StaticConfig.LDAP.AuthKey != "" {
+		cert, err := tls.LoadX509KeyPair(deps.StaticConfig.LDAP.AuthCert, deps.StaticConfig.LDAP.AuthKey)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
 		}
 
-		log.App.Info().Msg("LDAP mTLS authentication configured successfully")
+		ldap.log.App.Info().Msg("LDAP mTLS authentication configured successfully")
 
 		ldap.cert = &cert
 
@@ -72,7 +70,7 @@ func NewLdapService(
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
-	dg.Go(func(ctx context.Context) {
+	deps.Ding.Go(func(ctx context.Context) {
 		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
 
 		ticker := time.NewTicker(5 * time.Minute)

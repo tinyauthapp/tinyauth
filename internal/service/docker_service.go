@@ -22,9 +22,7 @@ type DockerService struct {
 }
 
 func NewDockerService(
-	log *logger.Logger,
-	ctx context.Context,
-	dg *ding.Ding,
+	deps *ServiceDependencies,
 ) (*DockerService, error) {
 
 	client, err := client.NewClientWithOpts(client.FromEnv)
@@ -32,25 +30,25 @@ func NewDockerService(
 		return nil, err
 	}
 
-	client.NegotiateAPIVersion(ctx)
+	client.NegotiateAPIVersion(deps.Ctx)
 
-	_, err = client.Ping(ctx)
+	_, err = client.Ping(deps.Ctx)
 
 	if err != nil {
-		log.App.Debug().Err(err).Msg("Docker not connected")
+		deps.Log.App.Debug().Err(err).Msg("Docker not connected")
 		return nil, nil
 	}
 
 	service := &DockerService{
-		log:     log,
+		log:     deps.Log,
 		client:  client,
-		context: ctx,
+		context: deps.Ctx,
 	}
 
 	service.isConnected = true
 	service.log.App.Debug().Msg("Docker connected successfully")
 
-	dg.Go(service.watchAndClose, ding.RingMajor)
+	deps.Ding.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }

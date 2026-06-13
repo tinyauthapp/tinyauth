@@ -13,19 +13,18 @@ type LabelProvider interface {
 
 type AccessControlsService struct {
 	log           *logger.Logger
-	config        model.Config
+	config        *model.Config
 	labelProvider *LabelProvider
 }
 
 func NewAccessControlsService(
-	log *logger.Logger,
-	config model.Config,
-	labelProvider *LabelProvider) *AccessControlsService {
+	deps *ServiceDependencies,
+) *AccessControlsService {
 
 	return &AccessControlsService{
-		log:           log,
-		config:        config,
-		labelProvider: labelProvider,
+		log:           deps.Log,
+		config:        deps.StaticConfig,
+		labelProvider: &deps.LabelProvider,
 	}
 }
 
