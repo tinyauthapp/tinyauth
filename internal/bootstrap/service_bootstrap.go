@@ -1,54 +1,27 @@
 package bootstrap
 
 import (
-	"context"
 	"fmt"
 	"os"
 
-	"github.com/steveiliop56/ding"
-	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
-	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"go.uber.org/dig"
 )
 
 func (app *BootstrapApp) setupServices() error {
-	c := dig.New()
-	app.dig = c
+	app.setupPolicyEngine()
 
-	c.Provide(func() *logger.Logger {
-		return app.log
+	app.dig.Provide(func() *service.PolicyEngine {
+		return app.services.policyEngine
 	})
 
-	c.Provide(func() *model.Config {
-		return &app.config
-	})
-
-	c.Provide(func() *model.RuntimeConfig {
-		return &app.runtime
-	})
-
-	c.Provide(func() *ding.Ding {
-		return app.ding
-	})
-
-	c.Provide(func() context.Context {
-		return app.ctx
-	})
-
-	c.Provide(func() repository.Store {
-		return app.queries
-	})
-
-	c.Provide(service.NewLdapService)
-	c.Provide(app.getLabelProvider)
-	c.Provide(service.NewTailscaleService)
-	c.Provide(service.NewAccessControlsService)
-	c.Provide(app.setupPolicyEngine)
-	c.Provide(service.NewOAuthBrokerService)
-	c.Provide(service.NewAuthService)
-	c.Provide(service.NewOIDCService)
+	app.dig.Provide(app.getLabelProvider)
+	app.dig.Provide(service.NewLdapService)
+	app.dig.Provide(service.NewTailscaleService)
+	app.dig.Provide(service.NewAccessControlsService)
+	app.dig.Provide(service.NewOAuthBrokerService)
+	app.dig.Provide(service.NewAuthService)
+	app.dig.Provide(service.NewOIDCService)
 
 	type svcInput struct {
 		dig.In
@@ -59,17 +32,15 @@ func (app *BootstrapApp) setupServices() error {
 		OAuthBrokerService   *service.OAuthBrokerService
 		OIDCService          *service.OIDCService
 		TailscaleService     *service.TailscaleService
-		PolicyEngine         *service.PolicyEngine
 	}
 
-	err := c.Invoke(func(i svcInput) error {
+	err := app.dig.Invoke(func(i svcInput) error {
 		app.services = Services{
 			accessControlService: i.AccessControlService,
 			authService:          i.AuthService,
 			ldapService:          i.LDAPService,
 			oauthBrokerService:   i.OAuthBrokerService,
 			tailscaleService:     i.TailscaleService,
-			policyEngine:         i.PolicyEngine,
 		}
 		return nil
 	})
@@ -90,76 +61,62 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		if useKubernetes {
 			app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-			kubernetesService, err := service.NewKubernetesService(service.KubernetesServiceInput{
-				Log:  app.log,
-				Ctx:  app.ctx,
-				Ding: app.ding,
+			app.dig.Provide(service.NewKubernetesService)
+
+			app.dig.Invoke(func(k *service.KubernetesService) error {
+				app.services.kubernetesService = k
+				return nil
 			})
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
-			}
-
-			app.services.kubernetesService = kubernetesService
-			return kubernetesService, nil
+			return app.services.kubernetesService, nil
 		}
 
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService, err := service.NewDockerService(service.DockerServiceInput{
-			Log:  app.log,
-			Ctx:  app.ctx,
-			Ding: app.ding,
+		app.dig.Provide(service.NewDockerService)
+
+		app.dig.Invoke(func(d *service.DockerService) error {
+			app.services.dockerService = d
+			return nil
 		})
 
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize docker service: %w", err)
-		}
-
-		if dockerService == nil {
+		if app.services.dockerService == nil {
 			if app.config.LabelProvider == "docker" {
 				app.log.App.Warn().Msg("Docker label provider selected but Docker is not available, will continue without it")
 			}
 			return nil, nil
 		}
 
-		app.services.dockerService = dockerService
-		return dockerService, nil
+		return app.services.dockerService, nil
 	default:
 		return nil, fmt.Errorf("invalid label provider: %s", app.config.LabelProvider)
 	}
 }
 
-func (app *BootstrapApp) setupPolicyEngine() (*service.PolicyEngine, error) {
-	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
-		Log:    app.log,
-		Config: &app.config,
-	})
+func (app *BootstrapApp) setupPolicyEngine() {
+	app.dig.Provide(service.NewPolicyEngine)
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize policy engine: %w", err)
-	}
-
-	policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
-		Log: app.log,
+	app.dig.Invoke(func(policyEngine *service.PolicyEngine) error {
+		policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
+			Log: app.log,
+		})
+		policyEngine.RegisterRule(service.RuleOAuthGroup, &service.OAuthGroupRule{
+			Log: app.log,
+		})
+		policyEngine.RegisterRule(service.RuleLDAPGroup, &service.LDAPGroupRule{
+			Log: app.log,
+		})
+		policyEngine.RegisterRule(service.RuleAuthEnabled, &service.AuthEnabledRule{
+			Log: app.log,
+		})
+		policyEngine.RegisterRule(service.RuleIPAllowed, &service.IPAllowedRule{
+			Log:    app.log,
+			Config: app.config,
+		})
+		policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
+			Log:    app.log,
+			Config: app.config,
+		})
+		return nil
 	})
-	policyEngine.RegisterRule(service.RuleOAuthGroup, &service.OAuthGroupRule{
-		Log: app.log,
-	})
-	policyEngine.RegisterRule(service.RuleLDAPGroup, &service.LDAPGroupRule{
-		Log: app.log,
-	})
-	policyEngine.RegisterRule(service.RuleAuthEnabled, &service.AuthEnabledRule{
-		Log: app.log,
-	})
-	policyEngine.RegisterRule(service.RuleIPAllowed, &service.IPAllowedRule{
-		Log:    app.log,
-		Config: app.config,
-	})
-	policyEngine.RegisterRule(service.RuleIPBypassed, &service.IPBypassedRule{
-		Log:    app.log,
-		Config: app.config,
-	})
-
-	return policyEngine, nil
 }
