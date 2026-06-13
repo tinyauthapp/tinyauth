@@ -274,8 +274,9 @@ type AppUsers struct {
 }
 
 type AppOAuth struct {
-	Whitelist string `description:"Comma-separated list of allowed OAuth groups." yaml:"whitelist"`
-	Groups    string `description:"Comma-separated list of required OAuth groups." yaml:"groups"`
+	Whitelist     string `description:"Comma-separated list of allowed OAuth emails." yaml:"whitelist"`
+	WhitelistFile string `description:"Path to the OAuth whitelist file for this app." yaml:"whitelistFile"`
+	Groups        string `description:"Comma-separated list of required OAuth groups." yaml:"groups"`
 }
 
 type AppLDAP struct {

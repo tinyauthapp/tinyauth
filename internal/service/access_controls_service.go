@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
@@ -53,14 +54,33 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 
 	if app != nil {
 		service.log.App.Debug().Msg("Using static ACLs for app")
-		return app, nil
+		return service.resolveAppOAuthWhitelist(app)
 	}
 
 	// If we have a label provider configured, try to get ACLs from it
 	if service.labelProvider != nil && *service.labelProvider != nil {
-		return (*service.labelProvider).GetLabels(domain)
+		app, err := (*service.labelProvider).GetLabels(domain)
+		if err != nil {
+			return nil, err
+		}
+		return service.resolveAppOAuthWhitelist(app)
 	}
 
 	// no labels
 	return nil, nil
+}
+
+func (service *AccessControlsService) resolveAppOAuthWhitelist(app *model.App) (*model.App, error) {
+	if app == nil || app.OAuth.WhitelistFile == "" {
+		return app, nil
+	}
+
+	values, err := utils.GetStringList([]string{app.OAuth.Whitelist}, app.OAuth.WhitelistFile)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := *app
+	resolved.OAuth.Whitelist = strings.Join(values, ",")
+	return &resolved, nil
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -162,6 +163,38 @@ func TestGetAccessControls(t *testing.T) {
 		assert.Equal(t, 1, mock.callCount)
 	})
 
+	t.Run("loads app oauth whitelist from file for static config", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		whitelistPath := tmpDir + "/oauth-whitelist.txt"
+		file, err := os.Create(whitelistPath)
+		require.NoError(t, err)
+
+		_, err = file.WriteString("second@example.com\nthird@example.com\n")
+		require.NoError(t, err)
+
+		err = file.Close()
+		require.NoError(t, err)
+
+		config := model.Config{
+			Apps: map[string]model.App{
+				"foo": {
+					Config: model.AppConfig{Domain: "foo.example.com"},
+					OAuth: model.AppOAuth{
+						Whitelist:     "first@example.com",
+						WhitelistFile: whitelistPath,
+					},
+				},
+			},
+		}
+		svc := NewAccessControlsService(log, config, nil)
+
+		got, err := svc.GetAccessControls("foo.example.com")
+
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, "first@example.com,second@example.com,third@example.com", got.OAuth.Whitelist)
+	})
+
 	t.Run("does not call label provider when static match found", func(t *testing.T) {
 		mock := &mockLabelProvider{}
 		var provider LabelProvider = mock
@@ -195,5 +228,24 @@ func TestGetAccessControls(t *testing.T) {
 		assert.Nil(t, got)
 		assert.ErrorIs(t, err, providerErr)
 		assert.Equal(t, 1, mock.callCount)
+	})
+
+	t.Run("returns whitelist file errors from static config", func(t *testing.T) {
+		config := model.Config{
+			Apps: map[string]model.App{
+				"foo": {
+					Config: model.AppConfig{Domain: "foo.example.com"},
+					OAuth: model.AppOAuth{
+						WhitelistFile: t.TempDir() + "/missing.txt",
+					},
+				},
+			},
+		}
+		svc := NewAccessControlsService(log, config, nil)
+
+		got, err := svc.GetAccessControls("foo.example.com")
+
+		assert.Nil(t, got)
+		assert.ErrorContains(t, err, "no such file or directory")
 	})
 }

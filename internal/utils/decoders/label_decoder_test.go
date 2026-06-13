@@ -21,8 +21,9 @@ func TestDecodeLabels(t *testing.T) {
 					Block: "user3",
 				},
 				OAuth: model.AppOAuth{
-					Whitelist: "somebody@example.com",
-					Groups:    "group3",
+					Whitelist:     "somebody@example.com",
+					WhitelistFile: "/path/to/whitelistfile",
+					Groups:        "group3",
 				},
 				IP: model.AppIP{
 					Allow:  []string{"10.71.0.1/24", "10.71.0.2"},
@@ -49,6 +50,7 @@ func TestDecodeLabels(t *testing.T) {
 		"tinyauth.apps.foo.users.allow":                     "user1,user2",
 		"tinyauth.apps.foo.users.block":                     "user3",
 		"tinyauth.apps.foo.oauth.whitelist":                 "somebody@example.com",
+		"tinyauth.apps.foo.oauth.whitelistfile":             "/path/to/whitelistfile",
 		"tinyauth.apps.foo.oauth.groups":                    "group3",
 		"tinyauth.apps.foo.ip.allow":                        "10.71.0.1/24,10.71.0.2",
 		"tinyauth.apps.foo.ip.block":                        "10.10.10.10,10.0.0.0/24",
