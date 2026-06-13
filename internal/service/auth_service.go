@@ -14,6 +14,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -57,8 +58,8 @@ type LoginAttempt struct {
 
 type AuthService struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	ctx     context.Context
 
 	ldap         *LdapService
@@ -82,28 +83,32 @@ type AuthService struct {
 	}
 }
 
-func NewAuthService(
-	log *logger.Logger,
-	config model.Config,
-	runtime model.RuntimeConfig,
-	ctx context.Context,
-	dg *ding.Ding,
-	ldap *LdapService,
-	queries repository.Store,
-	oauthBroker *OAuthBrokerService,
-	tailscale *TailscaleService,
-	policy *PolicyEngine,
-) *AuthService {
+type AuthServiceInput struct {
+	dig.In
+
+	Log          *logger.Logger
+	Config       *model.Config
+	Runtime      *model.RuntimeConfig
+	Ctx          context.Context
+	Ding         *ding.Ding
+	LDAP         *LdapService `optional:"true"`
+	Queries      repository.Store
+	OAuthBroker  *OAuthBrokerService
+	Tailscale    *TailscaleService `optional:"true"`
+	PolicyEngine *PolicyEngine
+}
+
+func NewAuthService(i AuthServiceInput) *AuthService {
 	service := &AuthService{
-		log:          log,
-		runtime:      runtime,
-		ctx:          ctx,
-		config:       config,
-		ldap:         ldap,
-		queries:      queries,
-		oauthBroker:  oauthBroker,
-		tailscale:    tailscale,
-		policyEngine: policy,
+		log:          i.Log,
+		runtime:      i.Runtime,
+		ctx:          i.Ctx,
+		config:       i.Config,
+		ldap:         i.LDAP,
+		queries:      i.Queries,
+		oauthBroker:  i.OAuthBroker,
+		tailscale:    i.Tailscale,
+		policyEngine: i.PolicyEngine,
 	}
 
 	// caches setup
@@ -115,7 +120,7 @@ func NewAuthService(
 	service.caches.login = loginCache
 	service.caches.ldap = ldapCache
 
-	dg.Go(func(ctx context.Context) {
+	i.Ding.Go(func(ctx context.Context) {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 

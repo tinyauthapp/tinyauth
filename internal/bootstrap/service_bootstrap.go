@@ -1,59 +1,80 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/steveiliop56/ding"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 )
 
 func (app *BootstrapApp) setupServices() error {
-	ldapService, err := service.NewLdapService(app.log, app.config, app.ding)
+	c := dig.New()
+	app.dig = c
 
-	if err != nil {
-		app.log.App.Warn().Err(err).Msg("Failed to initialize LDAP connection, will continue without it")
+	c.Provide(func() *logger.Logger {
+		return app.log
+	})
+
+	c.Provide(func() *model.Config {
+		return &app.config
+	})
+
+	c.Provide(func() *model.RuntimeConfig {
+		return &app.runtime
+	})
+
+	c.Provide(func() *ding.Ding {
+		return app.ding
+	})
+
+	c.Provide(func() context.Context {
+		return app.ctx
+	})
+
+	c.Provide(func() repository.Store {
+		return app.queries
+	})
+
+	c.Provide(service.NewLdapService)
+	c.Provide(app.getLabelProvider)
+	c.Provide(service.NewTailscaleService)
+	c.Provide(service.NewAccessControlsService)
+	c.Provide(app.setupPolicyEngine)
+	c.Provide(service.NewOAuthBrokerService)
+	c.Provide(service.NewAuthService)
+	c.Provide(service.NewOIDCService)
+
+	type svcInput struct {
+		dig.In
+
+		AccessControlService *service.AccessControlsService
+		AuthService          *service.AuthService
+		LDAPService          *service.LdapService
+		OAuthBrokerService   *service.OAuthBrokerService
+		OIDCService          *service.OIDCService
+		TailscaleService     *service.TailscaleService
+		PolicyEngine         *service.PolicyEngine
 	}
 
-	app.services.ldapService = ldapService
+	err := c.Invoke(func(i svcInput) error {
+		app.services = Services{
+			accessControlService: i.AccessControlService,
+			authService:          i.AuthService,
+			ldapService:          i.LDAPService,
+			oauthBrokerService:   i.OAuthBrokerService,
+			tailscaleService:     i.TailscaleService,
+			policyEngine:         i.PolicyEngine,
+		}
+		return nil
+	})
 
-	labelProvider, err := app.getLabelProvider()
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize label provider: %w", err)
-	}
-
-	tailscaleService, err := service.NewTailscaleService(app.log, app.config, app.ctx, app.ding)
-
-	if err != nil {
-		app.log.App.Warn().Err(err).Msg("Failed to initialize Tailscale connection, will continue without it")
-	}
-
-	app.services.tailscaleService = tailscaleService
-
-	accessControlsService := service.NewAccessControlsService(app.log, app.config, &labelProvider)
-	app.services.accessControlService = accessControlsService
-
-	err = app.setupPolicyEngine()
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize policy engine: %w", err)
-	}
-
-	oauthBrokerService := service.NewOAuthBrokerService(app.log, app.runtime.OAuthProviders, app.ctx)
-	app.services.oauthBrokerService = oauthBrokerService
-
-	authService := service.NewAuthService(app.log, app.config, app.runtime, app.ctx, app.ding, app.services.ldapService, app.queries, app.services.oauthBrokerService, app.services.tailscaleService, app.services.policyEngine)
-	app.services.authService = authService
-
-	oidcService, err := service.NewOIDCService(app.log, app.config, app.runtime, app.queries, app.ding)
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize oidc service: %w", err)
-	}
-
-	app.services.oidcService = oidcService
-
-	return nil
+	return err
 }
 
 func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
@@ -69,7 +90,11 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		if useKubernetes {
 			app.log.App.Debug().Msg("Using Kubernetes label provider")
 
-			kubernetesService, err := service.NewKubernetesService(app.log, app.ctx, app.ding)
+			kubernetesService, err := service.NewKubernetesService(service.KubernetesServiceInput{
+				Log:  app.log,
+				Ctx:  app.ctx,
+				Ding: app.ding,
+			})
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize kubernetes service: %w", err)
@@ -81,7 +106,11 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 
 		app.log.App.Debug().Msg("Using Docker label provider")
 
-		dockerService, err := service.NewDockerService(app.log, app.ctx, app.ding)
+		dockerService, err := service.NewDockerService(service.DockerServiceInput{
+			Log:  app.log,
+			Ctx:  app.ctx,
+			Ding: app.ding,
+		})
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize docker service: %w", err)
@@ -101,11 +130,14 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 	}
 }
 
-func (app *BootstrapApp) setupPolicyEngine() error {
-	policyEngine, err := service.NewPolicyEngine(app.config, app.log)
+func (app *BootstrapApp) setupPolicyEngine() (*service.PolicyEngine, error) {
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    app.log,
+		Config: &app.config,
+	})
 
 	if err != nil {
-		return fmt.Errorf("failed to initialize policy engine: %w", err)
+		return nil, fmt.Errorf("failed to initialize policy engine: %w", err)
 	}
 
 	policyEngine.RegisterRule(service.RuleUserAllowed, &service.UserAllowedRule{
@@ -129,6 +161,5 @@ func (app *BootstrapApp) setupPolicyEngine() error {
 		Config: app.config,
 	})
 
-	app.services.policyEngine = policyEngine
-	return nil
+	return policyEngine, nil
 }

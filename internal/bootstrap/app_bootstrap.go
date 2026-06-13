@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/steveiliop56/ding"
+	"go.uber.org/dig"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -56,6 +57,7 @@ type BootstrapApp struct {
 	db        *sql.DB
 	ding      *ding.Ding
 	listeners []Listener
+	dig       *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {

@@ -8,6 +8,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	container "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -21,36 +22,40 @@ type DockerService struct {
 	isConnected bool
 }
 
-func NewDockerService(
-	log *logger.Logger,
-	ctx context.Context,
-	dg *ding.Ding,
-) (*DockerService, error) {
+type DockerServiceInput struct {
+	dig.In
+
+	Log  *logger.Logger
+	Ctx  context.Context
+	Ding *ding.Ding
+}
+
+func NewDockerService(i DockerServiceInput) (*DockerService, error) {
 
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
 	}
 
-	client.NegotiateAPIVersion(ctx)
+	client.NegotiateAPIVersion(i.Ctx)
 
-	_, err = client.Ping(ctx)
+	_, err = client.Ping(i.Ctx)
 
 	if err != nil {
-		log.App.Debug().Err(err).Msg("Docker not connected")
+		i.Log.App.Debug().Err(err).Msg("Docker not connected")
 		return nil, nil
 	}
 
 	service := &DockerService{
-		log:     log,
+		log:     i.Log,
 		client:  client,
-		context: ctx,
+		context: i.Ctx,
 	}
 
 	service.isConnected = true
 	service.log.App.Debug().Msg("Docker connected successfully")
 
-	dg.Go(service.watchAndClose, ding.RingMajor)
+	i.Ding.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }
