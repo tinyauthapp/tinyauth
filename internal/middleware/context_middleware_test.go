@@ -254,13 +254,37 @@ func TestContextMiddleware(t *testing.T) {
 
 	store := memory.New()
 
-	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	require.NoError(t, err)
 
-	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
+		Log:     log,
+		Runtime: &runtime,
+		Ctx:     ctx,
+	})
+	authService := service.NewAuthService(service.AuthServiceInput{
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		Ctx:          ctx,
+		Ding:         dg,
+		LDAP:         nil,
+		Queries:      store,
+		OAuthBroker:  broker,
+		Tailscale:    nil,
+		PolicyEngine: policyEngine,
+	})
 
-	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
+	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareInput{
+		Log:              log,
+		RuntimeConfig:    &runtime,
+		AuthService:      authService,
+		BrokerService:    broker,
+		TailscaleService: nil,
+	})
 
 	for _, test := range tests {
 		authService.ClearLoginAttempts()

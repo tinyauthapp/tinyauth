@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"go.uber.org/dig"
 )
 
 type OpenIDConnectConfiguration struct {
@@ -30,13 +31,20 @@ type WellKnownController struct {
 	oidc *service.OIDCService
 }
 
-func NewWellKnownController(oidc *service.OIDCService, router *gin.RouterGroup) *WellKnownController {
+type WellKnownControllerInput struct {
+	dig.In
+
+	OIDCService *service.OIDCService
+	RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
+}
+
+func NewWellKnownController(i WellKnownControllerInput) *WellKnownController {
 	controller := &WellKnownController{
-		oidc: oidc,
+		oidc: i.OIDCService,
 	}
 
-	router.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
-	router.GET("/.well-known/jwks.json", controller.JWKS)
+	i.RouterGroup.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
+	i.RouterGroup.GET("/.well-known/jwks.json", controller.JWKS)
 
 	return controller
 }

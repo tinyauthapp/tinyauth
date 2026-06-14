@@ -13,44 +13,48 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 )
 
 type LdapService struct {
 	log    *logger.Logger
-	config model.Config
+	config *model.Config
 
-	conn  *ldapgo.Conn
-	mutex sync.RWMutex
-	cert  *tls.Certificate
+	conn   *ldapgo.Conn
+	mutex  sync.RWMutex
+	cert   *tls.Certificate
+	bindPw string
 }
 
-func NewLdapService(
-	log *logger.Logger,
-	config model.Config,
-	dg *ding.Ding,
-) (*LdapService, error) {
-	if config.LDAP.Address == "" {
+type LdapServiceInput struct {
+	dig.In
+
+	Log    *logger.Logger
+	Config *model.Config
+	Ding   *ding.Ding
+}
+
+func NewLdapService(i LdapServiceInput) (*LdapService, error) {
+	if i.Config.LDAP.Address == "" {
 		return nil, nil
 	}
 
-	secret := utils.GetSecret(config.LDAP.BindPassword, config.LDAP.BindPasswordFile)
-	config.LDAP.BindPassword = secret
-	config.LDAP.BindPasswordFile = ""
-
 	ldap := &LdapService{
-		log:    log,
-		config: config,
+		log:    i.Log,
+		config: i.Config,
 	}
 
+	ldap.bindPw = utils.GetSecret(i.Config.LDAP.BindPassword, i.Config.LDAP.BindPasswordFile)
+
 	// Check whether authentication with client certificate is possible
-	if config.LDAP.AuthCert != "" && config.LDAP.AuthKey != "" {
-		cert, err := tls.LoadX509KeyPair(config.LDAP.AuthCert, config.LDAP.AuthKey)
+	if i.Config.LDAP.AuthCert != "" && i.Config.LDAP.AuthKey != "" {
+		cert, err := tls.LoadX509KeyPair(i.Config.LDAP.AuthCert, i.Config.LDAP.AuthKey)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize LDAP with mTLS authentication: %w", err)
 		}
 
-		log.App.Info().Msg("LDAP mTLS authentication configured successfully")
+		i.Log.App.Info().Msg("LDAP mTLS authentication configured successfully")
 
 		ldap.cert = &cert
 
@@ -72,7 +76,7 @@ func NewLdapService(
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
-	dg.Go(func(ctx context.Context) {
+	i.Ding.Go(func(ctx context.Context) {
 		ldap.log.App.Debug().Msg("Starting LDAP connection heartbeat routine")
 
 		ticker := time.NewTicker(5 * time.Minute)
@@ -217,7 +221,7 @@ func (ldap *LdapService) BindService(rebind bool) error {
 	if ldap.cert != nil {
 		return ldap.conn.ExternalBind()
 	}
-	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.config.LDAP.BindPassword)
+	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.bindPw)
 }
 
 func (ldap *LdapService) Bind(userDN string, password string) error {

@@ -93,7 +93,13 @@ func TestWellKnownController(t *testing.T) {
 
 	store := memory.New()
 
-	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, dg)
+	oidcService, err := service.NewOIDCService(service.OIDCServiceInput{
+		Log:     log,
+		Config:  &cfg,
+		Runtime: &runtime,
+		Queries: store,
+		Ding:    dg,
+	})
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -103,7 +109,10 @@ func TestWellKnownController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			controller.NewWellKnownController(oidcService, &router.RouterGroup)
+			controller.NewWellKnownController(controller.WellKnownControllerInput{
+				OIDCService: oidcService,
+				RouterGroup: &router.RouterGroup,
+			})
 
 			test.run(t, router, recorder)
 		})

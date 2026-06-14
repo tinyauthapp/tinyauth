@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/assets"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +19,12 @@ type UIMiddleware struct {
 	uiFileServer http.Handler
 }
 
-func NewUIMiddleware() (*UIMiddleware, error) {
+// for future use if we need to inject dependencies into the middleware
+type UIMiddlewareInput struct {
+	dig.In
+}
+
+func NewUIMiddleware(_ UIMiddlewareInput) (*UIMiddleware, error) {
 	m := &UIMiddleware{}
 
 	ui, err := fs.Sub(assets.FrontendAssets, "dist")

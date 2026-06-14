@@ -6,6 +6,7 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 )
 
 type Policy string
@@ -40,21 +41,28 @@ type PolicyEngine struct {
 	policy Policy
 }
 
-func NewPolicyEngine(config model.Config, log *logger.Logger) (*PolicyEngine, error) {
+type PolicyEngineInput struct {
+	dig.In
+
+	Log    *logger.Logger
+	Config *model.Config
+}
+
+func NewPolicyEngine(i PolicyEngineInput) (*PolicyEngine, error) {
 	engine := PolicyEngine{
-		log:   log,
+		log:   i.Log,
 		rules: make(map[RuleName]Rule),
 	}
 
-	switch config.Auth.ACLs.Policy {
+	switch i.Config.Auth.ACLs.Policy {
 	case string(PolicyAllow):
-		log.App.Debug().Msg("Using 'allow' ACL policy: access to apps will be allowed by default unless explicitly blocked")
+		i.Log.App.Debug().Msg("Using 'allow' ACL policy: access to apps will be allowed by default unless explicitly blocked")
 		engine.policy = PolicyAllow
 	case string(PolicyDeny):
-		log.App.Debug().Msg("Using 'deny' ACL policy: access to apps will be blocked by default unless explicitly allowed")
+		i.Log.App.Debug().Msg("Using 'deny' ACL policy: access to apps will be blocked by default unless explicitly allowed")
 		engine.policy = PolicyDeny
 	default:
-		return nil, fmt.Errorf("invalid acl policy: %s", config.Auth.ACLs.Policy)
+		return nil, fmt.Errorf("invalid acl policy: %s", i.Config.Auth.ACLs.Policy)
 	}
 
 	return &engine, nil

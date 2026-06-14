@@ -5,6 +5,7 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"slices"
 
@@ -32,23 +33,27 @@ var presets = map[string]func(config model.OAuthServiceConfig, ctx context.Conte
 	"google": newGoogleOAuthService,
 }
 
-func NewOAuthBrokerService(
-	log *logger.Logger,
-	configs map[string]model.OAuthServiceConfig,
-	ctx context.Context,
-) *OAuthBrokerService {
+type OAuthBrokerServiceInput struct {
+	dig.In
+
+	Log     *logger.Logger
+	Runtime *model.RuntimeConfig
+	Ctx     context.Context
+}
+
+func NewOAuthBrokerService(i OAuthBrokerServiceInput) *OAuthBrokerService {
 	service := &OAuthBrokerService{
-		log:      log,
+		log:      i.Log,
 		services: make(map[string]OAuthServiceImpl),
-		configs:  configs,
+		configs:  i.Runtime.OAuthProviders,
 	}
 
-	for name, cfg := range configs {
+	for name, cfg := range service.configs {
 		if presetFunc, exists := presets[name]; exists {
-			service.services[name] = presetFunc(cfg, ctx)
+			service.services[name] = presetFunc(cfg, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from preset")
 		} else {
-			service.services[name] = NewOAuthService(cfg, name, ctx)
+			service.services[name] = NewOAuthService(cfg, name, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from custom config")
 		}
 	}

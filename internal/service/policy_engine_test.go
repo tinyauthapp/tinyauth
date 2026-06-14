@@ -33,23 +33,35 @@ func TestPolicyEngine(t *testing.T) {
 
 	// Engine should fail with invalid policy
 	cfg.Auth.ACLs.Policy = "invalid_policy"
-	_, err := service.NewPolicyEngine(cfg, log)
+	_, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.Error(t, err)
 
 	// Engine should initialize with 'allow' policy
 	cfg.Auth.ACLs.Policy = string(service.PolicyAllow)
-	engine, err := service.NewPolicyEngine(cfg, log)
+	engine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, service.PolicyAllow, engine.Policy())
 
 	// Engine should initialize with 'deny' policy
 	cfg.Auth.ACLs.Policy = string(service.PolicyDeny)
-	engine, err = service.NewPolicyEngine(cfg, log)
+	engine, err = service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, service.PolicyDeny, engine.Policy())
 
 	// Engine should allow adding rules
-	engine, err = service.NewPolicyEngine(cfg, log)
+	engine, err = service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.NoError(t, err)
 	engine.RegisterRule("test-rule", testRule)
 	_, ok := engine.Rules()["test-rule"]
@@ -57,7 +69,10 @@ func TestPolicyEngine(t *testing.T) {
 
 	// Begin allow policy tests
 	cfg.Auth.ACLs.Policy = string(service.PolicyAllow)
-	engine, err = service.NewPolicyEngine(cfg, log)
+	engine, err = service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.NoError(t, err)
 	engine.RegisterRule("test-rule", testRule)
 
@@ -75,7 +90,10 @@ func TestPolicyEngine(t *testing.T) {
 
 	// Begin deny policy tests
 	cfg.Auth.ACLs.Policy = string(service.PolicyDeny)
-	engine, err = service.NewPolicyEngine(cfg, log)
+	engine, err = service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	assert.NoError(t, err)
 	engine.RegisterRule("test-rule", testRule)
 

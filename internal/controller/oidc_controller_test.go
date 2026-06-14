@@ -35,7 +35,13 @@ func TestOIDCController(t *testing.T) {
 
 	store := memory.New()
 
-	oidcService, err := service.NewOIDCService(log, cfg, runtime, store, dg)
+	oidcService, err := service.NewOIDCService(service.OIDCServiceInput{
+		Log:     log,
+		Config:  &cfg,
+		Runtime: &runtime,
+		Queries: store,
+		Ding:    dg,
+	})
 	require.NoError(t, err)
 
 	// Middleware that injects an authenticated local user into the gin context,
@@ -831,7 +837,13 @@ func TestOIDCController(t *testing.T) {
 				svc = nil
 			}
 
-			controller.NewOIDCController(log, svc, runtime, group, &router.RouterGroup)
+			controller.NewOIDCController(controller.OIDCControllerInput{
+				Log:           log,
+				OIDCService:   svc,
+				RuntimeConfig: &runtime,
+				RouterGroup:   group,
+				MainRouter:    &router.RouterGroup,
+			})
 
 			recorder := httptest.NewRecorder()
 

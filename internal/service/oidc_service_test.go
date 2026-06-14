@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
@@ -67,7 +68,15 @@ func TestCompileUserinfo(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	svc, err := service.NewOIDCService(log, cfg, runtime, nil, dg)
+	store := memory.New()
+
+	svc, err := service.NewOIDCService(service.OIDCServiceInput{
+		Log:     log,
+		Config:  &cfg,
+		Runtime: &runtime,
+		Queries: store,
+		Ding:    dg,
+	})
 	require.NoError(t, err)
 
 	type testCase struct {

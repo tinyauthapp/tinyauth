@@ -121,7 +121,12 @@ func TestContextController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewContextController(log, cfg, runtime, group)
+			controller.NewContextController(controller.ContextControllerInput{
+				Log:         log,
+				Config:      &cfg,
+				Runtime:     &runtime,
+				RouterGroup: group,
+			})
 
 			recorder := httptest.NewRecorder()
 

@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -37,25 +38,29 @@ var (
 
 type ContextMiddleware struct {
 	log       *logger.Logger
-	runtime   model.RuntimeConfig
+	runtime   *model.RuntimeConfig
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
 }
 
-func NewContextMiddleware(
-	log *logger.Logger,
-	runtime model.RuntimeConfig,
-	auth *service.AuthService,
-	broker *service.OAuthBrokerService,
-	tailscale *service.TailscaleService,
-) *ContextMiddleware {
+type ContextMiddlewareInput struct {
+	dig.In
+
+	Log              *logger.Logger
+	RuntimeConfig    *model.RuntimeConfig
+	AuthService      *service.AuthService
+	BrokerService    *service.OAuthBrokerService
+	TailscaleService *service.TailscaleService
+}
+
+func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 	return &ContextMiddleware{
-		log:       log,
-		runtime:   runtime,
-		auth:      auth,
-		broker:    broker,
-		tailscale: tailscale,
+		log:       i.Log,
+		runtime:   i.RuntimeConfig,
+		auth:      i.AuthService,
+		broker:    i.BrokerService,
+		tailscale: i.TailscaleService,
 	}
 }
 
