@@ -55,7 +55,9 @@ func TestHealthController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewHealthController(group)
+			controller.NewHealthController(controller.HealthControllerInput{
+				RouterGroup: group,
+			})
 
 			recorder := httptest.NewRecorder()
 

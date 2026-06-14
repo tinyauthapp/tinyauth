@@ -14,7 +14,7 @@ func TestIsEmailWhitelistedUsesProviderSpecificList(t *testing.T) {
 
 	auth := &AuthService{
 		log: log,
-		runtime: model.RuntimeConfig{
+		runtime: &model.RuntimeConfig{
 			OAuthWhitelist: []string{"global@example.com"},
 			OAuthProviders: map[string]model.OAuthServiceConfig{
 				"github": {
