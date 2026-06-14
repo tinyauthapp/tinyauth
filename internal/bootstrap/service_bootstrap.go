@@ -21,42 +21,24 @@ func (app *BootstrapApp) setupServices() error {
 		return fmt.Errorf("failed to get label provider: %w", err)
 	}
 
-	err = app.dig.Provide(func() service.LabelProvider {
-		return labelProvider
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to provide label provider: %w", err)
+	serviceProvideFor := []any{
+		func() service.LabelProvider {
+			return labelProvider
+		},
+		service.NewLdapService,
+		service.NewTailscaleService,
+		service.NewAccessControlsService,
+		service.NewOAuthBrokerService,
+		service.NewAuthService,
+		service.NewOIDCService,
 	}
 
-	err = app.dig.Provide(service.NewLdapService)
-	if err != nil {
-		return fmt.Errorf("failed to provide ldap service: %w", err)
-	}
+	for _, provider := range serviceProvideFor {
+		err = app.dig.Provide(provider)
 
-	err = app.dig.Provide(service.NewTailscaleService)
-	if err != nil {
-		return fmt.Errorf("failed to provide tailscale service: %w", err)
-	}
-
-	err = app.dig.Provide(service.NewAccessControlsService)
-	if err != nil {
-		return fmt.Errorf("failed to provide access controls service: %w", err)
-	}
-
-	err = app.dig.Provide(service.NewOAuthBrokerService)
-	if err != nil {
-		return fmt.Errorf("failed to provide oauth broker service: %w", err)
-	}
-
-	err = app.dig.Provide(service.NewAuthService)
-	if err != nil {
-		return fmt.Errorf("failed to provide auth service: %w", err)
-	}
-
-	err = app.dig.Provide(service.NewOIDCService)
-	if err != nil {
-		return fmt.Errorf("failed to provide oidc service: %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to provide service: %w", err)
+		}
 	}
 
 	type svcInput struct {
