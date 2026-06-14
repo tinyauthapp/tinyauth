@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
@@ -11,6 +12,19 @@ import (
 func TestIsEmailWhitelistedUsesProviderSpecificList(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
+
+	policyEngine, err := NewPolicyEngine(PolicyEngineInput{
+		Log: log,
+		Config: &model.Config{
+			Auth: model.AuthConfig{
+				ACLs: model.ACLsConfig{
+					Policy: string(PolicyAllow),
+				},
+			},
+		},
+	})
+
+	require.NoError(t, err)
 
 	auth := &AuthService{
 		log: log,
@@ -28,6 +42,7 @@ func TestIsEmailWhitelistedUsesProviderSpecificList(t *testing.T) {
 				},
 			},
 		},
+		policyEngine: policyEngine,
 	}
 
 	assert.True(t, auth.IsEmailWhitelisted("github", "github@example.com"))

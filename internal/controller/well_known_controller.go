@@ -35,7 +35,7 @@ type WellKnownControllerInput struct {
 	dig.In
 
 	OIDCService *service.OIDCService
-	RouterGroup *gin.RouterGroup `name:"apiRouterGroup"`
+	RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
 }
 
 func NewWellKnownController(i WellKnownControllerInput) *WellKnownController {

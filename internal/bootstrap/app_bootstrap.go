@@ -163,12 +163,6 @@ func (app *BootstrapApp) Setup() error {
 		app.runtime.OAuthProviders[id] = provider
 	}
 
-	// setup oidc clients
-	for id, client := range app.config.OIDC.Clients {
-		client.ID = id
-		app.runtime.OIDCClients = append(app.runtime.OIDCClients, client)
-	}
-
 	// cookie domain
 	cookieDomainResolver := utils.GetCookieDomain
 

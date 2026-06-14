@@ -163,7 +163,7 @@ type OIDCServiceInput struct {
 
 func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 	// If not configured, skip init
-	if len(i.Runtime.OIDCClients) == 0 {
+	if len(i.Config.OIDC.Clients) == 0 {
 		return nil, nil
 	}
 

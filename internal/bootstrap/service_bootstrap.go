@@ -71,13 +71,11 @@ func (app *BootstrapApp) setupServices() error {
 	}
 
 	err = app.dig.Invoke(func(i svcInput) error {
-		app.services = Services{
-			accessControlService: i.AccessControlService,
-			authService:          i.AuthService,
-			ldapService:          i.LDAPService,
-			oauthBrokerService:   i.OAuthBrokerService,
-			tailscaleService:     i.TailscaleService,
-		}
+		app.services.accessControlService = i.AccessControlService
+		app.services.authService = i.AuthService
+		app.services.ldapService = i.LDAPService
+		app.services.oauthBrokerService = i.OAuthBrokerService
+		app.services.tailscaleService = i.TailscaleService
 		return nil
 	})
 
