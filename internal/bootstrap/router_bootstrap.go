@@ -13,6 +13,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,31 +41,94 @@ func (app *BootstrapApp) setupRouter() error {
 		}
 	}
 
-	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService, app.services.tailscaleService)
-	engine.Use(contextMiddleware.Middleware())
-
-	uiMiddleware, err := middleware.NewUIMiddleware()
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize UI middleware: %w", err)
+	middlewareProvideFor := []any{
+		middleware.NewContextMiddleware,
+		middleware.NewUIMiddleware,
+		middleware.NewZerologMiddleware,
 	}
 
-	engine.Use(uiMiddleware.Middleware())
+	for _, provider := range middlewareProvideFor {
+		err := app.dig.Provide(provider)
 
-	zerologMiddleware := middleware.NewZerologMiddleware(app.log)
+		if err != nil {
+			return fmt.Errorf("failed to provide middleware: %w", err)
+		}
+	}
 
-	engine.Use(zerologMiddleware.Middleware())
+	type middlewareInput struct {
+		dig.In
 
-	apiRouter := engine.Group("/api")
+		ContextMiddleware *middleware.ContextMiddleware
+		UIMiddleware      *middleware.UIMiddleware
+		ZerologMiddleware *middleware.ZerologMiddleware
+	}
 
-	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, apiRouter, &engine.RouterGroup)
-	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService, app.services.policyEngine)
-	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
-	controller.NewResourcesController(app.config, &engine.RouterGroup)
-	controller.NewHealthController(apiRouter)
-	controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
+	err := app.dig.Invoke(func(mi middlewareInput) {
+		engine.Use(mi.ContextMiddleware.Middleware())
+		engine.Use(mi.UIMiddleware.Middleware())
+		engine.Use(mi.ZerologMiddleware.Middleware())
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke middleware: %w", err)
+	}
+
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return &engine.RouterGroup
+	}, dig.Name("mainRouterGroup"))
+
+	if err != nil {
+		return fmt.Errorf("failed to provide main router group: %w", err)
+	}
+
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return engine.Group("/api")
+	}, dig.Name("apiRouterGroup"))
+
+	if err != nil {
+		return fmt.Errorf("failed to provide api router group: %w", err)
+	}
+
+	controllerProvideFor := []any{
+		controller.NewContextController,
+		controller.NewOAuthController,
+		controller.NewOIDCController,
+		controller.NewProxyController,
+		controller.NewUserController,
+		controller.NewResourcesController,
+		controller.NewHealthController,
+		controller.NewWellKnownController,
+	}
+
+	for _, provider := range controllerProvideFor {
+		err := app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide controller: %w", err)
+		}
+	}
+
+	type controllerInput struct {
+		dig.In
+
+		ContextController   *controller.ContextController
+		OAuthController     *controller.OAuthController
+		OIDCController      *controller.OIDCController
+		ProxyController     *controller.ProxyController
+		UserController      *controller.UserController
+		ResourcesController *controller.ResourcesController
+		HealthController    *controller.HealthController
+		WellKnownController *controller.WellKnownController
+	}
+
+	// force dig to build all controllers and register their routes
+	err = app.dig.Invoke(func(ci controllerInput) error {
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke controllers: %w", err)
+	}
 
 	app.router = engine
 	return nil

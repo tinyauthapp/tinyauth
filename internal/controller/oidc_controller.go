@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/google/go-querystring/query"
+	"go.uber.org/dig"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
@@ -30,7 +31,7 @@ type authorizeErrorParams struct {
 type OIDCController struct {
 	log     *logger.Logger
 	oidc    *service.OIDCService
-	runtime model.RuntimeConfig
+	runtime *model.RuntimeConfig
 }
 
 type AuthorizeCallback struct {
@@ -78,22 +79,27 @@ type AuthorizeCompleteRequest struct {
 	Ticket string `json:"ticket" binding:"required"`
 }
 
-func NewOIDCController(
-	log *logger.Logger,
-	oidcService *service.OIDCService,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-	mainRouter *gin.RouterGroup) *OIDCController {
+type OIDCControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	OIDCService   *service.OIDCService
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	MainRouter    *gin.RouterGroup `name:"mainRouterGroup"`
+}
+
+func NewOIDCController(i OIDCControllerInput) *OIDCController {
 	controller := &OIDCController{
-		log:     log,
-		oidc:    oidcService,
-		runtime: runtimeConfig,
+		log:     i.Log,
+		oidc:    i.OIDCService,
+		runtime: i.RuntimeConfig,
 	}
 
-	mainRouter.POST("/authorize", controller.authorize)
-	mainRouter.GET("/authorize", controller.authorize)
+	i.MainRouter.POST("/authorize", controller.authorize)
+	i.MainRouter.GET("/authorize", controller.authorize)
 
-	oidcGroup := router.Group("/oidc")
+	oidcGroup := i.RouterGroup.Group("/oidc")
 	oidcGroup.POST("/authorize-complete", controller.authorizeComplete)
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)

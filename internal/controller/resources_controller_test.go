@@ -69,7 +69,10 @@ func TestResourcesController(t *testing.T) {
 			group := router.Group("/")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewResourcesController(cfg, group)
+			controller.NewResourcesController(controller.ResourcesControllerInput{
+				RouterGroup: group,
+				Config:      &cfg,
+			})
 
 			recorder := httptest.NewRecorder()
 			test.run(t, router, recorder)

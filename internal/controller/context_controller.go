@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,29 +72,33 @@ type AppContextResponse struct {
 	App     ACRApp   `json:"app"`
 }
 
-type ContextController struct {
-	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+type ContextControllerInput struct {
+	dig.In
+
+	Log         *logger.Logger
+	Config      *model.Config
+	Runtime     *model.RuntimeConfig
+	RouterGroup *gin.RouterGroup `name:"apiRouterGroup"`
 }
 
-func NewContextController(
-	log *logger.Logger,
-	config model.Config,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-) *ContextController {
+type ContextController struct {
+	log     *logger.Logger
+	config  *model.Config
+	runtime *model.RuntimeConfig
+}
+
+func NewContextController(i ContextControllerInput) *ContextController {
 	controller := &ContextController{
-		log:     log,
-		config:  config,
-		runtime: runtimeConfig,
+		log:     i.Log,
+		config:  i.Config,
+		runtime: i.Runtime,
 	}
 
-	if !config.UI.WarningsEnabled {
-		log.App.Warn().Msg("UI warnings are disabled. This may lead to security issues if you are not careful. Make sure to enable warnings in production environments.")
+	if !i.Config.UI.WarningsEnabled {
+		i.Log.App.Warn().Msg("UI warnings are disabled. This may lead to security issues if you are not careful. Make sure to enable warnings in production environments.")
 	}
 
-	contextGroup := router.Group("/context")
+	contextGroup := i.RouterGroup.Group("/context")
 	contextGroup.GET("/user", controller.userContextHandler)
 	contextGroup.GET("/app", controller.appContextHandler)
 

@@ -414,11 +414,29 @@ func TestUserController(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	require.NoError(t, err)
 
-	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
+		Log:     log,
+		Runtime: &runtime,
+		Ctx:     ctx,
+	})
+	authService := service.NewAuthService(service.AuthServiceInput{
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		Ctx:          ctx,
+		Ding:         dg,
+		LDAP:         nil,
+		Queries:      store,
+		OAuthBroker:  broker,
+		Tailscale:    nil,
+		PolicyEngine: policyEngine,
+	})
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
@@ -437,7 +455,12 @@ func TestUserController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewUserController(log, runtime, group, authService)
+			controller.NewUserController(controller.UserControllerInput{
+				Log:           log,
+				RuntimeConfig: &runtime,
+				RouterGroup:   group,
+				AuthService:   authService,
+			})
 
 			recorder := httptest.NewRecorder()
 

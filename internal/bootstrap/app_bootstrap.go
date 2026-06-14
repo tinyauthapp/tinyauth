@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/steveiliop56/ding"
+	"go.uber.org/dig"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -56,6 +57,7 @@ type BootstrapApp struct {
 	db        *sql.DB
 	ding      *ding.Ding
 	listeners []Listener
+	dig       *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -70,7 +72,11 @@ func (app *BootstrapApp) Setup() error {
 	app.ctx = ctx
 	app.cancel = cancel
 
-	// Create a ding instance
+	// create the dig container
+	c := dig.New()
+	app.dig = c
+
+	// create a ding instance
 	dg := ding.New(ctx)
 	app.ding = dg
 
@@ -157,12 +163,6 @@ func (app *BootstrapApp) Setup() error {
 		app.runtime.OAuthProviders[id] = provider
 	}
 
-	// setup oidc clients
-	for id, client := range app.config.OIDC.Clients {
-		client.ID = id
-		app.runtime.OIDCClients = append(app.runtime.OIDCClients, client)
-	}
-
 	// cookie domain
 	cookieDomainResolver := utils.GetCookieDomain
 
@@ -210,6 +210,33 @@ func (app *BootstrapApp) Setup() error {
 
 	// store
 	app.queries = store
+
+	// provide basic utilities to container
+	type utilityProvider struct {
+		dig.Out
+
+		Log     *logger.Logger
+		Config  *model.Config
+		Runtime *model.RuntimeConfig
+		Ding    *ding.Ding
+		Ctx     context.Context
+		Queries repository.Store
+	}
+
+	err = app.dig.Provide(func() utilityProvider {
+		return utilityProvider{
+			Log:     app.log,
+			Config:  &app.config,
+			Runtime: &app.runtime,
+			Ding:    app.ding,
+			Ctx:     app.ctx,
+			Queries: app.queries,
+		}
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to provide utilities to container: %w", err)
+	}
 
 	// services
 	err = app.setupServices()

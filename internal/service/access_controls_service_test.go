@@ -87,7 +87,11 @@ func TestLookupStaticACLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewAccessControlsService(log, model.Config{Apps: tt.apps}, nil)
+			svc := NewAccessControlsService(AccessControlServiceInput{
+				Log:           log,
+				Config:        &model.Config{Apps: tt.apps},
+				LabelProvider: nil,
+			})
 			got := svc.lookupStaticACLs(tt.domain)
 			if tt.expectNil {
 				assert.Nil(t, got)
@@ -112,7 +116,11 @@ func TestGetAccessControls(t *testing.T) {
 				},
 			},
 		}
-		svc := NewAccessControlsService(log, config, nil)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &config,
+			LabelProvider: nil,
+		})
 
 		got, err := svc.GetAccessControls("foo.example.com")
 
@@ -123,7 +131,11 @@ func TestGetAccessControls(t *testing.T) {
 	})
 
 	t.Run("returns nil when no static match and no label provider", func(t *testing.T) {
-		svc := NewAccessControlsService(log, model.Config{}, nil)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &model.Config{},
+			LabelProvider: nil,
+		})
 
 		got, err := svc.GetAccessControls("unknown.example.com")
 
@@ -133,7 +145,11 @@ func TestGetAccessControls(t *testing.T) {
 
 	t.Run("returns nil when label provider pointer wraps a nil interface", func(t *testing.T) {
 		var provider LabelProvider
-		svc := NewAccessControlsService(log, model.Config{}, &provider)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &model.Config{},
+			LabelProvider: provider, // nil provider
+		})
 
 		got, err := svc.GetAccessControls("unknown.example.com")
 
@@ -152,7 +168,11 @@ func TestGetAccessControls(t *testing.T) {
 			},
 		}
 		var provider LabelProvider = mock
-		svc := NewAccessControlsService(log, model.Config{}, &provider)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &model.Config{},
+			LabelProvider: provider,
+		})
 
 		got, err := svc.GetAccessControls("dynamic.example.com")
 
@@ -170,7 +190,11 @@ func TestGetAccessControls(t *testing.T) {
 				"foo": {Config: model.AppConfig{Domain: "foo.example.com"}},
 			},
 		}
-		svc := NewAccessControlsService(log, config, &provider)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &config,
+			LabelProvider: provider,
+		})
 
 		got, err := svc.GetAccessControls("foo.example.com")
 
@@ -188,7 +212,11 @@ func TestGetAccessControls(t *testing.T) {
 			},
 		}
 		var provider LabelProvider = mock
-		svc := NewAccessControlsService(log, model.Config{}, &provider)
+		svc := NewAccessControlsService(AccessControlServiceInput{
+			Log:           log,
+			Config:        &model.Config{},
+			LabelProvider: provider,
+		})
 
 		got, err := svc.GetAccessControls("dynamic.example.com")
 

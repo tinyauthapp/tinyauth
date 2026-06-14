@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
@@ -22,26 +23,30 @@ type OAuthRequest struct {
 
 type OAuthController struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
 
-func NewOAuthController(
-	log *logger.Logger,
-	config model.Config,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-	auth *service.AuthService,
-) *OAuthController {
+type OAuthControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	Config        *model.Config
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	AuthService   *service.AuthService
+}
+
+func NewOAuthController(i OAuthControllerInput) *OAuthController {
 	controller := &OAuthController{
-		log:     log,
-		config:  config,
-		runtime: runtimeConfig,
-		auth:    auth,
+		log:     i.Log,
+		config:  i.Config,
+		runtime: i.RuntimeConfig,
+		auth:    i.AuthService,
 	}
 
-	oauthGroup := router.Group("/oauth")
+	oauthGroup := i.RouterGroup.Group("/oauth")
 	oauthGroup.GET("/url/:provider", controller.oauthURLHandler)
 	oauthGroup.GET("/callback/:provider", controller.oauthCallbackHandler)
 

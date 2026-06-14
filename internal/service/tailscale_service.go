@@ -12,6 +12,7 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
@@ -25,7 +26,7 @@ type TailscaleWhoisResponse struct {
 
 type TailscaleService struct {
 	log    *logger.Logger
-	config model.Config
+	config *model.Config
 	ctx    context.Context
 
 	srv *tsnet.Server
@@ -34,22 +35,31 @@ type TailscaleService struct {
 	mu  sync.Mutex
 }
 
-func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Context, dg *ding.Ding) (*TailscaleService, error) {
-	if !config.Tailscale.Enabled {
+type TailscaleServiceInput struct {
+	dig.In
+
+	Log    *logger.Logger
+	Config *model.Config
+	Ctx    context.Context
+	Ding   *ding.Ding
+}
+
+func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
+	if !i.Config.Tailscale.Enabled {
 		return nil, nil
 	}
 
 	srv := new(tsnet.Server)
 
 	// node options
-	srv.Dir = config.Tailscale.Dir
-	srv.Hostname = config.Tailscale.Hostname
-	srv.AuthKey = config.Tailscale.AuthKey
-	srv.Ephemeral = config.Tailscale.Ephemeral
+	srv.Dir = i.Config.Tailscale.Dir
+	srv.Hostname = i.Config.Tailscale.Hostname
+	srv.AuthKey = i.Config.Tailscale.AuthKey
+	srv.Ephemeral = i.Config.Tailscale.Ephemeral
 
 	// redirect logs to zerolog
-	srv.Logf = log.App.Printf
-	srv.UserLogf = log.App.Printf
+	srv.Logf = i.Log.App.Printf
+	srv.UserLogf = i.Log.App.Printf
 
 	err := srv.Start()
 
@@ -65,14 +75,14 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 	}
 
 	service := &TailscaleService{
-		log:    log,
-		config: config,
-		ctx:    ctx,
+		log:    i.Log,
+		config: i.Config,
+		ctx:    i.Ctx,
 		srv:    srv,
 		lc:     lc,
 	}
 
-	connectCtx, cancel := context.WithTimeout(ctx, 2*time.Minute) // large enough timeout to allow for user to manually authenticate with link if needed
+	connectCtx, cancel := context.WithTimeout(i.Ctx, 2*time.Minute) // large enough timeout to allow for user to manually authenticate with link if needed
 	defer cancel()
 
 	err = service.waitForConn(connectCtx)
@@ -82,7 +92,7 @@ func NewTailscaleService(log *logger.Logger, config model.Config, ctx context.Co
 		return nil, fmt.Errorf("failed to connect to tailscale network: %w", err)
 	}
 
-	dg.Go(service.watchAndClose, ding.RingMajor)
+	i.Ding.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
 }
