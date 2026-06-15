@@ -41,22 +41,18 @@ func (app *BootstrapApp) setupRouter() error {
 		}
 	}
 
-	err := app.dig.Provide(middleware.NewContextMiddleware)
-
-	if err != nil {
-		return fmt.Errorf("failed to provide context middleware: %w", err)
+	middlewareProvideFor := []any{
+		middleware.NewContextMiddleware,
+		middleware.NewUIMiddleware,
+		middleware.NewZerologMiddleware,
 	}
 
-	err = app.dig.Provide(middleware.NewUIMiddleware)
+	for _, provider := range middlewareProvideFor {
+		err := app.dig.Provide(provider)
 
-	if err != nil {
-		return fmt.Errorf("failed to provide ui middleware: %w", err)
-	}
-
-	err = app.dig.Provide(middleware.NewZerologMiddleware)
-
-	if err != nil {
-		return fmt.Errorf("failed to provide zerolog middleware: %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to provide middleware: %w", err)
+		}
 	}
 
 	type middlewareInput struct {
@@ -67,7 +63,7 @@ func (app *BootstrapApp) setupRouter() error {
 		ZerologMiddleware *middleware.ZerologMiddleware
 	}
 
-	err = app.dig.Invoke(func(mi middlewareInput) {
+	err := app.dig.Invoke(func(mi middlewareInput) {
 		engine.Use(mi.ContextMiddleware.Middleware())
 		engine.Use(mi.UIMiddleware.Middleware())
 		engine.Use(mi.ZerologMiddleware.Middleware())
@@ -93,44 +89,23 @@ func (app *BootstrapApp) setupRouter() error {
 		return fmt.Errorf("failed to provide api router group: %w", err)
 	}
 
-	err = app.dig.Provide(controller.NewContextController)
-	if err != nil {
-		return fmt.Errorf("failed to provide context controller: %w", err)
+	controllerProvideFor := []any{
+		controller.NewContextController,
+		controller.NewOAuthController,
+		controller.NewOIDCController,
+		controller.NewProxyController,
+		controller.NewUserController,
+		controller.NewResourcesController,
+		controller.NewHealthController,
+		controller.NewWellKnownController,
 	}
 
-	err = app.dig.Provide(controller.NewOAuthController)
-	if err != nil {
-		return fmt.Errorf("failed to provide oauth controller: %w", err)
-	}
+	for _, provider := range controllerProvideFor {
+		err := app.dig.Provide(provider)
 
-	err = app.dig.Provide(controller.NewOIDCController)
-	if err != nil {
-		return fmt.Errorf("failed to provide oidc controller: %w", err)
-	}
-
-	err = app.dig.Provide(controller.NewProxyController)
-	if err != nil {
-		return fmt.Errorf("failed to provide proxy controller: %w", err)
-	}
-
-	err = app.dig.Provide(controller.NewUserController)
-	if err != nil {
-		return fmt.Errorf("failed to provide user controller: %w", err)
-	}
-
-	err = app.dig.Provide(controller.NewResourcesController)
-	if err != nil {
-		return fmt.Errorf("failed to provide resources controller: %w", err)
-	}
-
-	err = app.dig.Provide(controller.NewHealthController)
-	if err != nil {
-		return fmt.Errorf("failed to provide health controller: %w", err)
-	}
-
-	err = app.dig.Provide(controller.NewWellKnownController)
-	if err != nil {
-		return fmt.Errorf("failed to provide well-known controller: %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to provide controller: %w", err)
+		}
 	}
 
 	type controllerInput struct {
