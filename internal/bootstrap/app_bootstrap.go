@@ -92,7 +92,7 @@ func (app *BootstrapApp) Setup() error {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.AppURL = normalizeAppURL(appUrl)
 	app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, app.runtime.AppURL)
 
 	// validate session config
@@ -308,6 +308,10 @@ func (app *BootstrapApp) Setup() error {
 			}
 		}
 	}
+}
+
+func normalizeAppURL(appUrl *url.URL) string {
+	return appUrl.Scheme + "://" + appUrl.Host
 }
 
 func (app *BootstrapApp) heartbeatRoutine(ctx context.Context) {
