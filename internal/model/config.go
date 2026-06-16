@@ -28,6 +28,7 @@ func NewDefaultConfiguration() *Config {
 			ACLs: ACLsConfig{
 				Policy: "allow",
 			},
+			LockdownEnabled: true,
 		},
 		UI: UIConfig{
 			Title:                 "Tinyauth",
