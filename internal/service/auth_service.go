@@ -639,12 +639,6 @@ func (auth *AuthService) GetOAuthPendingSession(sessionId string) (*OAuthPending
 }
 
 func (auth *AuthService) lockdownMode() {
-	defer func() {
-		if r := recover(); r != nil {
-			auth.log.App.Error().Interface("panic", r).Msg("Recovered from panic in lockdownMode")
-		}
-	}()
-
 	auth.lockdown.mu.Lock()
 
 	if auth.lockdown.active {
