@@ -57,6 +57,7 @@ func (app *BootstrapApp) setupServices() error {
 		app.services.authService = i.AuthService
 		app.services.ldapService = i.LDAPService
 		app.services.oauthBrokerService = i.OAuthBrokerService
+		app.services.oidcService = i.OIDCService
 		app.services.tailscaleService = i.TailscaleService
 		return nil
 	})
