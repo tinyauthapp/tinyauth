@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,7 +27,6 @@ import (
 // but for now these are just safety limits to prevent unbounded memory usage
 const MaxOAuthPendingSessions = 256
 const OAuthCleanupCount = 16
-const MaxLoginAttemptRecords = 256
 
 var (
 	ErrUserNotFound = errors.New("user not found")
@@ -81,6 +82,8 @@ type AuthService struct {
 		oauth *CacheStore[OAuthPendingSession]
 		ldap  *CacheStore[[]string]
 	}
+
+	maxLoginLimits int
 }
 
 type AuthServiceInput struct {
@@ -111,9 +114,18 @@ func NewAuthService(i AuthServiceInput) *AuthService {
 		policyEngine: i.PolicyEngine,
 	}
 
+	// get the max login limits based on the number of users and the configured max retries
+	service.maxLoginLimits = service.calculateLockdownLimit()
+
+	loginCacheSize := 0
+
+	if !service.config.Auth.LockdownEnabled {
+		loginCacheSize = service.maxLoginLimits
+	}
+
 	// caches setup
 	oauthCache := NewCacheStore[OAuthPendingSession](256)
-	loginCache := NewCacheStore[LoginAttempt](1024)
+	loginCache := NewCacheStore[LoginAttempt](loginCacheSize)
 	ldapCache := NewCacheStore[[]string](1024)
 
 	service.caches.oauth = oauthCache
@@ -259,7 +271,7 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 		return
 	}
 
-	if auth.caches.login.Size() >= MaxLoginAttemptRecords {
+	if !success && auth.config.Auth.LockdownEnabled && auth.caches.login.Size() >= auth.maxLoginLimits {
 		if locked, _ := auth.IsInLockdown(); locked {
 			return
 		}
@@ -627,6 +639,12 @@ func (auth *AuthService) GetOAuthPendingSession(sessionId string) (*OAuthPending
 }
 
 func (auth *AuthService) lockdownMode() {
+	defer func() {
+		if r := recover(); r != nil {
+			auth.log.App.Error().Interface("panic", r).Msg("Recovered from panic in lockdownMode")
+		}
+	}()
+
 	auth.lockdown.mu.Lock()
 
 	if auth.lockdown.active {
@@ -634,16 +652,17 @@ func (auth *AuthService) lockdownMode() {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(auth.ctx)
 
 	auth.log.App.Warn().Msg("Too many failed login attempts, entering lockdown mode")
 
 	auth.lockdown.active = true
 	auth.lockdown.ctx = ctx
 	auth.lockdown.cancelFunc = cancel
-	auth.lockdown.until = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
 
-	timer := time.NewTimer(time.Until(auth.lockdown.until))
+	d := time.Duration(auth.config.Auth.LoginTimeout) * time.Second
+	auth.lockdown.until = time.Now().Add(d)
+	timer := time.NewTimer(d)
 
 	auth.lockdown.mu.Unlock()
 
@@ -655,14 +674,13 @@ func (auth *AuthService) lockdownMode() {
 		// Timer expired, end lockdown
 	case <-ctx.Done():
 		// Context cancelled, end lockdown
-	case <-auth.ctx.Done():
-		// Service is shutting down, end lockdown
 	}
 
 	auth.lockdown.mu.Lock()
 
 	auth.log.App.Info().Msg("Exiting lockdown mode")
 
+	auth.caches.login.Clear()
 	auth.lockdown.active = false
 	auth.lockdown.until = time.Time{}
 	auth.lockdown.ctx = nil
@@ -684,4 +702,33 @@ func (auth *AuthService) IsInLockdown() (bool, int) {
 // mostly a testing function, not useful for anything else
 func (auth *AuthService) ClearLoginAttempts() {
 	auth.caches.login.Clear()
+}
+
+func (auth *AuthService) calculateLockdownLimit() int {
+	userCount := len(auth.runtime.LocalUsers)
+
+	if auth.ldap != nil {
+		ldapUsers, err := auth.ldap.GetUserCount()
+		if err != nil {
+			auth.log.App.Warn().Err(err).Msg("Failed to get LDAP user count")
+		} else {
+			userCount += ldapUsers
+		}
+	}
+
+	limit := userCount * auth.config.Auth.LoginMaxRetries
+
+	jitter, err := rand.Int(rand.Reader, big.NewInt(64))
+
+	if err != nil {
+		auth.log.App.Warn().Err(err).Msg("Failed to generate jitter for lockdown limit")
+	} else {
+		limit += int(jitter.Int64())
+	}
+
+	if limit < 256 {
+		limit = 256
+	}
+
+	return limit
 }

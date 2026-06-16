@@ -120,6 +120,7 @@ type AuthConfig struct {
 	SessionMaxLifetime int                       `description:"Maximum session lifetime in seconds." yaml:"sessionMaxLifetime"`
 	LoginTimeout       int                       `description:"Login timeout in seconds." yaml:"loginTimeout"`
 	LoginMaxRetries    int                       `description:"Maximum login retries." yaml:"loginMaxRetries"`
+	LockdownEnabled    bool                      `description:"Enable lockdown mode after maximum login retries. Lockdown mode limit is calculated automatically." yaml:"lockdownEnabled"`
 	TrustedProxies     []string                  `description:"Comma-separated list of trusted proxy addresses." yaml:"trustedProxies"`
 	ACLs               ACLsConfig                `description:"ACLs configuration." yaml:"acls"`
 }
@@ -178,16 +179,16 @@ type UIConfig struct {
 }
 
 type LDAPConfig struct {
-	Address      	 string `description:"LDAP server address." yaml:"address"`
-	BindDN       	 string `description:"Bind DN for LDAP authentication." yaml:"bindDn"`
-	BindPassword  	 string `description:"Bind password for LDAP authentication." yaml:"bindPassword"`
+	Address          string `description:"LDAP server address." yaml:"address"`
+	BindDN           string `description:"Bind DN for LDAP authentication." yaml:"bindDn"`
+	BindPassword     string `description:"Bind password for LDAP authentication." yaml:"bindPassword"`
 	BindPasswordFile string `description:"Path to the Bind password." yaml:"bindPasswordFile"`
-	BaseDN       	 string `description:"Base DN for LDAP searches." yaml:"baseDn"`
-	Insecure     	 bool   `description:"Allow insecure LDAP connections." yaml:"insecure"`
-	SearchFilter 	 string `description:"LDAP search filter." yaml:"searchFilter"`
-	AuthCert     	 string `description:"Certificate for mTLS authentication." yaml:"authCert"`
-	AuthKey      	 string `description:"Certificate key for mTLS authentication." yaml:"authKey"`
-	GroupCacheTTL	 int    `description:"Cache duration for LDAP group membership in seconds." yaml:"groupCacheTTL"`
+	BaseDN           string `description:"Base DN for LDAP searches." yaml:"baseDn"`
+	Insecure         bool   `description:"Allow insecure LDAP connections." yaml:"insecure"`
+	SearchFilter     string `description:"LDAP search filter." yaml:"searchFilter"`
+	AuthCert         string `description:"Certificate for mTLS authentication." yaml:"authCert"`
+	AuthKey          string `description:"Certificate key for mTLS authentication." yaml:"authKey"`
+	GroupCacheTTL    int    `description:"Cache duration for LDAP group membership in seconds." yaml:"groupCacheTTL"`
 }
 
 type LogConfig struct {

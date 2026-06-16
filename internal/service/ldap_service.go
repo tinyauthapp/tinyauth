@@ -169,6 +169,26 @@ func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, 
 	return entry.DN, entry.GetAttributeValue("mail"), nil
 }
 
+func (ldap *LdapService) GetUserCount() (int, error) {
+	searchRequest := ldapgo.NewSearchRequest(
+		ldap.config.LDAP.BaseDN,
+		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
+		"(objectClass=person)",
+		[]string{"dn"},
+		nil,
+	)
+
+	ldap.mutex.Lock()
+	defer ldap.mutex.Unlock()
+
+	searchResult, err := ldap.conn.Search(searchRequest)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(searchResult.Entries), nil
+}
+
 func (ldap *LdapService) GetUserGroups(userDN string) ([]string, error) {
 	escapedUserDN := ldapgo.EscapeFilter(userDN)
 
