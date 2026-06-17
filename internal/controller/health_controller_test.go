@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 )
 
 func TestHealthController(t *testing.T) {
@@ -55,7 +54,7 @@ func TestHealthController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewHealthController(controller.HealthControllerInput{
+			NewHealthController(HealthControllerInput{
 				RouterGroup: group,
 			})
 

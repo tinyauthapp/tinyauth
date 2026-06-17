@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -45,7 +44,7 @@ func TestOIDCController(t *testing.T) {
 	require.NoError(t, err)
 
 	// Middleware that injects an authenticated local user into the gin context,
-	// mimicking the context middleware that runs before the OIDC controller.
+	// mimicking the context middleware that runs before the OIDC
 	authedUser := func(c *gin.Context) {
 		c.Set("context", &model.UserContext{
 			Authenticated: true,
@@ -213,7 +212,7 @@ func TestOIDCController(t *testing.T) {
 		{
 			description: "Authorize complete returns a JSON error when the user context is missing",
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				body, err := json.Marshal(controller.AuthorizeCompleteRequest{Ticket: "some-ticket"})
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "some-ticket"})
 				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
@@ -243,7 +242,7 @@ func TestOIDCController(t *testing.T) {
 				},
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				body, err := json.Marshal(controller.AuthorizeCompleteRequest{Ticket: "some-ticket"})
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "some-ticket"})
 				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
@@ -263,7 +262,7 @@ func TestOIDCController(t *testing.T) {
 			description: "Authorize complete returns a JSON error when the ticket is invalid",
 			middlewares: []gin.HandlerFunc{authedUser},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				body, err := json.Marshal(controller.AuthorizeCompleteRequest{Ticket: "nonexistent-ticket"})
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "nonexistent-ticket"})
 				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
@@ -291,7 +290,7 @@ func TestOIDCController(t *testing.T) {
 					State:        "state-123",
 				})
 
-				body, err := json.Marshal(controller.AuthorizeCompleteRequest{Ticket: ticket})
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: ticket})
 				require.NoError(t, err)
 
 				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
@@ -837,7 +836,7 @@ func TestOIDCController(t *testing.T) {
 				svc = nil
 			}
 
-			controller.NewOIDCController(controller.OIDCControllerInput{
+			NewOIDCController(OIDCControllerInput{
 				Log:           log,
 				OIDCService:   svc,
 				RuntimeConfig: &runtime,

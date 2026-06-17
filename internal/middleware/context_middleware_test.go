@@ -1,4 +1,4 @@
-package middleware_test
+package middleware
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -278,7 +277,7 @@ func TestContextMiddleware(t *testing.T) {
 		PolicyEngine: policyEngine,
 	})
 
-	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareInput{
+	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
 		Log:              log,
 		RuntimeConfig:    &runtime,
 		AuthService:      authService,

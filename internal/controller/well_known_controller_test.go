@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
@@ -38,11 +37,11 @@ func TestWellKnownController(t *testing.T) {
 
 				assert.Equal(t, 200, recorder.Code)
 
-				res := controller.OpenIDConnectConfiguration{}
+				res := OpenIDConnectConfiguration{}
 				err := json.Unmarshal(recorder.Body.Bytes(), &res)
 				assert.NoError(t, err)
 
-				expected := controller.OpenIDConnectConfiguration{
+				expected := OpenIDConnectConfiguration{
 					Issuer:                                 runtime.AppURL,
 					AuthorizationEndpoint:                  fmt.Sprintf("%s/authorize", runtime.AppURL),
 					TokenEndpoint:                          fmt.Sprintf("%s/api/oidc/token", runtime.AppURL),
@@ -109,7 +108,7 @@ func TestWellKnownController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			controller.NewWellKnownController(controller.WellKnownControllerInput{
+			NewWellKnownController(WellKnownControllerInput{
 				OIDCService: oidcService,
 				RouterGroup: &router.RouterGroup,
 			})

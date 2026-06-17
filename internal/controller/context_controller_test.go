@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -33,22 +32,22 @@ func TestContextController(t *testing.T) {
 			middlewares: []gin.HandlerFunc{},
 			path:        "/api/context/app",
 			expected: func() string {
-				expectedAppContextResponse := controller.AppContextResponse{
+				expectedAppContextResponse := AppContextResponse{
 					Status:  200,
 					Message: "Success",
-					Auth: controller.ACRAuth{
+					Auth: ACRAuth{
 						Providers: runtime.ConfiguredProviders,
 					},
-					OAuth: controller.ACROAuth{
+					OAuth: ACROAuth{
 						AutoRedirect: cfg.OAuth.AutoRedirect,
 					},
-					UI: controller.ACRUI{
+					UI: ACRUI{
 						Title:                 cfg.UI.Title,
 						ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
 						BackgroundImage:       cfg.UI.BackgroundImage,
 						WarningsEnabled:       cfg.UI.WarningsEnabled,
 					},
-					App: controller.ACRApp{
+					App: ACRApp{
 						AppURL:         runtime.AppURL,
 						CookieDomain:   runtime.CookieDomain,
 						TrustedDomains: runtime.TrustedDomains,
@@ -64,7 +63,7 @@ func TestContextController(t *testing.T) {
 			middlewares: []gin.HandlerFunc{},
 			path:        "/api/context/user",
 			expected: func() string {
-				expectedUserContextResponse := controller.UserContextResponse{
+				expectedUserContextResponse := UserContextResponse{
 					Status:  401,
 					Message: "Unauthorized",
 				}
@@ -92,10 +91,10 @@ func TestContextController(t *testing.T) {
 			},
 			path: "/api/context/user",
 			expected: func() string {
-				expectedUserContextResponse := controller.UserContextResponse{
+				expectedUserContextResponse := UserContextResponse{
 					Status:  200,
 					Message: "Success",
-					Auth: controller.UCRAuth{
+					Auth: UCRAuth{
 						Authenticated: true,
 						Username:      "johndoe",
 						Name:          "John Doe",
@@ -121,7 +120,7 @@ func TestContextController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewContextController(controller.ContextControllerInput{
+			NewContextController(ContextControllerInput{
 				Log:         log,
 				Config:      &cfg,
 				Runtime:     &runtime,

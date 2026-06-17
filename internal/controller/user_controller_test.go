@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -86,7 +85,7 @@ func TestUserController(t *testing.T) {
 			description: "Should be able to login with valid credentials",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "password",
 				}
@@ -114,7 +113,7 @@ func TestUserController(t *testing.T) {
 			description: "Should reject login with invalid credentials",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "wrongpassword",
 				}
@@ -135,7 +134,7 @@ func TestUserController(t *testing.T) {
 			description: "Should rate limit on 3 invalid attempts",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "wrongpassword",
 				}
@@ -170,7 +169,7 @@ func TestUserController(t *testing.T) {
 			description: "Should not allow full login with totp",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "totpuser",
 					Password: "password",
 				}
@@ -207,7 +206,7 @@ func TestUserController(t *testing.T) {
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				// First login to get a session cookie
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "password",
 				}
@@ -264,7 +263,7 @@ func TestUserController(t *testing.T) {
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
-				totpReq := controller.TotpRequest{
+				totpReq := TotpRequest{
 					Code: code,
 				}
 
@@ -302,7 +301,7 @@ func TestUserController(t *testing.T) {
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				for range 3 {
-					totpReq := controller.TotpRequest{
+					totpReq := TotpRequest{
 						Code: "000000", // invalid code
 					}
 
@@ -334,7 +333,7 @@ func TestUserController(t *testing.T) {
 			description: "Login uses name and email from user attributes",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{Username: "attruser", Password: "password"}
+				loginReq := LoginRequest{Username: "attruser", Password: "password"}
 				body, err := json.Marshal(loginReq)
 				require.NoError(t, err)
 
@@ -352,7 +351,7 @@ func TestUserController(t *testing.T) {
 			description: "Login with TOTP uses name and email from user attributes in pending session",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{Username: "attrtotpuser", Password: "password"}
+				loginReq := LoginRequest{Username: "attrtotpuser", Password: "password"}
 				body, err := json.Marshal(loginReq)
 				require.NoError(t, err)
 
@@ -388,7 +387,7 @@ func TestUserController(t *testing.T) {
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
-				totpReq := controller.TotpRequest{Code: code}
+				totpReq := TotpRequest{Code: code}
 				body, err := json.Marshal(totpReq)
 				require.NoError(t, err)
 
@@ -455,7 +454,7 @@ func TestUserController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewUserController(controller.UserControllerInput{
+			NewUserController(UserControllerInput{
 				Log:           log,
 				RuntimeConfig: &runtime,
 				RouterGroup:   group,

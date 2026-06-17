@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"net/http/httptest"
@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 )
 
@@ -69,7 +68,7 @@ func TestResourcesController(t *testing.T) {
 			group := router.Group("/")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewResourcesController(controller.ResourcesControllerInput{
+			NewResourcesController(ResourcesControllerInput{
 				RouterGroup: group,
 				Config:      &cfg,
 			})
