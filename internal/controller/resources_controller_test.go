@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 )
 
@@ -18,8 +19,12 @@ func TestResourcesController(t *testing.T) {
 	err := os.MkdirAll(cfg.Resources.Path, 0777)
 	require.NoError(t, err)
 
+	// create a "backup" of the original configuration to restore after each test
+	originalCfg := cfg.Resources
+
 	type testCase struct {
 		description string
+		customCfg   *model.ResourcesConfig
 		run         func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder)
 	}
 
@@ -52,6 +57,32 @@ func TestResourcesController(t *testing.T) {
 				assert.Equal(t, 404, recorder.Code)
 			},
 		},
+		{
+			description: "Ensure resources controller returns 404 when resources path is empty",
+			customCfg: &model.ResourcesConfig{
+				Path:    "",
+				Enabled: true,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/resources/testfile.txt", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 404, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure resources controller returns 403 when resources are disabled",
+			customCfg: &model.ResourcesConfig{
+				Path:    cfg.Resources.Path,
+				Enabled: false,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/resources/testfile.txt", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 403, recorder.Code)
+			},
+		},
 	}
 
 	testFilePath := cfg.Resources.Path + "/testfile.txt"
@@ -67,6 +98,14 @@ func TestResourcesController(t *testing.T) {
 			router := gin.Default()
 			group := router.Group("/")
 			gin.SetMode(gin.TestMode)
+
+			// if custom configuration is provided, override the default config
+			if test.customCfg != nil {
+				cfg.Resources = *test.customCfg
+			} else {
+				// Reset to default configuration for each test
+				cfg.Resources = originalCfg
+			}
 
 			NewResourcesController(ResourcesControllerInput{
 				RouterGroup: group,
