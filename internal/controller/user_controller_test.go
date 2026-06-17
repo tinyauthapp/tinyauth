@@ -290,7 +290,7 @@ func TestUserController(t *testing.T) {
 			},
 		},
 		{
-			description: "TOTP should gracefuly reject invalid json",
+			description: "TOTP should gracefully reject invalid json",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(`{"code":`))

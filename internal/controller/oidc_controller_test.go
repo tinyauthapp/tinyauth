@@ -210,7 +210,7 @@ func TestOIDCController(t *testing.T) {
 
 		// --- authorize-complete ---
 		{
-			description:  "Shoud fail if oidc is disabled",
+			description:  "Should fail if oidc is disabled",
 			oidcDisabled: true,
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "some-ticket"})
