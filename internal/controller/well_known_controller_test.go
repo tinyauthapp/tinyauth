@@ -169,7 +169,7 @@ func TestWellKnownController(t *testing.T) {
 			description: "Ensure webfinger resource validator allows http",
 			oidcEnabled: true,
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				resource := "https://example.com/testuser"
+				resource := "http://example.com/testuser"
 				req := httptest.NewRequest("GET", fmt.Sprintf("/.well-known/webfinger?resource=%s", url.QueryEscape(resource)), nil)
 				router.ServeHTTP(recorder, req)
 
