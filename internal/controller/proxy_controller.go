@@ -158,7 +158,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 				return
 			}
 
-			c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+			c.Redirect(http.StatusFound, redirectURL)
 			return
 		}
 
@@ -251,7 +251,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 					return
 				}
 
-				c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+				c.Redirect(http.StatusFound, redirectURL)
 				return
 			}
 		}
@@ -300,7 +300,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) setHeaders(c *gin.Context, acls *model.App) {
@@ -336,7 +336,7 @@ func (controller *ProxyController) handleError(c *gin.Context, proxyCtx ProxyCon
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) getHeader(c *gin.Context, header string) (string, bool) {

@@ -76,6 +76,50 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					Bypass: []string{"10.10.10.10"},
 				},
 			},
+			"ip_block": {
+				Config: model.AppConfig{
+					Domain: "ip-block.example.com",
+				},
+				IP: model.AppIP{
+					Block: []string{"10.10.10.10"},
+				},
+			},
+			"oauth_group": {
+				Config: model.AppConfig{
+					Domain: "oauth-group.example.com",
+				},
+				OAuth: model.AppOAuth{
+					Whitelist: "testuser@example.com",
+					Groups:    "group1,group2",
+				},
+			},
+			"ldap_group": {
+				Config: model.AppConfig{
+					Domain: "ldap-group.example.com",
+				},
+				LDAP: model.AppLDAP{
+					Groups: "group1,group2",
+				},
+			},
+			"basic_auth": {
+				Config: model.AppConfig{
+					Domain: "basic-auth.example.com",
+				},
+				Response: model.AppResponse{
+					BasicAuth: model.AppBasicAuth{
+						Username: "test",
+						Password: "password",
+					},
+				},
+			},
+			"response_headers": {
+				Config: model.AppConfig{
+					Domain: "response-headers.example.com",
+				},
+				Response: model.AppResponse{
+					Headers: []string{"x-foo=bar"},
+				},
+			},
 		},
 	}
 

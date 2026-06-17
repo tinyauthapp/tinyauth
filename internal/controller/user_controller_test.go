@@ -41,6 +41,7 @@ func TestUserController(t *testing.T) {
 				TOTPPending: true,
 			},
 		})
+		c.Next()
 	}
 
 	totpAttrCtx := func(c *gin.Context) {
@@ -56,6 +57,7 @@ func TestUserController(t *testing.T) {
 				TOTPPending: true,
 			},
 		})
+		c.Next()
 	}
 
 	simpleCtx := func(c *gin.Context) {
@@ -70,6 +72,7 @@ func TestUserController(t *testing.T) {
 				},
 			},
 		})
+		c.Next()
 	}
 
 	store := memory.New()
@@ -337,6 +340,7 @@ func TestUserController(t *testing.T) {
 							TOTPPending: true,
 						},
 					})
+					ctx.Next()
 				},
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
