@@ -210,6 +210,26 @@ func TestOIDCController(t *testing.T) {
 
 		// --- authorize-complete ---
 		{
+			description:  "Shoud fail if oidc is disabled",
+			oidcDisabled: true,
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "some-ticket"})
+				require.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
+				req.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res map[string]any
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				redirectURI, ok := res["redirect_uri"].(string)
+				require.True(t, ok)
+				assert.Contains(t, redirectURI, oidcService.GetIssuer()+"/error")
+			},
+		},
+		{
 			description: "Authorize complete returns a JSON error when the user context is missing",
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: "some-ticket"})
