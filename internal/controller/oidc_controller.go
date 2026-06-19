@@ -170,6 +170,18 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 	prompts := controller.oidc.GetPrompt(req.Prompt)
 
+	if slices.Contains(prompts, service.OIDCPromptNone) && len(prompts) > 1 {
+		controller.authorizeError(c, authorizeErrorParams{
+			err:           errors.New("invalid prompt"),
+			reason:        "Invalid prompt",
+			reasonPublic:  "The prompt parameters are invalid",
+			callback:      req.RedirectURI,
+			callbackError: "invalid_request",
+			state:         req.State,
+		})
+		return
+	}
+
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
