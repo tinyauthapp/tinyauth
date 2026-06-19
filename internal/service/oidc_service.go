@@ -525,7 +525,7 @@ func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*Aut
 	return &entry, true
 }
 
-func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user UserinfoResponse, scope string, nonce string, auth_time int64) (string, error) {
+func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user UserinfoResponse, scope string, nonce string, authTime *int64) (string, error) {
 	createdAt := time.Now().Unix()
 	expiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 
@@ -562,13 +562,16 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 		Sub:               user.Sub,
 		Iat:               createdAt,
 		Exp:               expiresAt,
-		AuthTime:          auth_time,
 		Name:              userInfo.Name,
 		Email:             userInfo.Email,
 		EmailVerified:     userInfo.EmailVerified,
 		PreferredUsername: userInfo.PreferredUsername,
 		Groups:            userInfo.Groups,
 		Nonce:             nonce,
+	}
+
+	if authTime != nil {
+		claims.AuthTime = *authTime
 	}
 
 	payload, err := json.Marshal(claims)
@@ -593,7 +596,7 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 }
 
 func (service *OIDCService) GenerateAccessToken(ctx context.Context, client model.OIDCClientConfig, codeEntry AuthorizeCodeEntry, authTime int64) (*TokenResponse, error) {
-	idToken, err := service.generateIDToken(client, codeEntry.Userinfo, codeEntry.Scope, codeEntry.Nonce, authTime)
+	idToken, err := service.generateIDToken(client, codeEntry.Userinfo, codeEntry.Scope, codeEntry.Nonce, &authTime)
 
 	if err != nil {
 		return nil, err
@@ -672,9 +675,10 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 		return nil, err
 	}
 
+	// TODO: store auth time in the database so we can include it in the new ID token, for now we omit it
 	idToken, err := service.generateIDToken(model.OIDCClientConfig{
 		ClientID: entry.ClientID,
-	}, userInfo, entry.Scope, entry.Nonce, 0) // auth_time is not available during refresh, so we set it to 0
+	}, userInfo, entry.Scope, entry.Nonce, nil)
 
 	if err != nil {
 		return nil, err
