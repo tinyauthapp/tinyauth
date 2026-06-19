@@ -563,7 +563,6 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 		Sub:               user.Sub,
 		Iat:               createdAt,
 		Exp:               expiresAt,
-		AuthTime:          auth_time,
 		Name:              userInfo.Name,
 		Email:             userInfo.Email,
 		EmailVerified:     userInfo.EmailVerified,
