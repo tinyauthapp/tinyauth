@@ -168,6 +168,26 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		return
 	}
 
+	userContext, err := new(model.UserContext).NewFromGin(c)
+
+	if err != nil {
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context")
+		}
+	}
+
+	if (err != nil || !userContext.Authenticated) && req.Prompt == "none" {
+		controller.authorizeError(c, authorizeErrorParams{
+			err:           errors.New("user not logged in"),
+			reason:        "User not logged in",
+			reasonPublic:  "The user is not logged in",
+			callback:      req.RedirectURI,
+			callbackError: "login_required",
+			state:         req.State,
+		})
+		return
+	}
+
 	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
 
 	values := AuthorizeScreenParams{
@@ -185,9 +205,12 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 	if err != nil {
 		controller.authorizeError(c, authorizeErrorParams{
-			err:          err,
-			reason:       "Failed to compile authorize queries",
-			reasonPublic: "An internal error occured while processing your request",
+			err:           err,
+			reason:        "Failed to compile authorize queries",
+			reasonPublic:  "An internal error occured while processing your request",
+			callback:      req.RedirectURI,
+			callbackError: "server_error",
+			state:         req.State,
 		})
 		return
 	}
@@ -215,16 +238,12 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.authorizeError(c, authorizeErrorParams{
-			err:          err,
-			reason:       "Failed to get user context",
-			reasonPublic: "User is not logged in or the session is invalid",
-			json:         true,
-		})
-		return
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context")
+		}
 	}
 
-	if !userContext.Authenticated {
+	if err != nil || !userContext.Authenticated {
 		controller.authorizeError(c, authorizeErrorParams{
 			err:          errors.New("err user not logged in"),
 			reason:       "User not logged in",
