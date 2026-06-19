@@ -128,6 +128,7 @@ type AuthorizeRequest struct {
 	CodeChallenge       string `form:"code_challenge" json:"code_challenge" url:"code_challenge"`
 	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method" url:"code_challenge_method"`
 	Prompt              string `form:"prompt" json:"prompt" url:"prompt"`
+	MaxAge              string `form:"max_age" json:"max_age" url:"max_age"`
 }
 
 type AuthorizeCodeEntry struct {

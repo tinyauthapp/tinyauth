@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -215,6 +217,28 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		values.OIDCPrompt = service.OIDCPromptLogin
 	} else if slices.Contains(prompts, service.OIDCPromptNone) {
 		values.OIDCPrompt = service.OIDCPromptNone
+	}
+
+	if req.MaxAge != "" {
+		maxAge, err := strconv.Atoi(req.MaxAge)
+		if err != nil {
+			controller.authorizeError(c, authorizeErrorParams{
+				err:           err,
+				reason:        "Invalid max_age",
+				reasonPublic:  "The max_age parameter is invalid",
+				callback:      req.RedirectURI,
+				callbackError: "invalid_request",
+				state:         req.State,
+			})
+			return
+		}
+
+		if userContext.Authenticated {
+			authTime := time.Unix(userContext.AuthTime, 0)
+			if authTime.Add(time.Duration(maxAge) * time.Second).Before(time.Now()) {
+				values.OIDCPrompt = service.OIDCPromptLogin
+			}
+		}
 	}
 
 	queries, err := query.Values(values)
