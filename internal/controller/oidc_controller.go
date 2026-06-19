@@ -69,10 +69,11 @@ type ClientCredentials struct {
 }
 
 type AuthorizeScreenParams struct {
-	LoginFor   FrontendLoginFor `url:"login_for"`
-	OIDCTicket string           `url:"oidc_ticket"`
-	OIDCScope  string           `url:"oidc_scope"`
-	OIDCName   string           `url:"oidc_name"`
+	LoginFor   FrontendLoginFor   `url:"login_for"`
+	OIDCTicket string             `url:"oidc_ticket"`
+	OIDCScope  string             `url:"oidc_scope"`
+	OIDCName   string             `url:"oidc_name"`
+	OIDCPrompt service.OIDCPrompt `url:"oidc_prompt,omitempty"`
 }
 
 type AuthorizeCompleteRequest struct {
@@ -167,20 +168,65 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		return
 	}
 
+	prompts := controller.oidc.GetPrompt(req.Prompt)
+
+	if slices.Contains(prompts, service.OIDCPromptNone) && len(prompts) > 1 {
+		controller.authorizeError(c, authorizeErrorParams{
+			err:           errors.New("invalid prompt"),
+			reason:        "Invalid prompt",
+			reasonPublic:  "The prompt parameters are invalid",
+			callback:      req.RedirectURI,
+			callbackError: "invalid_request",
+			state:         req.State,
+		})
+		return
+	}
+
+	userContext, err := new(model.UserContext).NewFromGin(c)
+
+	if err != nil {
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context")
+		}
+	}
+
+	if (err != nil || !userContext.Authenticated) && slices.Contains(prompts, service.OIDCPromptNone) {
+		controller.authorizeError(c, authorizeErrorParams{
+			err:           errors.New("user not logged in"),
+			reason:        "User not logged in",
+			reasonPublic:  "The user is not logged in",
+			callback:      req.RedirectURI,
+			callbackError: "login_required",
+			state:         req.State,
+		})
+		return
+	}
+
 	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
 
-	queries, err := query.Values(AuthorizeScreenParams{
+	values := AuthorizeScreenParams{
 		LoginFor:   FrontendLoginForOIDC,
 		OIDCTicket: ticket,
 		OIDCScope:  req.Scope,
 		OIDCName:   client.Name,
-	})
+	}
+
+	if slices.Contains(prompts, service.OIDCPromptLogin) {
+		values.OIDCPrompt = service.OIDCPromptLogin
+	} else if slices.Contains(prompts, service.OIDCPromptNone) {
+		values.OIDCPrompt = service.OIDCPromptNone
+	}
+
+	queries, err := query.Values(values)
 
 	if err != nil {
 		controller.authorizeError(c, authorizeErrorParams{
-			err:          err,
-			reason:       "Failed to compile authorize queries",
-			reasonPublic: "An internal error occured while processing your request",
+			err:           err,
+			reason:        "Failed to compile authorize queries",
+			reasonPublic:  "An internal error occured while processing your request",
+			callback:      req.RedirectURI,
+			callbackError: "server_error",
+			state:         req.State,
 		})
 		return
 	}
@@ -208,16 +254,12 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.authorizeError(c, authorizeErrorParams{
-			err:          err,
-			reason:       "Failed to get user context",
-			reasonPublic: "User is not logged in or the session is invalid",
-			json:         true,
-		})
-		return
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context")
+		}
 	}
 
-	if !userContext.Authenticated {
+	if err != nil || !userContext.Authenticated {
 		controller.authorizeError(c, authorizeErrorParams{
 			err:          errors.New("err user not logged in"),
 			reason:       "User not logged in",
@@ -425,7 +467,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 			return
 		}
 
-		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry)
+		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry, entry.AuthTime)
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to generate access token")
