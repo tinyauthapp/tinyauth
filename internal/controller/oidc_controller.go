@@ -168,7 +168,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		return
 	}
 
-	prompt := controller.oidc.GetPrompt(req.Prompt)
+	prompts := controller.oidc.GetPrompt(req.Prompt)
 
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
@@ -178,7 +178,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
-	if (err != nil || !userContext.Authenticated) && prompt == service.OIDCPromptNone {
+	if (err != nil || !userContext.Authenticated) && slices.Contains(prompts, service.OIDCPromptNone) {
 		controller.authorizeError(c, authorizeErrorParams{
 			err:           errors.New("user not logged in"),
 			reason:        "User not logged in",
@@ -197,7 +197,12 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		OIDCTicket: ticket,
 		OIDCScope:  req.Scope,
 		OIDCName:   client.Name,
-		OIDCPrompt: prompt,
+	}
+
+	if slices.Contains(prompts, service.OIDCPromptLogin) {
+		values.OIDCPrompt = service.OIDCPromptLogin
+	} else if slices.Contains(prompts, service.OIDCPromptNone) {
+		values.OIDCPrompt = service.OIDCPromptNone
 	}
 
 	queries, err := query.Values(values)

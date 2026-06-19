@@ -947,19 +947,20 @@ func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRe
 	}, nil
 }
 
-// Return the first prompt in the list of prompts, or an empty string if no prompt is specified
-func (service *OIDCService) GetPrompt(prompt string) OIDCPrompt {
+func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	if prompt == "" {
-		return ""
+		return []OIDCPrompt{}
 	}
 
-	prompts := strings.Split(prompt, " ")
+	parsedPromps := make([]OIDCPrompt, 0)
+	prompts := strings.SplitSeq(prompt, " ")
 
-	for _, p := range prompts {
-		if slices.Contains(SupportedPrompts, p) {
-			return OIDCPrompt(p)
+	for p := range prompts {
+		if !slices.Contains(SupportedPrompts, p) {
+			continue
 		}
+		parsedPromps = append(parsedPromps, OIDCPrompt(p))
 	}
 
-	return ""
+	return parsedPromps
 }
