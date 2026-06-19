@@ -69,11 +69,11 @@ type ClientCredentials struct {
 }
 
 type AuthorizeScreenParams struct {
-	LoginFor   FrontendLoginFor `url:"login_for"`
-	OIDCTicket string           `url:"oidc_ticket"`
-	OIDCScope  string           `url:"oidc_scope"`
-	OIDCName   string           `url:"oidc_name"`
-	OIDCLogin  bool             `url:"oidc_login"`
+	LoginFor   FrontendLoginFor   `url:"login_for"`
+	OIDCTicket string             `url:"oidc_ticket"`
+	OIDCScope  string             `url:"oidc_scope"`
+	OIDCName   string             `url:"oidc_name"`
+	OIDCPrompt service.OIDCPrompt `url:"oidc_prompt,omitempty"`
 }
 
 type AuthorizeCompleteRequest struct {
@@ -168,6 +168,8 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		return
 	}
 
+	prompt := controller.oidc.GetPrompt(req.Prompt)
+
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
@@ -176,7 +178,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
-	if (err != nil || !userContext.Authenticated) && req.Prompt == "none" {
+	if (err != nil || !userContext.Authenticated) && prompt == service.OIDCPromptNone {
 		controller.authorizeError(c, authorizeErrorParams{
 			err:           errors.New("user not logged in"),
 			reason:        "User not logged in",
@@ -195,10 +197,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		OIDCTicket: ticket,
 		OIDCScope:  req.Scope,
 		OIDCName:   client.Name,
-	}
-
-	if req.Prompt == "login" {
-		values.OIDCLogin = true
+		OIDCPrompt: prompt,
 	}
 
 	queries, err := query.Values(values)

@@ -25,6 +25,7 @@ import {
   recompileScreenParams,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
+import { useEffect } from "react";
 
 type Scope = {
   id: string;
@@ -90,7 +91,15 @@ export const AuthorizePage = () => {
   const isOidc = screenParams.login_for === "oidc";
   const compiledParams = recompileScreenParams(screenParams);
 
-  const authorizeMutation = useMutation({
+  // TODO: maybe a better way to do this
+  const shouldAutoAuthorize =
+    auth.authenticated &&
+    isOidc &&
+    screenParams.oidc_ticket !== undefined &&
+    screenParams.oidc_scope !== undefined &&
+    screenParams.oidc_prompt === "none";
+
+  const { mutate: authorizeMutate, isPending: authorizePending } = useMutation({
     mutationFn: () => {
       return axios.post("/api/oidc/authorize-complete", {
         ticket: screenParams.oidc_ticket,
@@ -110,6 +119,12 @@ export const AuthorizePage = () => {
     },
   });
 
+  useEffect(() => {
+    if (shouldAutoAuthorize) {
+      authorizeMutate();
+    }
+  }, [shouldAutoAuthorize, authorizeMutate]);
+
   if (!isOidc || !screenParams.oidc_ticket || !screenParams.oidc_scope) {
     return (
       <Navigate
@@ -119,7 +134,7 @@ export const AuthorizePage = () => {
     );
   }
 
-  if (!auth.authenticated || screenParams.oidc_login) {
+  if (!auth.authenticated || screenParams.oidc_prompt === "login") {
     return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
@@ -168,14 +183,15 @@ export const AuthorizePage = () => {
       )}
       <CardFooter className="flex flex-col items-stretch gap-3">
         <Button
-          onClick={() => authorizeMutation.mutate()}
-          loading={authorizeMutation.isPending}
+          onClick={() => authorizeMutate()}
+          loading={authorizePending}
+          disabled={shouldAutoAuthorize}
         >
           {t("authorizeTitle")}
         </Button>
         <Button
           onClick={() => navigate(`/logout${compiledParams}`)}
-          disabled={authorizeMutation.isPending}
+          disabled={authorizePending || shouldAutoAuthorize}
           variant="outline"
         >
           {t("cancelTitle")}

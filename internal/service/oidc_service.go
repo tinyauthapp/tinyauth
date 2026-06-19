@@ -44,6 +44,15 @@ var (
 	ErrInvalidClient = errors.New("invalid_client")
 )
 
+type OIDCPrompt string
+
+const (
+	OIDCPromptLogin OIDCPrompt = "login"
+	OIDCPromptNone  OIDCPrompt = "none"
+)
+
+var SupportedPrompts = []string{string(OIDCPromptLogin), string(OIDCPromptNone)}
+
 // This is not spec-compliant, the ID token SHOULD NOT contain user info claims but,
 // it has became a "standard" and apps are looking for the claims in the ID tokens
 // instead of calling the userinfo endpoint, so we include them in the ID token as well
@@ -936,4 +945,21 @@ func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRe
 		CodeChallengeMethod: get("code_challenge_method"),
 		Prompt:              get("prompt"),
 	}, nil
+}
+
+// Return the first prompt in the list of prompts, or an empty string if no prompt is specified
+func (service *OIDCService) GetPrompt(prompt string) OIDCPrompt {
+	if prompt == "" {
+		return ""
+	}
+
+	prompts := strings.Split(prompt, " ")
+
+	for _, p := range prompts {
+		if slices.Contains(SupportedPrompts, p) {
+			return OIDCPrompt(p)
+		}
+	}
+
+	return ""
 }
