@@ -219,7 +219,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		values.OIDCPrompt = service.OIDCPromptNone
 	}
 
-	if req.MaxAge != "" {
+	if req.MaxAge != "" && userContext != nil {
 		maxAge, err := strconv.Atoi(req.MaxAge)
 		if err != nil {
 			controller.authorizeError(c, authorizeErrorParams{
