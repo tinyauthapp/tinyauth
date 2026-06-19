@@ -25,6 +25,7 @@ const (
 type UserContext struct {
 	Authenticated bool
 	Provider      ProviderType
+	AuthTime      int64
 	Local         *LocalContext
 	OAuth         *OAuthContext
 	LDAP          *LDAPContext
@@ -110,6 +111,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
 	*c = UserContext{
 		Authenticated: !session.TotpPending,
+		AuthTime:      session.CreatedAt,
 	}
 
 	switch session.Provider {

@@ -119,7 +119,7 @@ export const AuthorizePage = () => {
     );
   }
 
-  if (!auth.authenticated) {
+  if (!auth.authenticated || screenParams.oidc_login) {
     return <Navigate to={`/login${compiledParams}`} replace />;
   }
 

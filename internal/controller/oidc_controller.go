@@ -73,6 +73,7 @@ type AuthorizeScreenParams struct {
 	OIDCTicket string           `url:"oidc_ticket"`
 	OIDCScope  string           `url:"oidc_scope"`
 	OIDCName   string           `url:"oidc_name"`
+	OIDCLogin  bool             `url:"oidc_login"`
 }
 
 type AuthorizeCompleteRequest struct {
@@ -169,12 +170,18 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
 
-	queries, err := query.Values(AuthorizeScreenParams{
+	values := AuthorizeScreenParams{
 		LoginFor:   FrontendLoginForOIDC,
 		OIDCTicket: ticket,
 		OIDCScope:  req.Scope,
 		OIDCName:   client.Name,
-	})
+	}
+
+	if req.Prompt == "login" {
+		values.OIDCLogin = true
+	}
+
+	queries, err := query.Values(values)
 
 	if err != nil {
 		controller.authorizeError(c, authorizeErrorParams{
@@ -425,7 +432,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 			return
 		}
 
-		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry)
+		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry, entry.AuthTime)
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to generate access token")

@@ -6,6 +6,7 @@ type ScreenParams = {
   oidc_ticket?: string;
   oidc_scope?: string;
   oidc_name?: string;
+  oidc_login?: boolean;
 };
 
 const zodScreenParams = z.object({
@@ -14,6 +15,7 @@ const zodScreenParams = z.object({
   oidc_ticket: z.string().optional(),
   oidc_scope: z.string().optional(),
   oidc_name: z.string().optional(),
+  oidc_login: z.stringbool().optional(),
 });
 
 export function useScreenParams(params: URLSearchParams): ScreenParams {

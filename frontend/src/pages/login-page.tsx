@@ -63,7 +63,10 @@ export const LoginPage = () => {
 
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = recompileScreenParams({
+    ...screenParams,
+    oidc_login: false,
+  });
   const loginForUrl = useLoginFor({
     login_for: screenParams.login_for,
     compiledParams,
@@ -196,7 +199,7 @@ export const LoginPage = () => {
     };
   }, [redirectTimer, redirectButtonTimer]);
 
-  if (auth.authenticated) {
+  if (auth.authenticated && !screenParams.oidc_login) {
     return <Navigate to={loginForUrl} replace />;
   }
 
