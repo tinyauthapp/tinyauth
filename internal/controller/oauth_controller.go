@@ -335,7 +335,7 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
-	if u.Host == au.Host {
+	if strings.EqualFold(u.Host, au.Host) {
 		return true
 	}
 
@@ -343,7 +343,7 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
-	if strings.HasSuffix(u.Host, "."+au.Host) {
+	if strings.HasSuffix(strings.ToLower(u.Host), "."+strings.ToLower(controller.runtime.CookieDomain)) {
 		return true
 	}
 
