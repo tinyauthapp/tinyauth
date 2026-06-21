@@ -216,6 +216,7 @@ type TailscaleConfig struct {
 	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
 	AuthKey   string `description:"Tailscale auth key." yaml:"authKey"`
 	Ephemeral bool   `description:"Use ephemeral Tailscale node." yaml:"ephemeral"`
+	Funnel    bool   `description:"Enable Tailscale Funnel." yaml:"funnel"`
 	Listen    bool   `description:"Listen on the Tailscale address instead of standard address." yaml:"listen"`
 }
 

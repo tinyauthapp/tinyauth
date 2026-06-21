@@ -148,6 +148,16 @@ func (ts *TailscaleService) CreateListener() (net.Listener, error) {
 	if ts.ln != nil {
 		return *ts.ln, nil
 	}
+
+	if ts.config.Tailscale.Funnel {
+		ln, err := ts.srv.ListenFunnel("tcp", ":443")
+		if err != nil {
+			return nil, err
+		}
+		ts.ln = &ln
+		return ln, nil
+	}
+
 	ln, err := ts.srv.ListenTLS("tcp", ":443")
 	if err != nil {
 		return nil, err
