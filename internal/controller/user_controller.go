@@ -295,6 +295,14 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
+		if errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Msg("TOTP verification attempt without user context")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 		controller.log.App.Error().Err(err).Msg("Failed to create user context from request for TOTP verification")
 		c.JSON(500, gin.H{
 			"status":  500,
@@ -405,6 +413,14 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
+		if errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Msg("Tailscale login attempt without user context")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
 		c.JSON(401, gin.H{
 			"status":  401,

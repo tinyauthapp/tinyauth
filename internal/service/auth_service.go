@@ -46,7 +46,7 @@ type OAuthPendingSession struct {
 	State          string
 	Verifier       string
 	Token          *oauth2.Token
-	Service        *OAuthServiceImpl
+	Service        IOAuthService
 	ExpiresAt      time.Time
 	CallbackParams OAuthCallbackParams
 }
@@ -527,7 +527,7 @@ func (auth *AuthService) NewOAuthSession(serviceName string, params OAuthCallbac
 	session := OAuthPendingSession{
 		State:          state,
 		Verifier:       verifier,
-		Service:        &service,
+		Service:        service,
 		ExpiresAt:      time.Now().Add(1 * time.Hour),
 		CallbackParams: params,
 	}
@@ -544,7 +544,18 @@ func (auth *AuthService) GetOAuthURL(sessionId string) (string, error) {
 		return "", err
 	}
 
-	return (*session.Service).GetAuthURL(session.State, session.Verifier), nil
+	svc := session.Service
+
+	cfg := svc.GetConfig()
+
+	// If the redirect URL is not set in the service config, we set it ourselves
+	if cfg.RedirectURL == "" {
+		cfg.RedirectURL = auth.runtime.AppURL + "/api/oauth/callback/" + svc.ID()
+	}
+
+	svc.UpdateConfig(cfg)
+
+	return svc.GetAuthURL(session.State, session.Verifier), nil
 }
 
 func (auth *AuthService) GetOAuthToken(sessionId string, code string) (*oauth2.Token, error) {
@@ -554,7 +565,7 @@ func (auth *AuthService) GetOAuthToken(sessionId string, code string) (*oauth2.T
 		return nil, fmt.Errorf("oauth session not found: %s", sessionId)
 	}
 
-	token, err := (*session.Service).GetToken(code, session.Verifier)
+	token, err := session.Service.GetToken(code, session.Verifier)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
@@ -583,7 +594,7 @@ func (auth *AuthService) GetOAuthUserinfo(sessionId string) (*model.Claims, erro
 		return nil, fmt.Errorf("oauth token not found for session: %s", sessionId)
 	}
 
-	userinfo, err := (*session.Service).GetUserinfo(session.Token)
+	userinfo, err := session.Service.GetUserinfo(session.Token)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get userinfo: %w", err)
@@ -592,14 +603,14 @@ func (auth *AuthService) GetOAuthUserinfo(sessionId string) (*model.Claims, erro
 	return userinfo, nil
 }
 
-func (auth *AuthService) GetOAuthService(sessionId string) (OAuthServiceImpl, error) {
+func (auth *AuthService) GetOAuthService(sessionId string) (IOAuthService, error) {
 	session, err := auth.GetOAuthPendingSession(sessionId)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return *session.Service, nil
+	return session.Service, nil
 }
 
 func (auth *AuthService) EndOAuthSession(sessionId string) {

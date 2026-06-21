@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"errors"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"go.uber.org/dig"
@@ -109,7 +111,9 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		}
 		c.JSON(200, UserContextResponse{
 			Status:  401,
 			Message: "Unauthorized",

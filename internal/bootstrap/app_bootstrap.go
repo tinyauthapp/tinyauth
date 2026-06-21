@@ -142,15 +142,6 @@ func (app *BootstrapApp) Setup() error {
 		provider.ClientSecret = secret
 		provider.ClientSecretFile = ""
 
-		if provider.RedirectURL == "" {
-			provider.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + id
-		}
-
-		app.runtime.OAuthProviders[id] = provider
-	}
-
-	// set presets for built-in providers
-	for id, provider := range app.runtime.OAuthProviders {
 		if provider.Name == "" {
 			if name, ok := model.OverrideProviders[id]; ok {
 				provider.Name = name
@@ -158,6 +149,7 @@ func (app *BootstrapApp) Setup() error {
 				provider.Name = utils.Capitalize(id)
 			}
 		}
+
 		app.runtime.OAuthProviders[id] = provider
 	}
 

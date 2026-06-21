@@ -12,19 +12,21 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type OAuthServiceImpl interface {
+type IOAuthService interface {
 	Name() string
 	ID() string
 	NewRandom() string
-	GetAuthURL(state string, verifier string) string
-	GetToken(code string, verifier string) (*oauth2.Token, error)
+	GetAuthURL(state, verifier string) string
+	GetToken(code, verifier string) (*oauth2.Token, error)
 	GetUserinfo(token *oauth2.Token) (*model.Claims, error)
+	GetConfig() model.OAuthServiceConfig
+	UpdateConfig(config model.OAuthServiceConfig)
 }
 
 type OAuthBrokerService struct {
 	log *logger.Logger
 
-	services map[string]OAuthServiceImpl
+	services map[string]IOAuthService
 	configs  map[string]model.OAuthServiceConfig
 }
 
@@ -44,7 +46,7 @@ type OAuthBrokerServiceInput struct {
 func NewOAuthBrokerService(i OAuthBrokerServiceInput) *OAuthBrokerService {
 	service := &OAuthBrokerService{
 		log:      i.Log,
-		services: make(map[string]OAuthServiceImpl),
+		services: make(map[string]IOAuthService),
 		configs:  i.Runtime.OAuthProviders,
 	}
 
@@ -70,7 +72,7 @@ func (broker *OAuthBrokerService) GetConfiguredServices() []string {
 	return services
 }
 
-func (broker *OAuthBrokerService) GetService(name string) (OAuthServiceImpl, bool) {
+func (broker *OAuthBrokerService) GetService(name string) (IOAuthService, bool) {
 	service, exists := broker.services[name]
 	return service, exists
 }

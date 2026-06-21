@@ -147,7 +147,7 @@ func (app *BootstrapApp) getListenerFunc() (func(ctx context.Context) error, err
 func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
 	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
 
-	app.log.App.Info().Msgf("Starting server on %s", address)
+	app.log.App.Info().Msgf("Starting server on http://%s", address)
 
 	listener, err := net.Listen("tcp", address)
 

@@ -335,7 +335,17 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
-	if u.Port() != au.Port() {
+	getEffectivePort := func(u *url.URL) string {
+		if u.Port() != "" {
+			return u.Port()
+		}
+		if u.Scheme == "https" {
+			return "443"
+		}
+		return "80"
+	}
+
+	if getEffectivePort(u) != getEffectivePort(au) {
 		controller.log.App.Warn().Msg("Redirect URI port does not match app URL port")
 		return false
 	}
