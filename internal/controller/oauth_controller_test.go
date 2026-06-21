@@ -9,7 +9,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func TestOAuthController(t *testing.T) {
+func TestOAuthControllerIsRedirectSafe(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
@@ -17,145 +17,171 @@ func TestOAuthController(t *testing.T) {
 
 	type testCase struct {
 		description       string
-		run               func(ctrl *OAuthController)
-		trustedDomains    []string
+		appURL            string
+		cookieDomain      string
 		subdomainsEnabled bool
+		redirectURI       string
+		expected          bool
 	}
 
 	tests := []testCase{
 		{
-			description:       "Test exact match of redirect URI",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
+			description:       "Exact host match returns true",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://tinyauth.example.com"
-				assert.True(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://tinyauth.example.com",
+			expected:          true,
 		},
 		{
-			description:       "Test subdomain match of redirect URI",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
+			description:       "Exact host match is case insensitive",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://sub.example.com"
-				assert.True(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://TinyAuth.Example.com",
+			expected:          true,
 		},
 		{
-			description:       "Test different trusted domain",
-			trustedDomains:    []string{"https://tinyauth.example.com", "https://tinyauth.foo.com"},
-			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://app.foo.com"
-				assert.True(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			description: "Test invalid redirect URI",
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https:/malicious"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			description: "Test empty redirect URI",
-			run: func(ctrl *OAuthController) {
-				redirectUri := ""
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			description:       "Test redirect URI with different scheme",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
-			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "http://tinyauth.example.com"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			description:       "Test redirect URI with different port",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
-			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://tinyauth.example.com:8080"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			// weird case, subdomains enabled and domain without subdomain can't happen
-			description:    "Test with trusted domain that's in PSL when split",
-			trustedDomains: []string{"https://example.com"}, // will become .com which we
-			// obviously don't want to allow
-			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://sub.example.com"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
-		},
-		{
-			description:       "Test subdomain redirect URI when subdomains are disabled",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
+			description:       "Exact host match with subdomains disabled returns true",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: false,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://sub.tinyauth.example.com"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://tinyauth.example.com",
+			expected:          true,
 		},
 		{
-			description:       "Test domain like the .co.uk",
-			trustedDomains:    []string{"https://example.co.uk"},
+			description:       "Subdomain of cookie domain returns true when subdomains enabled",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://sub.example.co.uk"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://sub.example.com",
+			expected:          true,
 		},
 		{
-			description:       "Test domain like the .co.uk with subdomains disabled",
-			trustedDomains:    []string{"https://example.co.uk"},
+			description:       "Subdomain of cookie domain is case insensitive",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "Example.COM",
+			subdomainsEnabled: true,
+			redirectURI:       "https://SUB.example.com",
+			expected:          true,
+		},
+		{
+			description:       "Subdomain not matching cookie domain returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https://sub.evil.com",
+			expected:          false,
+		},
+		{
+			description:       "Subdomain returns false when subdomains disabled",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: false,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://example.co.uk"
-				assert.True(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://sub.example.com",
+			expected:          false,
 		},
 		{
-			description:       "Test caps domain",
-			trustedDomains:    []string{"https://TINYAUTH.ExAmpLe.com"},
+			description:       "Cookie domain itself is not a subdomain match",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://sUb.ExAmPle.com"
-				assert.True(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "https://example.com",
+			expected:          false,
 		},
 		{
-			description:       "Test edge case with @",
-			trustedDomains:    []string{"https://tinyauth.example.com"},
+			description:       "Different scheme returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
-			run: func(ctrl *OAuthController) {
-				redirectUri := "https://malicious.example.com@evil.com"
-				assert.False(t, ctrl.isRedirectSafe(redirectUri))
-			},
+			redirectURI:       "http://tinyauth.example.com",
+			expected:          false,
+		},
+		{
+			description:       "Different port returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https://tinyauth.example.com:8080",
+			expected:          false,
+		},
+		{
+			description:       "Empty redirect URI returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "",
+			expected:          false,
+		},
+		{
+			description:       "Redirect URI without host returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https:/malicious",
+			expected:          false,
+		},
+		{
+			description:       "Redirect URI without scheme returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "tinyauth.example.com",
+			expected:          false,
+		},
+		{
+			description:       "Relative redirect URI returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "/some/path",
+			expected:          false,
+		},
+		{
+			description:       "Userinfo trick with malicious host returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https://malicious.example.com@evil.com",
+			expected:          false,
+		},
+		{
+			description:       "Unparseable redirect URI returns false",
+			appURL:            "https://tinyauth.example.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https://exa\x7fmple.com",
+			expected:          false,
+		},
+		{
+			description:       "Unparseable app URL returns false",
+			appURL:            "https://tinyauth.\x7fexample.com",
+			cookieDomain:      "example.com",
+			subdomainsEnabled: true,
+			redirectURI:       "https://tinyauth.example.com",
+			expected:          false,
 		},
 	}
 
-	// TODO: add auth service
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			router := gin.Default()
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
-			// overwrite the trusted domains and subdomain setting for each test case
-			runtime.TrustedDomains = tc.trustedDomains
+
+			// Overwrite the app URL, cookie domain and subdomain setting for each test case
+			runtime.AppURL = tc.appURL
+			runtime.CookieDomain = tc.cookieDomain
 			cfg.Auth.SubdomainsEnabled = tc.subdomainsEnabled
+
 			ctrl := NewOAuthController(OAuthControllerInput{
 				Log:           log,
 				Config:        &cfg,
 				RuntimeConfig: &runtime,
 				RouterGroup:   group,
 			})
-			tc.run(ctrl)
+
+			assert.Equal(t, tc.expected, ctrl.isRedirectSafe(tc.redirectURI))
 		})
 	}
 }

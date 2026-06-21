@@ -166,7 +166,7 @@ func (app *BootstrapApp) Setup() error {
 		app.log.App.Warn().Msg("Subdomains are disabled, cookies will be set for the current domain only")
 	}
 
-	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL)
+	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL, app.config.Auth.SubdomainsEnabled)
 
 	if err != nil {
 		return fmt.Errorf("failed to get cookie domain: %w", err)
@@ -288,7 +288,7 @@ func (app *BootstrapApp) Setup() error {
 			app.log.App.Info().Msg("Listening on tailscale, replacing app url with tailscale hostname")
 			app.runtime.AppURL = tailscaleUrl
 			// also update cookie domain
-			cookieDomain, err := utils.GetCookieDomain(tailscaleUrl)
+			cookieDomain, err := utils.GetCookieDomain(tailscaleUrl, app.config.Auth.SubdomainsEnabled)
 
 			if err != nil {
 				return fmt.Errorf("failed to get cookie domain: %w", err)

@@ -48,9 +48,9 @@ func TestContextController(t *testing.T) {
 						WarningsEnabled:       cfg.UI.WarningsEnabled,
 					},
 					App: ACRApp{
-						AppURL:         runtime.AppURL,
-						CookieDomain:   runtime.CookieDomain,
-						TrustedDomains: runtime.TrustedDomains,
+						AppURL:            runtime.AppURL,
+						CookieDomain:      runtime.CookieDomain,
+						SubdomainsEnabled: cfg.Auth.SubdomainsEnabled,
 					},
 				}
 				bytes, err := json.Marshal(expectedAppContextResponse)

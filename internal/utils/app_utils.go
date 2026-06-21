@@ -10,7 +10,7 @@ import (
 )
 
 // Get cookie domain parses a hostname and returns the upper domain (e.g. sub1.sub2.domain.com -> sub2.domain.com)
-func GetCookieDomain(appUrl string) (string, error) {
+func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 	u, err := url.Parse(appUrl)
 
 	if err != nil {
@@ -29,11 +29,15 @@ func GetCookieDomain(appUrl string) (string, error) {
 		return "", fmt.Errorf("invalid app url, must be in format subdomain.domain.tld or domain.tld")
 	}
 
-	if len(parts) == 2 {
+	if !subdomainsEnabled || len(parts) == 2 {
+		_, err = publicsuffix.DomainFromListWithOptions(publicsuffix.DefaultList, hostname, nil)
+
+		if err != nil {
+			return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
+		}
+
 		return strings.ToLower(u.Host), nil
 	}
-
-	// parts > 3
 
 	domain := strings.Join(parts[1:], ".")
 
@@ -44,10 +48,10 @@ func GetCookieDomain(appUrl string) (string, error) {
 	}
 
 	// now that we validated the domain, return with the port
-	parts = strings.Split(strings.ToLower(u.Host), ":")
-	domainWithPort := strings.Join(parts[1:], ":")
+	parts = strings.Split(strings.ToLower(u.Host), ".")
+	host := strings.Join(parts[1:], ".")
 
-	return domainWithPort, nil
+	return host, nil
 }
 
 func ParseFileToLine(content string) string {

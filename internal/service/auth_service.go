@@ -380,33 +380,11 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		return nil, fmt.Errorf("failed to create session entry: %w", err)
 	}
 
-	if data.Provider == "tailscale" {
-		auth.log.App.Trace().Str("url", fmt.Sprintf("https://%s", auth.tailscale.GetHostname())).Msg("Extracting root domain from Tailscale hostname")
-
-		tsCookieDomain, err := utils.GetCookieDomain(fmt.Sprintf("https://%s", auth.tailscale.GetHostname()))
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cookie domain for tailscale user: %w", err)
-		}
-
-		return &http.Cookie{
-			Name:     auth.runtime.SessionCookieName,
-			Value:    session.UUID,
-			Path:     "/",
-			Domain:   fmt.Sprintf(".%s", tsCookieDomain),
-			Expires:  expiresAt,
-			MaxAge:   int(time.Until(expiresAt).Seconds()),
-			Secure:   auth.config.Auth.SecureCookie,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		}, nil
-	}
-
 	return &http.Cookie{
 		Name:     auth.runtime.SessionCookieName,
 		Value:    session.UUID,
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   auth.getCookieDomain(),
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		Secure:   auth.config.Auth.SecureCookie,
@@ -459,7 +437,7 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 		Name:     auth.runtime.SessionCookieName,
 		Value:    session.UUID,
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   auth.getCookieDomain(),
 		Expires:  time.Now().Add(time.Duration(newExpiry-currentTime) * time.Second),
 		MaxAge:   int(newExpiry - currentTime),
 		Secure:   auth.config.Auth.SecureCookie,
@@ -480,7 +458,7 @@ func (auth *AuthService) DeleteSession(ctx context.Context, uuid string) (*http.
 		Name:     auth.runtime.SessionCookieName,
 		Value:    "",
 		Path:     "/",
-		Domain:   fmt.Sprintf(".%s", auth.runtime.CookieDomain),
+		Domain:   auth.getCookieDomain(),
 		Expires:  time.Now(),
 		MaxAge:   -1,
 		Secure:   auth.config.Auth.SecureCookie,
@@ -725,4 +703,11 @@ func (auth *AuthService) calculateLockdownLimit() int {
 	}
 
 	return limit
+}
+
+func (auth *AuthService) getCookieDomain() string {
+	if auth.config.Auth.SubdomainsEnabled {
+		return "." + auth.runtime.CookieDomain
+	}
+	return auth.runtime.CookieDomain
 }
