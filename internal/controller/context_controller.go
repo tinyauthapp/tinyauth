@@ -58,9 +58,8 @@ type ACRUI struct {
 }
 
 type ACRApp struct {
-	AppURL         string   `json:"appUrl"`
-	CookieDomain   string   `json:"cookieDomain"`
-	TrustedDomains []string `json:"trustedDomains"`
+	AppURL       string `json:"appUrl"`
+	CookieDomain string `json:"cookieDomain"`
 }
 
 type AppContextResponse struct {
@@ -160,9 +159,8 @@ func (controller *ContextController) appContextHandler(c *gin.Context) {
 			WarningsEnabled:       controller.config.UI.WarningsEnabled,
 		},
 		App: ACRApp{
-			AppURL:         controller.runtime.AppURL,
-			CookieDomain:   controller.runtime.CookieDomain,
-			TrustedDomains: controller.runtime.TrustedDomains,
+			AppURL:       controller.runtime.AppURL,
+			CookieDomain: controller.runtime.CookieDomain,
 		},
 	})
 }

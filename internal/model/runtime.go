@@ -12,7 +12,6 @@ type RuntimeConfig struct {
 	OAuthProviders         map[string]OAuthServiceConfig
 	OAuthWhitelist         []string
 	ConfiguredProviders    []Provider
-	TrustedDomains         []string
 }
 
 type Provider struct {

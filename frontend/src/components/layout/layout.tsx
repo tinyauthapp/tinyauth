@@ -40,11 +40,7 @@ export const Layout = () => {
     setIgnoreDomainWarning(true);
   }, [setIgnoreDomainWarning]);
 
-  if (
-    !ignoreDomainWarning &&
-    ui.warningsEnabled &&
-    !app.trustedDomains.includes(currentUrl)
-  ) {
+  if (!ignoreDomainWarning && ui.warningsEnabled && currentUrl !== app.appUrl) {
     return (
       <BaseLayout>
         <DomainWarning

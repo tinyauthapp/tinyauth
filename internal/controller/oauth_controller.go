@@ -12,7 +12,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
-	"github.com/weppos/publicsuffix-go/publicsuffix"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -314,51 +313,38 @@ func (controller *OAuthController) getCookieDomain() string {
 func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 	u, err := url.Parse(redirectURI)
 
-	if err != nil || u.Host == "" || u.Scheme == "" {
+	if err != nil {
+		controller.log.App.Error().Err(err).Str("redirectUri", redirectURI).Msg("Failed to parse redirect URI")
 		return false
 	}
 
-	for _, allowed := range controller.runtime.TrustedDomains {
-		tu, err := url.Parse(allowed)
-		if err != nil {
-			controller.log.App.Error().Err(err).Str("allowed", allowed).Msg("Failed to parse trusted domain")
-			continue
-		}
+	if u.Scheme == "" || u.Host == "" {
+		controller.log.App.Warn().Str("redirectUri", redirectURI).Msg("Redirect URI has invalid scheme or host")
+		return false
+	}
 
-		if tu.Scheme != u.Scheme {
-			continue
-		}
+	au, err := url.Parse(controller.runtime.AppURL)
 
-		// exact match
-		if strings.EqualFold(u.Host, tu.Host) {
-			return true
-		}
+	if err != nil {
+		controller.log.App.Error().Err(err).Str("appUrl", controller.runtime.AppURL).Msg("Failed to parse app URL")
+		return false
+	}
 
-		// if subdomains are disabled, end here
-		if !controller.config.Auth.SubdomainsEnabled {
-			continue
-		}
+	if u.Scheme != au.Scheme {
+		controller.log.App.Warn().Str("redirectUri", redirectURI).Str("appUrl", controller.runtime.AppURL).Msg("Redirect URI scheme does not match app URL scheme")
+		return false
+	}
 
-		// get the root domain (e.g. tinyauth.example.com -> example.com or
-		// tinyauth.sub.example.com -> sub.example.com)
-		_, root, ok := strings.Cut(tu.Host, ".")
-		if !ok {
-			continue
-		}
+	if u.Host == au.Host {
+		return true
+	}
 
-		root = strings.ToLower(root)
+	if !controller.config.Auth.SubdomainsEnabled {
+		return false
+	}
 
-		// check if the root domain is in the psl
-		_, err = publicsuffix.DomainFromListWithOptions(publicsuffix.DefaultList, root, nil)
-
-		if err != nil {
-			continue
-		}
-
-		// subdomain match
-		if strings.HasSuffix(strings.ToLower(u.Host), "."+root) {
-			return true
-		}
+	if strings.HasSuffix(u.Host, "."+au.Host) {
+		return true
 	}
 
 	return false

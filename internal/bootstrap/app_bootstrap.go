@@ -99,7 +99,6 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
-	app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, app.runtime.AppURL)
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -286,9 +285,13 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
-	// throw in tailscale if it's configured just before setting up the controllers
+	// replace the default app url with the tailscale hostname if tailscale is enabled
 	if app.services.tailscaleService != nil {
-		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
+		tailscaleUrl := "https://" + app.services.tailscaleService.GetHostname()
+		if tailscaleUrl != app.runtime.AppURL {
+			app.log.App.Info().Msg("Tailscale is enabled, replacing app url with tailscale hostname")
+			app.runtime.AppURL = tailscaleUrl
+		}
 	}
 
 	// setup router
