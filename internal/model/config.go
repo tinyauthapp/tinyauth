@@ -15,9 +15,8 @@ func NewDefaultConfiguration() *Config {
 			Path:    "./resources",
 		},
 		Server: ServerConfig{
-			Port:                       3000,
-			Address:                    "0.0.0.0",
-			ConcurrentListenersEnabled: false,
+			Port:    3000,
+			Address: "0.0.0.0",
 		},
 		Auth: AuthConfig{
 			SubdomainsEnabled:  true,
@@ -104,10 +103,9 @@ type ResourcesConfig struct {
 }
 
 type ServerConfig struct {
-	Port                       int    `description:"The port on which the server listens." yaml:"port"`
-	Address                    string `description:"The address on which the server listens." yaml:"address"`
-	SocketPath                 string `description:"The path to the Unix socket." yaml:"socketPath"`
-	ConcurrentListenersEnabled bool   `description:"Enable listening on both TCP and Unix socket at the same time." yaml:"concurrentListenersEnabled"`
+	Port       int    `description:"The port on which the server listens." yaml:"port"`
+	Address    string `description:"The address on which the server listens." yaml:"address"`
+	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath"`
 }
 
 type AuthConfig struct {
@@ -218,6 +216,7 @@ type TailscaleConfig struct {
 	Hostname  string `description:"Tailscale hostname." yaml:"hostname"`
 	AuthKey   string `description:"Tailscale auth key." yaml:"authKey"`
 	Ephemeral bool   `description:"Use ephemeral Tailscale node." yaml:"ephemeral"`
+	Listen    bool   `description:"Listen on the Tailscale address instead of standard address." yaml:"listen"`
 }
 
 // OAuth/OIDC config

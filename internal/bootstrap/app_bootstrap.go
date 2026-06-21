@@ -46,18 +46,17 @@ type Services struct {
 }
 
 type BootstrapApp struct {
-	config    model.Config
-	runtime   model.RuntimeConfig
-	services  Services
-	log       *logger.Logger
-	ctx       context.Context
-	cancel    context.CancelFunc
-	queries   repository.Store
-	router    *gin.Engine
-	db        *sql.DB
-	ding      *ding.Ding
-	listeners []Listener
-	dig       *dig.Container
+	config   model.Config
+	runtime  model.RuntimeConfig
+	services Services
+	log      *logger.Logger
+	ctx      context.Context
+	cancel   context.CancelFunc
+	queries  repository.Store
+	router   *gin.Engine
+	db       *sql.DB
+	ding     *ding.Ding
+	dig      *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -285,11 +284,11 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
-	// replace the default app url with the tailscale hostname if tailscale is enabled
-	if app.services.tailscaleService != nil {
+	// force tailscale app url if listening on a tailscale address
+	if app.services.tailscaleService != nil && app.config.Tailscale.Listen {
 		tailscaleUrl := "https://" + app.services.tailscaleService.GetHostname()
 		if tailscaleUrl != app.runtime.AppURL {
-			app.log.App.Info().Msg("Tailscale is enabled, replacing app url with tailscale hostname")
+			app.log.App.Info().Msg("Listening on tailscale, replacing app url with tailscale hostname")
 			app.runtime.AppURL = tailscaleUrl
 		}
 	}
@@ -311,19 +310,15 @@ func (app *BootstrapApp) Setup() error {
 		app.ding.Go(app.heartbeatRoutine, ding.RingMinor)
 	}
 
-	// setup listeners
-	app.listeners = app.calculateListenerPolicy()
+	// get listener
+	listenerFunc := app.getListenerFunc()
 
-	if app.config.Server.ConcurrentListenersEnabled {
-		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
-	}
+	// run listener
+	lec := make(chan error, 1)
 
-	// run listeners
-	lec, err := app.runListeners()
-
-	if err != nil {
-		return fmt.Errorf("failed to run listeners: %w", err)
-	}
+	app.ding.Go(func(ctx context.Context) {
+		lec <- listenerFunc(ctx)
+	}, ding.RingNormal)
 
 	// monitor cancellation and server errors
 	for {
