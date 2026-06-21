@@ -36,7 +36,7 @@ func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 			return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
 		}
 
-		return strings.ToLower(u.Host), nil
+		return hostname, nil
 	}
 
 	domain := strings.Join(parts[1:], ".")
@@ -47,11 +47,7 @@ func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 		return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
 	}
 
-	// now that we validated the domain, return with the port
-	parts = strings.Split(strings.ToLower(u.Host), ".")
-	host := strings.Join(parts[1:], ".")
-
-	return host, nil
+	return domain, nil
 }
 
 func ParseFileToLine(content string) string {

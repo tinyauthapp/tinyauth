@@ -335,6 +335,11 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
+	if u.Port() != au.Port() {
+		controller.log.App.Warn().Str("redirectUri", redirectURI).Str("appUrl", controller.runtime.AppURL).Msg("Redirect URI port does not match app URL port")
+		return false
+	}
+
 	if strings.EqualFold(u.Host, au.Host) {
 		return true
 	}
@@ -343,7 +348,7 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
-	if strings.HasSuffix(strings.ToLower(u.Host), "."+strings.ToLower(controller.runtime.CookieDomain)) {
+	if strings.HasSuffix(strings.ToLower(u.Hostname()), "."+strings.ToLower(controller.runtime.CookieDomain)) {
 		return true
 	}
 

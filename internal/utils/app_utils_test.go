@@ -46,7 +46,7 @@ func TestGetRootDomain(t *testing.T) {
 
 	// URL with port
 	domain = "http://sub.tinyauth.app:8080"
-	expected = "tinyauth.app:8080"
+	expected = "tinyauth.app"
 	result, err = utils.GetCookieDomain(domain, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
