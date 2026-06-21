@@ -9,12 +9,26 @@ type IuseRedirectUri = {
 export const useRedirectUri = (
   redirect_uri: string | undefined,
   cookieDomain: string,
+  appUrl: string,
   subdomainsEnabled: boolean,
 ): IuseRedirectUri => {
   let isValid = false;
   let isTrusted = false;
   let isAllowedProto = false;
   let isHttpsDowngrade = false;
+
+  let appUrlObj: URL;
+
+  try {
+    appUrlObj = new URL(appUrl);
+  } catch {
+    return {
+      valid: isValid,
+      trusted: isTrusted,
+      allowedProto: isAllowedProto,
+      httpsDowngrade: isHttpsDowngrade,
+    };
+  }
 
   if (!redirect_uri) {
     return {
@@ -40,11 +54,7 @@ export const useRedirectUri = (
 
   isValid = true;
 
-  if (url.hostname == cookieDomain) {
-    isTrusted = true;
-  }
-
-  if (subdomainsEnabled && url.hostname.endsWith("." + cookieDomain)) {
+  if (isTrustedDomain(url, appUrlObj, cookieDomain, subdomainsEnabled)) {
     isTrusted = true;
   }
 
@@ -63,4 +73,46 @@ export const useRedirectUri = (
     allowedProto: isAllowedProto,
     httpsDowngrade: isHttpsDowngrade,
   };
+};
+
+// ported from internal/controller/oauth_controller.go
+const getEffectivePort = (url: URL): string => {
+  if (url.port) {
+    return url.port;
+  }
+
+  if (url.protocol == "https:") {
+    return "443";
+  }
+
+  return "80";
+};
+
+const isTrustedDomain = (
+  url: URL,
+  appUrl: URL,
+  cookieDomain: string,
+  subdomainsEnabled: boolean,
+): boolean => {
+  if (url.protocol != appUrl.protocol) {
+    return false;
+  }
+
+  if (getEffectivePort(url) != getEffectivePort(appUrl)) {
+    return false;
+  }
+
+  if (url.hostname == appUrl.hostname) {
+    return true;
+  }
+
+  if (!subdomainsEnabled) {
+    return false;
+  }
+
+  if (url.hostname.endsWith("." + cookieDomain.toLowerCase())) {
+    return true;
+  }
+
+  return false;
 };

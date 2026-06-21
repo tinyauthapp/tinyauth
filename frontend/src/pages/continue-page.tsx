@@ -37,6 +37,7 @@ export const ContinuePage = () => {
   const { url, valid, trusted, allowedProto, httpsDowngrade } = useRedirectUri(
     redirectUri,
     app.cookieDomain,
+    app.appUrl,
     app.subdomainsEnabled,
   );
 
