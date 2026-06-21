@@ -544,18 +544,7 @@ func (auth *AuthService) GetOAuthURL(sessionId string) (string, error) {
 		return "", err
 	}
 
-	svc := session.Service
-
-	cfg := svc.GetConfig()
-
-	// If the redirect URL is not set in the service config, we set it ourselves
-	if cfg.RedirectURL == "" {
-		cfg.RedirectURL = auth.runtime.AppURL + "/api/oauth/callback/" + svc.ID()
-	}
-
-	svc.UpdateConfig(cfg)
-
-	return svc.GetAuthURL(session.State, session.Verifier), nil
+	return session.Service.GetAuthURL(session.State, session.Verifier), nil
 }
 
 func (auth *AuthService) GetOAuthToken(sessionId string, code string) (*oauth2.Token, error) {

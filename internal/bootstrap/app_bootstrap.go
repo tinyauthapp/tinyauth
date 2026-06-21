@@ -273,12 +273,16 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
-	// force tailscale app url if listening on a tailscale address
+	// if tailscale is enabled and listening, replace the app url with the tailscale hostname
 	if app.services.tailscaleService != nil && app.config.Tailscale.Listen {
 		tailscaleUrl := "https://" + app.services.tailscaleService.GetHostname()
+
+		// if the tailscale url is different from the app url, replace it
 		if tailscaleUrl != app.runtime.AppURL {
 			app.log.App.Info().Msg("Listening on tailscale, replacing app url with tailscale hostname")
+
 			app.runtime.AppURL = tailscaleUrl
+
 			// also update cookie domain
 			cookieDomain, err := utils.GetCookieDomain(tailscaleUrl, app.config.Auth.SubdomainsEnabled)
 
@@ -287,6 +291,24 @@ func (app *BootstrapApp) Setup() error {
 			}
 
 			app.runtime.CookieDomain = cookieDomain
+		}
+	}
+
+	// force an update of the redirect urls for all oauth providers, if they are empty
+	services := app.services.oauthBrokerService.GetConfiguredServices()
+
+	for _, service := range services {
+		oauthService, ok := app.services.oauthBrokerService.GetService(service)
+
+		if !ok {
+			return fmt.Errorf("failed to get oauth service for provider %s", service)
+		}
+
+		providerConfig := oauthService.GetConfig()
+
+		if providerConfig.RedirectURL == "" {
+			providerConfig.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + service
+			oauthService.UpdateConfig(providerConfig)
 		}
 	}
 
