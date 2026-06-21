@@ -9,6 +9,7 @@ type IuseRedirectUri = {
 export const useRedirectUri = (
   redirect_uri: string | undefined,
   cookieDomain: string,
+  subdomainsEnabled: boolean,
 ): IuseRedirectUri => {
   let isValid = false;
   let isTrusted = false;
@@ -39,10 +40,11 @@ export const useRedirectUri = (
 
   isValid = true;
 
-  if (
-    url.hostname == cookieDomain ||
-    url.hostname.endsWith(`.${cookieDomain}`)
-  ) {
+  if (url.hostname == cookieDomain) {
+    isTrusted = true;
+  }
+
+  if (subdomainsEnabled && url.hostname.endsWith("." + cookieDomain)) {
     isTrusted = true;
   }
 

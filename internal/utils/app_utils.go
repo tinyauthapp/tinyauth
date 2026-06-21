@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -10,58 +10,44 @@ import (
 )
 
 // Get cookie domain parses a hostname and returns the upper domain (e.g. sub1.sub2.domain.com -> sub2.domain.com)
-func GetCookieDomain(u string) (string, error) {
-	parsed, err := url.Parse(u)
+func GetCookieDomain(appUrl string) (string, error) {
+	u, err := url.Parse(appUrl)
+
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid app url: %w", err)
 	}
 
-	host := parsed.Hostname()
+	hostname := strings.ToLower(u.Hostname())
 
-	if netIP := net.ParseIP(host); netIP != nil {
-		return "", errors.New("ip addresses not allowed")
+	if netIP := net.ParseIP(hostname); netIP != nil {
+		return "", fmt.Errorf("ip addresses not allowed")
 	}
 
-	parts := strings.Split(host, ".")
+	parts := strings.Split(hostname, ".")
+
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid app url, must be in format subdomain.domain.tld or domain.tld")
+	}
 
 	if len(parts) == 2 {
-		return host, nil
+		return strings.ToLower(u.Host), nil
 	}
 
-	if len(parts) < 3 {
-		return "", errors.New("invalid app url, must be at least second level domain")
-	}
+	// parts > 3
 
 	domain := strings.Join(parts[1:], ".")
 
 	_, err = publicsuffix.DomainFromListWithOptions(publicsuffix.DefaultList, domain, nil)
 
 	if err != nil {
-		return "", errors.New("domain in public suffix list, cannot set cookies")
+		return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
 	}
 
-	return domain, nil
-}
+	// now that we validated the domain, return with the port
+	parts = strings.Split(strings.ToLower(u.Host), ":")
+	domainWithPort := strings.Join(parts[1:], ":")
 
-func GetStandaloneCookieDomain(u string) (string, error) {
-	parsed, err := url.Parse(u)
-	if err != nil {
-		return "", err
-	}
-
-	host := parsed.Hostname()
-
-	if netIP := net.ParseIP(host); netIP != nil {
-		return "", errors.New("ip addresses not allowed")
-	}
-
-	parts := strings.Split(host, ".")
-
-	if len(parts) < 2 {
-		return "", errors.New("invalid app url")
-	}
-
-	return host, nil
+	return domainWithPort, nil
 }
 
 func ParseFileToLine(content string) string {

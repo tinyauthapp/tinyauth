@@ -97,7 +97,7 @@ func (app *BootstrapApp) Setup() error {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.AppURL = strings.ToLower(appUrl.Scheme + "://" + appUrl.Host)
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -162,14 +162,11 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// cookie domain
-	cookieDomainResolver := utils.GetCookieDomain
-
 	if !app.config.Auth.SubdomainsEnabled {
-		app.log.App.Warn().Msg("Subdomains are disabled, using standalone cookie domain resolver which will not work with subdomains")
-		cookieDomainResolver = utils.GetStandaloneCookieDomain
+		app.log.App.Warn().Msg("Subdomains are disabled, cookies will be set for the current domain only")
 	}
 
-	cookieDomain, err := cookieDomainResolver(app.runtime.AppURL)
+	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL)
 
 	if err != nil {
 		return fmt.Errorf("failed to get cookie domain: %w", err)
@@ -290,6 +287,14 @@ func (app *BootstrapApp) Setup() error {
 		if tailscaleUrl != app.runtime.AppURL {
 			app.log.App.Info().Msg("Listening on tailscale, replacing app url with tailscale hostname")
 			app.runtime.AppURL = tailscaleUrl
+			// also update cookie domain
+			cookieDomain, err := utils.GetCookieDomain(tailscaleUrl)
+
+			if err != nil {
+				return fmt.Errorf("failed to get cookie domain: %w", err)
+			}
+
+			app.runtime.CookieDomain = cookieDomain
 		}
 	}
 

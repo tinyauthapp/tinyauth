@@ -24,6 +24,7 @@ const uiSchema = z.object({
 const appSchema = z.object({
   appUrl: z.string(),
   cookieDomain: z.string(),
+  subdomainsEnabled: z.boolean(),
 });
 
 export const appContextSchema = z.object({
