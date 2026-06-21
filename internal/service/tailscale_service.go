@@ -94,6 +94,10 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 
 	i.Ding.Go(service.watchAndClose, ding.RingMajor)
 
+	if i.Config.Tailscale.Funnel && !i.Config.Tailscale.Listen {
+		service.log.App.Warn().Msg("Tailscale Funnel is enabled but listen is disabled. Funnel will not work without listen enabled.")
+	}
+
 	return service, nil
 }
 

@@ -316,7 +316,11 @@ func (app *BootstrapApp) Setup() error {
 	}
 
 	// get listener
-	listenerFunc := app.getListenerFunc()
+	listenerFunc, err := app.getListenerFunc()
+
+	if err != nil {
+		return fmt.Errorf("failed to get listener function: %w", err)
+	}
 
 	// run listener
 	lec := make(chan error, 1)

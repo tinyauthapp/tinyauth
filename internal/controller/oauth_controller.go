@@ -304,8 +304,8 @@ func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackPar
 }
 
 func (controller *OAuthController) getCookieDomain() string {
-	if controller.config.Auth.SubdomainsEnabled {
-		return "." + controller.runtime.CookieDomain
+	if !controller.config.Auth.SubdomainsEnabled {
+		return ""
 	}
 	return controller.runtime.CookieDomain
 }
@@ -314,29 +314,29 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 	u, err := url.Parse(redirectURI)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("redirectUri", redirectURI).Msg("Failed to parse redirect URI")
+		controller.log.App.Error().Err(err).Msg("Failed to parse redirect URI")
 		return false
 	}
 
 	if u.Scheme == "" || u.Host == "" {
-		controller.log.App.Warn().Str("redirectUri", redirectURI).Msg("Redirect URI has invalid scheme or host")
+		controller.log.App.Warn().Msg("Redirect URI has invalid scheme or host")
 		return false
 	}
 
 	au, err := url.Parse(controller.runtime.AppURL)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("appUrl", controller.runtime.AppURL).Msg("Failed to parse app URL")
+		controller.log.App.Error().Err(err).Msg("Failed to parse app URL")
 		return false
 	}
 
 	if u.Scheme != au.Scheme {
-		controller.log.App.Warn().Str("redirectUri", redirectURI).Str("appUrl", controller.runtime.AppURL).Msg("Redirect URI scheme does not match app URL scheme")
+		controller.log.App.Warn().Msg("Redirect URI scheme does not match app URL scheme")
 		return false
 	}
 
 	if u.Port() != au.Port() {
-		controller.log.App.Warn().Str("redirectUri", redirectURI).Str("appUrl", controller.runtime.AppURL).Msg("Redirect URI port does not match app URL port")
+		controller.log.App.Warn().Msg("Redirect URI port does not match app URL port")
 		return false
 	}
 

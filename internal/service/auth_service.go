@@ -706,8 +706,8 @@ func (auth *AuthService) calculateLockdownLimit() int {
 }
 
 func (auth *AuthService) getCookieDomain() string {
-	if auth.config.Auth.SubdomainsEnabled {
-		return "." + auth.runtime.CookieDomain
+	if !auth.config.Auth.SubdomainsEnabled {
+		return ""
 	}
 	return auth.runtime.CookieDomain
 }
