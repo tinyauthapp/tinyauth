@@ -9,7 +9,9 @@ import (
 	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
-// Get cookie domain parses a hostname and returns the upper domain (e.g. sub1.sub2.domain.com -> sub2.domain.com)
+// GetCookieDomain parses the app url and returns the domain value to use for cookies.
+// When auth for subdomains is enabled, it strips the leftmost label
+// (e.g. sub1.sub2.domain.com -> sub2.domain.com), otherwise it returns the full hostname.
 func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 	u, err := url.Parse(appUrl)
 

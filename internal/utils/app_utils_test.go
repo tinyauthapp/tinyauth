@@ -54,7 +54,7 @@ func TestGetRootDomain(t *testing.T) {
 	// Domain managed by ICANN
 	domain = "http://example.co.uk"
 	_, err = utils.GetCookieDomain(domain, true)
-	assert.Error(t, err, "domain in public suffix list, cannot set cookies")
+	assert.ErrorContains(t, err, "domain in public suffix list, cannot set cookies")
 
 	// Domain without subdomain
 	domain = "http://tinyauth.app"

@@ -88,7 +88,7 @@ const getEffectivePort = (url: URL): string => {
   return "80";
 };
 
-const isTrustedDomain = (
+export const isTrustedDomain = (
   url: URL,
   appUrl: URL,
   cookieDomain: string,
