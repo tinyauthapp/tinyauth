@@ -37,6 +37,13 @@ import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
 import { useEffect } from "react";
+import { GoogleIcon } from "../icons/google";
+import { GithubIcon } from "../icons/github";
+import { TailscaleIcon } from "../icons/tailscale";
+import { MicrosoftIcon } from "../icons/microsoft";
+import { PocketIDIcon } from "../icons/pocket-id";
+import { LocalAuthIcon } from "../icons/local-auth";
+import { OAuthIcon } from "../icons/oauth";
 
 function Avatar({ initial }: { initial: string }) {
   return (
@@ -49,8 +56,18 @@ function Avatar({ initial }: { initial: string }) {
   );
 }
 
+const iconStyles = "size-4";
+
+const iconMap: Record<string, React.ReactNode> = {
+  google: <GoogleIcon className={iconStyles} />,
+  github: <GithubIcon className={iconStyles} />,
+  tailscale: <TailscaleIcon className={iconStyles} />,
+  microsoft: <MicrosoftIcon className={iconStyles} />,
+  pocketid: <PocketIDIcon className={iconStyles} />,
+};
+
 export const QuickActions = () => {
-  const { auth } = useUserContext();
+  const { auth, oauth, tailscale } = useUserContext();
   const { theme, setTheme } = useTheme();
   const { t } = useTranslation();
   const { search } = useLocation();
@@ -63,6 +80,41 @@ export const QuickActions = () => {
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
   const compiledParams = recompileScreenParams(screenParams);
+
+  const providerDetails = (():
+    | { name: string; icon: React.ReactNode }
+    | undefined => {
+    if (!auth.authenticated) {
+      return undefined;
+    }
+
+    if (auth.providerId === "local" || auth.providerId === "ldap") {
+      return {
+        name: t(
+          auth.providerId === "ldap"
+            ? "quickActionsProviderLDAP"
+            : "quickActionsProviderLocal",
+        ),
+        icon: <LocalAuthIcon className={iconStyles} />,
+      };
+    }
+
+    if (oauth.active) {
+      return {
+        name: t("quickActionsProviderOAuth", { provider: oauth.displayName }),
+        icon: iconMap[auth.providerId] || <OAuthIcon className={iconStyles} />,
+      };
+    }
+
+    if (auth.providerId === "tailscale") {
+      return {
+        name: `Tailscale (${tailscale.nodeName})`,
+        icon: <TailscaleIcon className={iconStyles} />,
+      };
+    }
+
+    return undefined;
+  })();
 
   const logoutMutation = useMutation({
     mutationFn: () => axios.post("/api/user/logout"),
@@ -134,11 +186,19 @@ export const QuickActions = () => {
               <div className="bg-foreground text-background flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-medium">
                 {initial}
               </div>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium">
-                  {auth.name}
-                </span>
-                <span className="text-muted-foreground truncate text-xs font-normal">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium leading-none">
+                    {auth.name}
+                  </span>
+                  {providerDetails && (
+                    <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-lg bg-secondary px-2 py-1.25 text-[10px] font-medium leading-none [&_svg]:size-3">
+                      {providerDetails.icon}
+                      {providerDetails.name}
+                    </span>
+                  )}
+                </div>
+                <span className="text-muted-foreground truncate text-xs leading-none">
                   {auth.email}
                 </span>
               </div>
