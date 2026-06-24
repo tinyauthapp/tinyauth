@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -131,6 +132,10 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
 	for id, provider := range app.runtime.OAuthProviders {
+		if slices.Contains(model.ReservedProviderNames, id) {
+			return fmt.Errorf("provider id %s is reserved and cannot be used", id)
+		}
+
 		providerWhitelist, err := utils.GetStringList(provider.Whitelist, provider.WhitelistFile)
 		if err != nil {
 			return fmt.Errorf("failed to load oauth whitelist for provider %s: %w", id, err)
