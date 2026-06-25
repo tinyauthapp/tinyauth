@@ -25,6 +25,7 @@ import {
   Palette,
   Settings,
   Sun,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
@@ -45,13 +46,17 @@ import { PocketIDIcon } from "../icons/pocket-id";
 import { LocalAuthIcon } from "../icons/local-auth";
 import { OAuthIcon } from "../icons/oauth";
 
-function Avatar({ initial }: { initial: string }) {
+function Avatar({ initial, isOpen }: { initial: string; isOpen: boolean }) {
   return (
     <span className="group relative grid size-10 place-items-center rounded-full">
       <span className="absolute inset-0 overflow-hidden rounded-full bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-700 dark:to-neutral-950 shadow-lg"></span>
-      <span className="relative text-sm font-semibold text-primary">
-        {initial}
-      </span>
+      {isOpen ? (
+        <X className="relative size-4 text-primary rotate-0 transition-transform duration-200 starting:rotate-45" />
+      ) : (
+        <span className="relative text-sm font-semibold text-primary rotate-0 transition-transform duration-200 starting:-rotate-45">
+          {initial}
+        </span>
+      )}
     </span>
   );
 }
@@ -80,6 +85,8 @@ export const QuickActions = () => {
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
   const compiledParams = recompileScreenParams(screenParams);
+
+  const [isOpen, setIsOpen] = useState(false);
 
   const providerDetails = (():
     | { name: string; icon: React.ReactNode }
@@ -159,14 +166,14 @@ export const QuickActions = () => {
   ] as const;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => setIsOpen(open)} open={isOpen}>
       <DropdownMenuTrigger asChild>
         <button
           aria-label={t("quickActionsTitle")}
           className="rounded-full transition-transform duration-200 will-change-transform hover:scale-105 hover:cursor-pointer focus:ring-0 focus:outline-3 focus:outline-ring/50"
         >
           {auth.authenticated ? (
-            <Avatar initial={initial!} />
+            <Avatar initial={initial!} isOpen={isOpen} />
           ) : (
             <span className="bg-card text-primary border-border size-10 flex items-center justify-center rounded-full border shadow-lg">
               <Settings className="size-4" />
