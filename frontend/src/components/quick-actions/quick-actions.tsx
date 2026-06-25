@@ -25,6 +25,7 @@ import {
   Palette,
   Settings,
   Sun,
+  UserRoundKey,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -43,23 +44,8 @@ import { GithubIcon } from "../icons/github";
 import { TailscaleIcon } from "../icons/tailscale";
 import { MicrosoftIcon } from "../icons/microsoft";
 import { PocketIDIcon } from "../icons/pocket-id";
-import { LocalAuthIcon } from "../icons/local-auth";
 import { OAuthIcon } from "../icons/oauth";
-
-function Avatar({ initial, isOpen }: { initial: string; isOpen: boolean }) {
-  return (
-    <span className="group relative grid size-10 place-items-center rounded-full">
-      <span className="absolute inset-0 overflow-hidden rounded-full bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-700 dark:to-neutral-950 shadow-lg"></span>
-      {isOpen ? (
-        <X className="relative size-4 text-primary rotate-0 transition-transform duration-200 starting:rotate-45" />
-      ) : (
-        <span className="relative text-sm font-semibold text-primary rotate-0 transition-transform duration-200 starting:-rotate-45">
-          {initial}
-        </span>
-      )}
-    </span>
-  );
-}
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 const iconStyles = "size-4";
 
@@ -102,7 +88,13 @@ export const QuickActions = () => {
             ? "quickActionsProviderLDAP"
             : "quickActionsProviderLocal",
         ),
-        icon: <LocalAuthIcon className={iconStyles} />,
+        icon: (
+          <UserRoundKey
+            strokeWidth={1.5}
+            size={16}
+            className="text-muted-foreground ml-0.5"
+          />
+        ),
       };
     }
 
@@ -173,10 +165,22 @@ export const QuickActions = () => {
           className="rounded-full transition-transform duration-200 will-change-transform hover:scale-105 hover:cursor-pointer focus:ring-0 focus:outline-3 focus:outline-ring/50"
         >
           {auth.authenticated ? (
-            <Avatar initial={initial!} isOpen={isOpen} />
+            <div className="size-10 flex justify-center items-center p-2 rounded-full bg-card border border-border">
+              {isOpen ? (
+                <X className="size-4 text-primary rotate-0 transition-transform duration-200 starting:rotate-45" />
+              ) : (
+                <span className="text-sm text-primary rotate-0 transition-transform duration-200 starting:-rotate-45">
+                  {initial}
+                </span>
+              )}
+            </div>
           ) : (
             <span className="bg-card text-primary border-border size-10 flex items-center justify-center rounded-full border shadow-lg">
-              <Settings className="size-4" />
+              <Settings
+                className={`size-4 transition-transform duration-200 ${
+                  isOpen ? "rotate-45" : "rotate-0"
+                }`}
+              />
             </span>
           )}
         </button>
@@ -190,21 +194,16 @@ export const QuickActions = () => {
         {auth.authenticated && (
           <>
             <DropdownMenuLabel className="flex items-center gap-3 p-2">
-              <div className="bg-foreground text-background flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-medium">
-                {initial}
-              </div>
+              <Tooltip>
+                <TooltipTrigger className="size-9 rounded-full p-2 bg-muted border-border border flex items-center justify-center">
+                  {providerDetails!.icon}
+                </TooltipTrigger>
+                <TooltipContent>{providerDetails!.name}</TooltipContent>
+              </Tooltip>
               <div className="flex min-w-0 flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium leading-none">
-                    {auth.name}
-                  </span>
-                  {providerDetails && (
-                    <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-lg bg-secondary px-2 py-1.25 text-[10px] font-medium leading-none [&_svg]:size-3">
-                      {providerDetails.icon}
-                      {providerDetails.name}
-                    </span>
-                  )}
-                </div>
+                <span className="truncate text-sm font-medium leading-none">
+                  {auth.name}
+                </span>
                 <span className="text-muted-foreground truncate text-xs leading-none">
                   {auth.email}
                 </span>
@@ -264,7 +263,7 @@ export const QuickActions = () => {
               onSelect={() => logoutMutation.mutate()}
               className="text-destructive"
             >
-              <DoorOpenIcon className="size-4" />
+              <DoorOpenIcon className="size-4 text-destructive" />
               {t("quickActionsLogout")}
             </DropdownMenuItem>
           </>

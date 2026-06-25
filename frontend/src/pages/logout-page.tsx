@@ -137,7 +137,7 @@ function LogoutLayout({ children, logoutMutation }: LogoutLayoutProps) {
       </CardHeader>
       <CardFooter>
         <Button
-          className="w-full"
+          className="w-full text-destructive"
           variant="outline"
           loading={logoutMutation.isPending}
           onClick={() => logoutMutation.mutate()}
