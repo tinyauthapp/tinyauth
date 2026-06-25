@@ -189,7 +189,7 @@ export const QuickActions = () => {
       <DropdownMenuContent
         align="end"
         sideOffset={8}
-        className="rounded-xl p-1"
+        className="rounded-xl p-1 w-3xs"
       >
         {auth.authenticated && (
           <>
@@ -200,11 +200,11 @@ export const QuickActions = () => {
                 </TooltipTrigger>
                 <TooltipContent>{providerDetails!.name}</TooltipContent>
               </Tooltip>
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <span className="truncate text-sm font-medium leading-none">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium">
                   {auth.name}
                 </span>
-                <span className="text-muted-foreground truncate text-xs leading-none">
+                <span className="text-muted-foreground truncate text-xs">
                   {auth.email}
                 </span>
               </div>
