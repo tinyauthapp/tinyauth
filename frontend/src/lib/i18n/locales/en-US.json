@@ -99,5 +99,8 @@
   "quickActionsThemeDark": "Dark",
   "quickActionsThemeSystem": "System",
   "quickActionsLogout": "Logout",
-  "quickActionsTitle": "Quick Actions"
+  "quickActionsTitle": "Quick Actions",
+  "quickActionsProviderLocal": "Local",
+  "quickActionsProviderLDAP": "LDAP",
+  "quickActionsProviderOAuth": "{{provider}} OAuth"
 }
