@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/steveiliop56/ding"
+	"go.uber.org/dig"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -45,17 +47,17 @@ type Services struct {
 }
 
 type BootstrapApp struct {
-	config    model.Config
-	runtime   model.RuntimeConfig
-	services  Services
-	log       *logger.Logger
-	ctx       context.Context
-	cancel    context.CancelFunc
-	queries   repository.Store
-	router    *gin.Engine
-	db        *sql.DB
-	ding      *ding.Ding
-	listeners []Listener
+	config   model.Config
+	runtime  model.RuntimeConfig
+	services Services
+	log      *logger.Logger
+	ctx      context.Context
+	cancel   context.CancelFunc
+	queries  repository.Store
+	router   *gin.Engine
+	db       *sql.DB
+	ding     *ding.Ding
+	dig      *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -70,7 +72,11 @@ func (app *BootstrapApp) Setup() error {
 	app.ctx = ctx
 	app.cancel = cancel
 
-	// Create a ding instance
+	// create the dig container
+	c := dig.New()
+	app.dig = c
+
+	// create a ding instance
 	dg := ding.New(ctx)
 	app.ding = dg
 
@@ -92,8 +98,7 @@ func (app *BootstrapApp) Setup() error {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
-	app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, app.runtime.AppURL)
+	app.runtime.AppURL = strings.ToLower(appUrl.Scheme + "://" + appUrl.Host)
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -127,6 +132,10 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
 	for id, provider := range app.runtime.OAuthProviders {
+		if slices.Contains(model.ReservedProviderNames, id) {
+			return fmt.Errorf("provider id %s is reserved and cannot be used", id)
+		}
+
 		providerWhitelist, err := utils.GetStringList(provider.Whitelist, provider.WhitelistFile)
 		if err != nil {
 			return fmt.Errorf("failed to load oauth whitelist for provider %s: %w", id, err)
@@ -138,15 +147,6 @@ func (app *BootstrapApp) Setup() error {
 		provider.ClientSecret = secret
 		provider.ClientSecretFile = ""
 
-		if provider.RedirectURL == "" {
-			provider.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + id
-		}
-
-		app.runtime.OAuthProviders[id] = provider
-	}
-
-	// set presets for built-in providers
-	for id, provider := range app.runtime.OAuthProviders {
 		if provider.Name == "" {
 			if name, ok := model.OverrideProviders[id]; ok {
 				provider.Name = name
@@ -154,24 +154,16 @@ func (app *BootstrapApp) Setup() error {
 				provider.Name = utils.Capitalize(id)
 			}
 		}
+
 		app.runtime.OAuthProviders[id] = provider
 	}
 
-	// setup oidc clients
-	for id, client := range app.config.OIDC.Clients {
-		client.ID = id
-		app.runtime.OIDCClients = append(app.runtime.OIDCClients, client)
-	}
-
 	// cookie domain
-	cookieDomainResolver := utils.GetCookieDomain
-
 	if !app.config.Auth.SubdomainsEnabled {
-		app.log.App.Warn().Msg("Subdomains are disabled, using standalone cookie domain resolver which will not work with subdomains")
-		cookieDomainResolver = utils.GetStandaloneCookieDomain
+		app.log.App.Warn().Msg("Subdomains are disabled, cookies will be set for the current domain only")
 	}
 
-	cookieDomain, err := cookieDomainResolver(app.runtime.AppURL)
+	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL, app.config.Auth.SubdomainsEnabled)
 
 	if err != nil {
 		return fmt.Errorf("failed to get cookie domain: %w", err)
@@ -210,6 +202,33 @@ func (app *BootstrapApp) Setup() error {
 
 	// store
 	app.queries = store
+
+	// provide basic utilities to container
+	type utilityProvider struct {
+		dig.Out
+
+		Log     *logger.Logger
+		Config  *model.Config
+		Runtime *model.RuntimeConfig
+		Ding    *ding.Ding
+		Ctx     context.Context
+		Queries repository.Store
+	}
+
+	err = app.dig.Provide(func() utilityProvider {
+		return utilityProvider{
+			Log:     app.log,
+			Config:  &app.config,
+			Runtime: &app.runtime,
+			Ding:    app.ding,
+			Ctx:     app.ctx,
+			Queries: app.queries,
+		}
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to provide utilities to container: %w", err)
+	}
 
 	// services
 	err = app.setupServices()
@@ -259,9 +278,43 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
-	// throw in tailscale if it's configured just before setting up the controllers
-	if app.services.tailscaleService != nil {
-		app.runtime.TrustedDomains = append(app.runtime.TrustedDomains, "https://"+app.services.tailscaleService.GetHostname())
+	// if tailscale is enabled and listening, replace the app url with the tailscale hostname
+	if app.services.tailscaleService != nil && app.config.Tailscale.Listen {
+		tailscaleUrl := "https://" + app.services.tailscaleService.GetHostname()
+
+		// if the tailscale url is different from the app url, replace it
+		if tailscaleUrl != app.runtime.AppURL {
+			app.log.App.Info().Msg("Listening on tailscale, replacing app url with tailscale hostname")
+
+			app.runtime.AppURL = tailscaleUrl
+
+			// also update cookie domain
+			cookieDomain, err := utils.GetCookieDomain(tailscaleUrl, app.config.Auth.SubdomainsEnabled)
+
+			if err != nil {
+				return fmt.Errorf("failed to get cookie domain: %w", err)
+			}
+
+			app.runtime.CookieDomain = cookieDomain
+		}
+	}
+
+	// force an update of the redirect urls for all oauth providers, if they are empty
+	services := app.services.oauthBrokerService.GetConfiguredServices()
+
+	for _, service := range services {
+		oauthService, ok := app.services.oauthBrokerService.GetService(service)
+
+		if !ok {
+			return fmt.Errorf("failed to get oauth service for provider %s", service)
+		}
+
+		providerConfig := oauthService.GetConfig()
+
+		if providerConfig.RedirectURL == "" {
+			providerConfig.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + service
+			oauthService.UpdateConfig(providerConfig)
+		}
 	}
 
 	// setup router
@@ -281,19 +334,19 @@ func (app *BootstrapApp) Setup() error {
 		app.ding.Go(app.heartbeatRoutine, ding.RingMinor)
 	}
 
-	// setup listeners
-	app.listeners = app.calculateListenerPolicy()
-
-	if app.config.Server.ConcurrentListenersEnabled {
-		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
-	}
-
-	// run listeners
-	lec, err := app.runListeners()
+	// get listener
+	listenerFunc, err := app.getListenerFunc()
 
 	if err != nil {
-		return fmt.Errorf("failed to run listeners: %w", err)
+		return fmt.Errorf("failed to get listener function: %w", err)
 	}
+
+	// run listener
+	lec := make(chan error, 1)
+
+	app.ding.Go(func(ctx context.Context) {
+		lec <- listenerFunc(ctx)
+	}, ding.RingNormal)
 
 	// monitor cancellation and server errors
 	for {

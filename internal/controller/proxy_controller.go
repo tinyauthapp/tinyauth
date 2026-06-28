@@ -13,6 +13,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
@@ -53,29 +54,33 @@ type ProxyContext struct {
 
 type ProxyController struct {
 	log          *logger.Logger
-	runtime      model.RuntimeConfig
+	runtime      *model.RuntimeConfig
 	acls         *service.AccessControlsService
 	auth         *service.AuthService
 	policyEngine *service.PolicyEngine
 }
 
-func NewProxyController(
-	log *logger.Logger,
-	runtime model.RuntimeConfig,
-	router *gin.RouterGroup,
-	acls *service.AccessControlsService,
-	auth *service.AuthService,
-	policyEngine *service.PolicyEngine,
-) *ProxyController {
+type ProxyControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	ACLsService   *service.AccessControlsService
+	AuthService   *service.AuthService
+	PolicyEngine  *service.PolicyEngine
+}
+
+func NewProxyController(i ProxyControllerInput) *ProxyController {
 	controller := &ProxyController{
-		log:          log,
-		runtime:      runtime,
-		acls:         acls,
-		auth:         auth,
-		policyEngine: policyEngine,
+		log:          i.Log,
+		runtime:      i.RuntimeConfig,
+		acls:         i.ACLsService,
+		auth:         i.AuthService,
+		policyEngine: i.PolicyEngine,
 	}
 
-	proxyGroup := router.Group("/auth")
+	proxyGroup := i.RouterGroup.Group("/auth")
 	proxyGroup.Any("/:proxy", controller.proxyHandler)
 
 	return controller
@@ -153,7 +158,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
 
@@ -202,7 +207,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 				return
 			}
 
-			c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+			c.Redirect(http.StatusFound, redirectURL)
 			return
 		}
 
@@ -246,7 +251,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 					return
 				}
 
-				c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+				c.Redirect(http.StatusFound, redirectURL)
 				return
 			}
 		}
@@ -275,6 +280,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	queries, err := query.Values(RedirectQuery{
 		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.Path),
+		LoginFor:    FrontendLoginForApp,
 	})
 
 	if err != nil {
@@ -294,7 +300,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) setHeaders(c *gin.Context, acls *model.App) {
@@ -330,7 +336,7 @@ func (controller *ProxyController) handleError(c *gin.Context, proxyCtx ProxyCon
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) getHeader(c *gin.Context, header string) (string, bool) {

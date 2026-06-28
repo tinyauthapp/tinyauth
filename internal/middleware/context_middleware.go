@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -37,25 +38,29 @@ var (
 
 type ContextMiddleware struct {
 	log       *logger.Logger
-	runtime   model.RuntimeConfig
+	runtime   *model.RuntimeConfig
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
 }
 
-func NewContextMiddleware(
-	log *logger.Logger,
-	runtime model.RuntimeConfig,
-	auth *service.AuthService,
-	broker *service.OAuthBrokerService,
-	tailscale *service.TailscaleService,
-) *ContextMiddleware {
+type ContextMiddlewareInput struct {
+	dig.In
+
+	Log              *logger.Logger
+	RuntimeConfig    *model.RuntimeConfig
+	AuthService      *service.AuthService
+	BrokerService    *service.OAuthBrokerService
+	TailscaleService *service.TailscaleService
+}
+
+func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 	return &ContextMiddleware{
-		log:       log,
-		runtime:   runtime,
-		auth:      auth,
-		broker:    broker,
-		tailscale: tailscale,
+		log:       i.Log,
+		runtime:   i.RuntimeConfig,
+		auth:      i.AuthService,
+		broker:    i.BrokerService,
+		tailscale: i.TailscaleService,
 	}
 }
 
@@ -69,7 +74,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
 		if err == nil {
-			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.RemoteIP())
+			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.ClientIP())
 
 			if err == nil {
 				if cookie != nil {
@@ -107,10 +112,10 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		// Lastly check if we have a tailscale session to add
 		if m.tailscale != nil {
-			tailscaleContext, err := m.tailscaleWhois(c.Request.Context(), c.RemoteIP())
+			tailscaleContext, err := m.tailscaleWhois(c.Request.Context(), c.ClientIP())
 
 			if err != nil {
-				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.RemoteIP(), err)
+				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.ClientIP(), err)
 			}
 
 			if tailscaleContext != nil {

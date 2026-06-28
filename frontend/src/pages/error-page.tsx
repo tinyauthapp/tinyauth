@@ -11,7 +11,7 @@ export const ErrorPage = () => {
   const { t } = useTranslation();
   const { search } = useLocation();
   const searchParams = new URLSearchParams(search);
-  const error = searchParams.get("error") ?? "";
+  const error = searchParams.get("error") || "";
 
   return (
     <Card>

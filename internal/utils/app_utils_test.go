@@ -11,50 +11,71 @@ func TestGetRootDomain(t *testing.T) {
 	// Normal case
 	domain := "http://sub.tinyauth.app"
 	expected := "tinyauth.app"
-	result, err := utils.GetCookieDomain(domain)
+	result, err := utils.GetCookieDomain(domain, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 
 	// Domain with multiple subdomains
 	domain = "http://b.c.tinyauth.app"
 	expected = "c.tinyauth.app"
-	result, err = utils.GetCookieDomain(domain)
+	result, err = utils.GetCookieDomain(domain, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 
 	// Invalid domain (only TLD)
 	domain = "com"
-	_, err = utils.GetCookieDomain(domain)
-	assert.ErrorContains(t, err, "invalid app url, must be at least second level domain")
+	_, err = utils.GetCookieDomain(domain, true)
+	assert.EqualError(t, err, "invalid app url, must be in format subdomain.domain.tld or domain.tld")
 
 	// IP address
 	domain = "http://10.10.10.10"
-	_, err = utils.GetCookieDomain(domain)
+	_, err = utils.GetCookieDomain(domain, true)
 	assert.ErrorContains(t, err, "ip addresses not allowed")
 
 	// Invalid URL
 	domain = "http://[::1]:namedport"
-	_, err = utils.GetCookieDomain(domain)
+	_, err = utils.GetCookieDomain(domain, true)
 	assert.ErrorContains(t, err, "parse \"http://[::1]:namedport\": invalid port \":namedport\" after host")
 
 	// URL with scheme and path
 	domain = "https://sub.tinyauth.app/path"
 	expected = "tinyauth.app"
-	result, err = utils.GetCookieDomain(domain)
+	result, err = utils.GetCookieDomain(domain, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 
 	// URL with port
 	domain = "http://sub.tinyauth.app:8080"
 	expected = "tinyauth.app"
-	result, err = utils.GetCookieDomain(domain)
+	result, err = utils.GetCookieDomain(domain, true)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 
 	// Domain managed by ICANN
 	domain = "http://example.co.uk"
-	_, err = utils.GetCookieDomain(domain)
-	assert.Error(t, err, "domain in public suffix list, cannot set cookies")
+	_, err = utils.GetCookieDomain(domain, true)
+	assert.ErrorContains(t, err, "domain in public suffix list, cannot set cookies")
+
+	// Domain without subdomain
+	domain = "http://tinyauth.app"
+	expected = "tinyauth.app"
+	result, err = utils.GetCookieDomain(domain, true)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Case insensitivity
+	domain = "http://Sub.Tinyauth.App"
+	expected = "tinyauth.app"
+	result, err = utils.GetCookieDomain(domain, true)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Subdomains disabled
+	domain = "http://sub.tinyauth.app"
+	expected = "sub.tinyauth.app"
+	result, err = utils.GetCookieDomain(domain, false)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }
 
 func TestParseFileToLine(t *testing.T) {
@@ -124,104 +145,4 @@ func TestFilter(t *testing.T) {
 	expectedStr := []string{"banana", "cherry"}
 	resultStr := utils.Filter(sliceStr, testFuncStr)
 	assert.Equal(t, expectedStr, resultStr)
-}
-
-func TestIsRedirectSafe(t *testing.T) {
-	// Setup
-	domain := "example.com"
-
-	// Case with no subdomain
-	redirectURL := "http://example.com/welcome"
-	result := utils.IsRedirectSafe(redirectURL, domain)
-	assert.True(t, result)
-
-	// Case with different domain
-	redirectURL = "http://malicious.com/phishing"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.False(t, result)
-
-	// Case with subdomain
-	redirectURL = "http://sub.example.com/page"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.True(t, result)
-
-	// Case with sub-subdomain
-	redirectURL = "http://a.b.example.com/home"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.True(t, result)
-
-	// Case with empty redirect URL
-	redirectURL = ""
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.False(t, result)
-
-	// Case with invalid URL
-	redirectURL = "http://[::1]:namedport"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.False(t, result)
-
-	// Case with URL having port
-	redirectURL = "http://sub.example.com:8080/page"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.True(t, result)
-
-	// Case with URL having different subdomain
-	redirectURL = "http://another.example.com/page"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.True(t, result)
-
-	// Case with URL having different TLD
-	redirectURL = "http://example.org/page"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.False(t, result)
-
-	// Case with malicious domain
-	redirectURL = "https://malicious-example.com/yoyo"
-	result = utils.IsRedirectSafe(redirectURL, domain)
-	assert.False(t, result)
-}
-
-func TestGetStandaloneCookieDomain(t *testing.T) {
-	// Normal case
-	domain := "http://tinyauth.app"
-	expected := "tinyauth.app"
-	result, err := utils.GetStandaloneCookieDomain(domain)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, result)
-
-	// URL with subdomain (full hostname is returned, no subdomain stripping)
-	domain = "http://sub.tinyauth.app"
-	expected = "sub.tinyauth.app"
-	result, err = utils.GetStandaloneCookieDomain(domain)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, result)
-
-	// URL with port (port should be stripped)
-	domain = "http://tinyauth.app:8080"
-	expected = "tinyauth.app"
-	result, err = utils.GetStandaloneCookieDomain(domain)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, result)
-
-	// URL with path
-	domain = "https://tinyauth.app/some/path"
-	expected = "tinyauth.app"
-	result, err = utils.GetStandaloneCookieDomain(domain)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, result)
-
-	// IP address
-	domain = "http://10.10.10.10"
-	_, err = utils.GetStandaloneCookieDomain(domain)
-	assert.ErrorContains(t, err, "ip addresses not allowed")
-
-	// Invalid domain (only TLD)
-	domain = "com"
-	_, err = utils.GetStandaloneCookieDomain(domain)
-	assert.ErrorContains(t, err, "invalid app url")
-
-	// Invalid URL
-	domain = "http://[::1]:namedport"
-	_, err = utils.GetStandaloneCookieDomain(domain)
-	assert.ErrorContains(t, err, "parse \"http://[::1]:namedport\": invalid port \":namedport\" after host")
 }

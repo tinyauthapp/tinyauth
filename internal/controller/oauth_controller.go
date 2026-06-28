@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
@@ -22,26 +24,30 @@ type OAuthRequest struct {
 
 type OAuthController struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
 
-func NewOAuthController(
-	log *logger.Logger,
-	config model.Config,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-	auth *service.AuthService,
-) *OAuthController {
+type OAuthControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	Config        *model.Config
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	AuthService   *service.AuthService
+}
+
+func NewOAuthController(i OAuthControllerInput) *OAuthController {
 	controller := &OAuthController{
-		log:     log,
-		config:  config,
-		runtime: runtimeConfig,
-		auth:    auth,
+		log:     i.Log,
+		config:  i.Config,
+		runtime: i.RuntimeConfig,
+		auth:    i.AuthService,
 	}
 
-	oauthGroup := router.Group("/oauth")
+	oauthGroup := i.RouterGroup.Group("/oauth")
 	oauthGroup.GET("/url/:provider", controller.oauthURLHandler)
 	oauthGroup.GET("/callback/:provider", controller.oauthCallbackHandler)
 
@@ -61,7 +67,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	var reqParams service.OAuthURLParams
+	var reqParams service.OAuthCallbackParams
 
 	err = c.BindQuery(&reqParams)
 
@@ -75,15 +81,13 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	}
 
 	if !controller.isOidcRequest(reqParams) {
-		isRedirectSafe := utils.IsRedirectSafe(reqParams.RedirectURI, controller.runtime.CookieDomain)
-
-		if !isRedirectSafe {
+		if !controller.isRedirectSafe(reqParams.RedirectURI) {
 			controller.log.App.Warn().Str("redirectUri", reqParams.RedirectURI).Msg("Unsafe redirect URI, ignoring")
 			reqParams.RedirectURI = ""
 		}
 	}
 
-	sessionId, _, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
+	sessionId, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create new OAuth session")
@@ -272,13 +276,14 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/authorize?%s", controller.runtime.AppURL, queries.Encode()))
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/oidc/authorize?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
 	if oauthPendingSession.CallbackParams.RedirectURI != "" {
 		queries, err := query.Values(RedirectQuery{
 			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
+			LoginFor:    FrontendLoginForApp,
 		})
 
 		if err != nil {
@@ -294,16 +299,68 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	c.Redirect(http.StatusTemporaryRedirect, controller.runtime.AppURL)
 }
 
-func (controller *OAuthController) isOidcRequest(params service.OAuthURLParams) bool {
-	return params.Scope != "" &&
-		params.ResponseType != "" &&
-		params.ClientID != "" &&
-		params.RedirectURI != ""
+func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {
+	return params.LoginFor == string(FrontendLoginForOIDC)
 }
 
 func (controller *OAuthController) getCookieDomain() string {
-	if controller.config.Auth.SubdomainsEnabled {
-		return "." + controller.runtime.CookieDomain
+	if !controller.config.Auth.SubdomainsEnabled {
+		return ""
 	}
 	return controller.runtime.CookieDomain
+}
+
+func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
+	u, err := url.Parse(redirectURI)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to parse redirect URI")
+		return false
+	}
+
+	if u.Scheme == "" || u.Host == "" {
+		controller.log.App.Warn().Msg("Redirect URI has invalid scheme or host")
+		return false
+	}
+
+	au, err := url.Parse(controller.runtime.AppURL)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to parse app URL")
+		return false
+	}
+
+	if u.Scheme != au.Scheme {
+		controller.log.App.Warn().Msg("Redirect URI scheme does not match app URL scheme")
+		return false
+	}
+
+	getEffectivePort := func(u *url.URL) string {
+		if u.Port() != "" {
+			return u.Port()
+		}
+		if u.Scheme == "https" {
+			return "443"
+		}
+		return "80"
+	}
+
+	if getEffectivePort(u) != getEffectivePort(au) {
+		controller.log.App.Warn().Msg("Redirect URI port does not match app URL port")
+		return false
+	}
+
+	if strings.EqualFold(u.Hostname(), au.Hostname()) {
+		return true
+	}
+
+	if !controller.config.Auth.SubdomainsEnabled {
+		return false
+	}
+
+	if strings.HasSuffix(strings.ToLower(u.Hostname()), "."+strings.ToLower(controller.runtime.CookieDomain)) {
+		return true
+	}
+
+	return false
 }

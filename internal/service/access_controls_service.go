@@ -5,6 +5,7 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 )
 
 type LabelProvider interface {
@@ -13,19 +14,24 @@ type LabelProvider interface {
 
 type AccessControlsService struct {
 	log           *logger.Logger
-	config        model.Config
-	labelProvider *LabelProvider
+	config        *model.Config
+	labelProvider LabelProvider
 }
 
-func NewAccessControlsService(
-	log *logger.Logger,
-	config model.Config,
-	labelProvider *LabelProvider) *AccessControlsService {
+type AccessControlServiceInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	Config        *model.Config
+	LabelProvider LabelProvider `optional:"true"`
+}
+
+func NewAccessControlsService(i AccessControlServiceInput) *AccessControlsService {
 
 	return &AccessControlsService{
-		log:           log,
-		config:        config,
-		labelProvider: labelProvider,
+		log:           i.Log,
+		config:        i.Config,
+		labelProvider: i.LabelProvider,
 	}
 }
 
@@ -57,8 +63,8 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 	}
 
 	// If we have a label provider configured, try to get ACLs from it
-	if service.labelProvider != nil && *service.labelProvider != nil {
-		return (*service.labelProvider).GetLabels(domain)
+	if service.labelProvider != nil {
+		return service.labelProvider.GetLabels(domain)
 	}
 
 	// no labels

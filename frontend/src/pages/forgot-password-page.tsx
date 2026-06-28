@@ -11,12 +11,18 @@ import { useAppContext } from "@/context/app-context";
 import { useTranslation } from "react-i18next";
 import Markdown from "react-markdown";
 import { useLocation } from "react-router";
+import {
+  recompileScreenParams,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
 
 export const ForgotPasswordPage = () => {
   const { ui } = useAppContext();
   const { t } = useTranslation();
   const { search } = useLocation();
   const searchParams = new URLSearchParams(search);
+  const screenParams = useScreenParams(searchParams);
+  const compiledParams = recompileScreenParams(screenParams);
 
   return (
     <Card>
@@ -37,10 +43,7 @@ export const ForgotPasswordPage = () => {
           className="w-full"
           variant="outline"
           onClick={() => {
-            const eparams = searchParams.toString();
-            window.location.replace(
-              `/login${eparams.length > 0 ? `?${eparams}` : ""}`,
-            );
+            window.location.replace(`/login${compiledParams}`);
           }}
         >
           {t("backToLoginButton")}

@@ -5,25 +5,28 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"slices"
 
 	"golang.org/x/oauth2"
 )
 
-type OAuthServiceImpl interface {
+type IOAuthService interface {
 	Name() string
 	ID() string
 	NewRandom() string
-	GetAuthURL(state string, verifier string) string
-	GetToken(code string, verifier string) (*oauth2.Token, error)
+	GetAuthURL(state, verifier string) string
+	GetToken(code, verifier string) (*oauth2.Token, error)
 	GetUserinfo(token *oauth2.Token) (*model.Claims, error)
+	GetConfig() model.OAuthServiceConfig
+	UpdateConfig(config model.OAuthServiceConfig)
 }
 
 type OAuthBrokerService struct {
 	log *logger.Logger
 
-	services map[string]OAuthServiceImpl
+	services map[string]IOAuthService
 	configs  map[string]model.OAuthServiceConfig
 }
 
@@ -32,23 +35,27 @@ var presets = map[string]func(config model.OAuthServiceConfig, ctx context.Conte
 	"google": newGoogleOAuthService,
 }
 
-func NewOAuthBrokerService(
-	log *logger.Logger,
-	configs map[string]model.OAuthServiceConfig,
-	ctx context.Context,
-) *OAuthBrokerService {
+type OAuthBrokerServiceInput struct {
+	dig.In
+
+	Log     *logger.Logger
+	Runtime *model.RuntimeConfig
+	Ctx     context.Context
+}
+
+func NewOAuthBrokerService(i OAuthBrokerServiceInput) *OAuthBrokerService {
 	service := &OAuthBrokerService{
-		log:      log,
-		services: make(map[string]OAuthServiceImpl),
-		configs:  configs,
+		log:      i.Log,
+		services: make(map[string]IOAuthService),
+		configs:  i.Runtime.OAuthProviders,
 	}
 
-	for name, cfg := range configs {
+	for name, cfg := range service.configs {
 		if presetFunc, exists := presets[name]; exists {
-			service.services[name] = presetFunc(cfg, ctx)
+			service.services[name] = presetFunc(cfg, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from preset")
 		} else {
-			service.services[name] = NewOAuthService(cfg, name, ctx)
+			service.services[name] = NewOAuthService(cfg, name, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from custom config")
 		}
 	}
@@ -65,7 +72,7 @@ func (broker *OAuthBrokerService) GetConfiguredServices() []string {
 	return services
 }
 
-func (broker *OAuthBrokerService) GetService(name string) (OAuthServiceImpl, bool) {
+func (broker *OAuthBrokerService) GetService(name string) (IOAuthService, bool) {
 	service, exists := broker.services[name]
 	return service, exists
 }

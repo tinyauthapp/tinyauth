@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,27 +9,36 @@ import (
 	"github.com/weppos/publicsuffix-go/publicsuffix"
 )
 
-// Get cookie domain parses a hostname and returns the upper domain (e.g. sub1.sub2.domain.com -> sub2.domain.com)
-func GetCookieDomain(u string) (string, error) {
-	parsed, err := url.Parse(u)
+// GetCookieDomain parses the app url and returns the domain value to use for cookies.
+// When auth for subdomains is enabled, it strips the leftmost label
+// (e.g. sub1.sub2.domain.com -> sub2.domain.com), otherwise it returns the full hostname.
+func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
+	u, err := url.Parse(appUrl)
+
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid app url: %w", err)
 	}
 
-	host := parsed.Hostname()
+	hostname := strings.ToLower(u.Hostname())
 
-	if netIP := net.ParseIP(host); netIP != nil {
-		return "", errors.New("ip addresses not allowed")
+	if netIP := net.ParseIP(hostname); netIP != nil {
+		return "", fmt.Errorf("ip addresses not allowed")
 	}
 
-	parts := strings.Split(host, ".")
+	parts := strings.Split(hostname, ".")
 
-	if len(parts) == 2 {
-		return host, nil
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid app url, must be in format subdomain.domain.tld or domain.tld")
 	}
 
-	if len(parts) < 3 {
-		return "", errors.New("invalid app url, must be at least second level domain")
+	if !subdomainsEnabled || len(parts) == 2 {
+		_, err = publicsuffix.DomainFromListWithOptions(publicsuffix.DefaultList, hostname, nil)
+
+		if err != nil {
+			return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
+		}
+
+		return hostname, nil
 	}
 
 	domain := strings.Join(parts[1:], ".")
@@ -38,31 +46,10 @@ func GetCookieDomain(u string) (string, error) {
 	_, err = publicsuffix.DomainFromListWithOptions(publicsuffix.DefaultList, domain, nil)
 
 	if err != nil {
-		return "", errors.New("domain in public suffix list, cannot set cookies")
+		return "", fmt.Errorf("domain in public suffix list, cannot set cookies: %w", err)
 	}
 
 	return domain, nil
-}
-
-func GetStandaloneCookieDomain(u string) (string, error) {
-	parsed, err := url.Parse(u)
-	if err != nil {
-		return "", err
-	}
-
-	host := parsed.Hostname()
-
-	if netIP := net.ParseIP(host); netIP != nil {
-		return "", errors.New("ip addresses not allowed")
-	}
-
-	parts := strings.Split(host, ".")
-
-	if len(parts) < 2 {
-		return "", errors.New("invalid app url")
-	}
-
-	return host, nil
 }
 
 func ParseFileToLine(content string) string {
@@ -87,24 +74,4 @@ func Filter[T any](slice []T, test func(T) bool) (res []T) {
 		}
 	}
 	return res
-}
-
-func IsRedirectSafe(redirectURL string, domain string) bool {
-	if redirectURL == "" {
-		return false
-	}
-
-	parsed, err := url.Parse(redirectURL)
-
-	if err != nil {
-		return false
-	}
-
-	hostname := parsed.Hostname()
-
-	if strings.HasSuffix(hostname, fmt.Sprintf(".%s", domain)) {
-		return true
-	}
-
-	return hostname == domain
 }

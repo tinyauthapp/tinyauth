@@ -70,7 +70,7 @@ func (s *OAuthService) NewRandom() string {
 	return random
 }
 
-func (s *OAuthService) GetAuthURL(state string, verifier string) string {
+func (s *OAuthService) GetAuthURL(state, verifier string) string {
 	return s.config.AuthCodeURL(state, oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(verifier))
 }
 
@@ -81,4 +81,18 @@ func (s *OAuthService) GetToken(code string, verifier string) (*oauth2.Token, er
 func (s *OAuthService) GetUserinfo(token *oauth2.Token) (*model.Claims, error) {
 	client := oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(token))
 	return s.userinfoExtractor(client, s.serviceCfg.UserinfoURL)
+}
+
+func (s *OAuthService) GetConfig() model.OAuthServiceConfig {
+	return s.serviceCfg
+}
+
+func (s *OAuthService) UpdateConfig(config model.OAuthServiceConfig) {
+	s.serviceCfg = config
+	s.config.ClientID = config.ClientID
+	s.config.ClientSecret = config.ClientSecret
+	s.config.Scopes = config.Scopes
+	s.config.Endpoint.AuthURL = config.AuthURL
+	s.config.Endpoint.TokenURL = config.TokenURL
+	s.config.RedirectURL = config.RedirectURL
 }

@@ -3,10 +3,26 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/service"
+	"go.uber.org/dig"
 )
+
+const OpenIDConnectRel = "http://openid.net/specs/connect/1.0/issuer"
+
+type WebfingerResponseLink struct {
+	Rel  string `json:"rel,omitempty"`
+	Href string `json:"href"`
+}
+
+type WebfingerResponse struct {
+	Subject string                  `json:"subject"`
+	Links   []WebfingerResponseLink `json:"links"`
+}
 
 type OpenIDConnectConfiguration struct {
 	Issuer                                 string   `json:"issuer"`
@@ -30,13 +46,21 @@ type WellKnownController struct {
 	oidc *service.OIDCService
 }
 
-func NewWellKnownController(oidc *service.OIDCService, router *gin.RouterGroup) *WellKnownController {
+type WellKnownControllerInput struct {
+	dig.In
+
+	OIDCService *service.OIDCService
+	RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
+}
+
+func NewWellKnownController(i WellKnownControllerInput) *WellKnownController {
 	controller := &WellKnownController{
-		oidc: oidc,
+		oidc: i.OIDCService,
 	}
 
-	router.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
-	router.GET("/.well-known/jwks.json", controller.JWKS)
+	i.RouterGroup.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
+	i.RouterGroup.GET("/.well-known/jwks.json", controller.JWKS)
+	i.RouterGroup.GET("/.well-known/webfinger", controller.WebFinger)
 
 	return controller
 }
@@ -96,4 +120,63 @@ func (controller *WellKnownController) JWKS(c *gin.Context) {
 	c.Writer.WriteString(`]}`)
 
 	c.Status(http.StatusOK)
+}
+
+func (controller *WellKnownController) WebFinger(c *gin.Context) {
+	c.Header("Content-Type", "application/jrd+json")
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	resource := c.Query("resource")
+
+	if !controller.validateWebFingerResource(resource) {
+		c.JSON(400, gin.H{
+			"status":  400,
+			"message": "invalid resource",
+		})
+		return
+	}
+
+	res := WebfingerResponse{
+		Subject: resource,
+		Links:   []WebfingerResponseLink{},
+	}
+
+	rel := c.Request.URL.Query()["rel"]
+
+	if controller.oidc != nil && (len(rel) == 0 || slices.Contains(rel, OpenIDConnectRel)) {
+		res.Links = append(res.Links, WebfingerResponseLink{Rel: OpenIDConnectRel, Href: controller.oidc.GetIssuer()})
+	}
+
+	c.JSON(200, res)
+}
+
+func (controller *WellKnownController) validateWebFingerResource(resource string) bool {
+	prefix, suffix, found := strings.Cut(resource, ":")
+
+	if !found {
+		return false
+	}
+
+	switch prefix {
+	case "acct":
+		if strings.Count(suffix, "@") != 1 {
+			return false
+		}
+		username, domain, found := strings.Cut(suffix, "@")
+		if !found || username == "" || domain == "" {
+			return false
+		}
+	case "https", "http":
+		u, err := url.Parse(resource)
+		if err != nil {
+			return false
+		}
+		if u.Host == "" {
+			return false
+		}
+	default:
+		return false
+	}
+
+	return true
 }

@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -42,6 +41,7 @@ func TestUserController(t *testing.T) {
 				TOTPPending: true,
 			},
 		})
+		c.Next()
 	}
 
 	totpAttrCtx := func(c *gin.Context) {
@@ -57,6 +57,7 @@ func TestUserController(t *testing.T) {
 				TOTPPending: true,
 			},
 		})
+		c.Next()
 	}
 
 	simpleCtx := func(c *gin.Context) {
@@ -71,6 +72,7 @@ func TestUserController(t *testing.T) {
 				},
 			},
 		})
+		c.Next()
 	}
 
 	store := memory.New()
@@ -83,10 +85,44 @@ func TestUserController(t *testing.T) {
 
 	tests := []testCase{
 		{
+			description: "Login should fail gracefully on invalid json",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(`{"username": "testuser", "password":`))
+				req.Header.Set("Content-Type", "application/json")
+
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 400, recorder.Code)
+				assert.Contains(t, recorder.Body.String(), "Bad Request")
+			},
+		},
+		{
+			description: "Should fail on missing user",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				loginReq := LoginRequest{
+					Username: "nonexistentuser",
+					Password: "password",
+				}
+				loginReqBody, err := json.Marshal(loginReq)
+				require.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(string(loginReqBody)))
+				req.Header.Set("Content-Type", "application/json")
+
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 401, recorder.Code)
+				assert.Len(t, recorder.Result().Cookies(), 0)
+				assert.Contains(t, recorder.Body.String(), "Unauthorized")
+			},
+		},
+		{
 			description: "Should be able to login with valid credentials",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "password",
 				}
@@ -114,7 +150,7 @@ func TestUserController(t *testing.T) {
 			description: "Should reject login with invalid credentials",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "wrongpassword",
 				}
@@ -135,7 +171,7 @@ func TestUserController(t *testing.T) {
 			description: "Should rate limit on 3 invalid attempts",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "wrongpassword",
 				}
@@ -170,7 +206,7 @@ func TestUserController(t *testing.T) {
 			description: "Should not allow full login with totp",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "totpuser",
 					Password: "password",
 				}
@@ -207,7 +243,7 @@ func TestUserController(t *testing.T) {
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				// First login to get a session cookie
-				loginReq := controller.LoginRequest{
+				loginReq := LoginRequest{
 					Username: "testuser",
 					Password: "password",
 				}
@@ -244,6 +280,87 @@ func TestUserController(t *testing.T) {
 			},
 		},
 		{
+			description: "Logout should be treated as valid without a session cookie",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("POST", "/api/user/logout", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 200, recorder.Code)
+			},
+		},
+		{
+			description: "TOTP should gracefully reject invalid json",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(`{"code":`))
+				req.Header.Set("Content-Type", "application/json")
+
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 400, recorder.Code)
+				assert.Contains(t, recorder.Body.String(), "Bad Request")
+			},
+		},
+		{
+			description: "TOTP should fail on non-totp context",
+			middlewares: []gin.HandlerFunc{
+				simpleCtx,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				totpReq := TotpRequest{
+					Code: "123456",
+				}
+
+				totpReqBody, err := json.Marshal(totpReq)
+				require.NoError(t, err)
+
+				recorder = httptest.NewRecorder()
+				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
+				req.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 401, recorder.Code)
+				assert.Contains(t, recorder.Body.String(), "Unauthorized")
+			},
+		},
+		{
+			description: "TOTP should fail when user in context doesn't exist",
+			middlewares: []gin.HandlerFunc{
+				func(ctx *gin.Context) {
+					ctx.Set("context", &model.UserContext{
+						Authenticated: false,
+						Provider:      model.ProviderLocal,
+						Local: &model.LocalContext{
+							BaseContext: model.BaseContext{
+								Username: "idontexist",
+								Name:     "Totpuser",
+								Email:    "totpuser@example.com",
+							},
+							TOTPPending: true,
+						},
+					})
+					ctx.Next()
+				},
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				totpReq := TotpRequest{
+					Code: "123456",
+				}
+
+				totpReqBody, err := json.Marshal(totpReq)
+				require.NoError(t, err)
+
+				recorder = httptest.NewRecorder()
+				req := httptest.NewRequest("POST", "/api/user/totp", strings.NewReader(string(totpReqBody)))
+				req.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, 401, recorder.Code)
+				assert.Contains(t, recorder.Body.String(), "Unauthorized")
+			},
+		},
+		{
 			description: "Should be able to login with totp",
 			middlewares: []gin.HandlerFunc{
 				totpCtx,
@@ -264,7 +381,7 @@ func TestUserController(t *testing.T) {
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
-				totpReq := controller.TotpRequest{
+				totpReq := TotpRequest{
 					Code: code,
 				}
 
@@ -302,7 +419,7 @@ func TestUserController(t *testing.T) {
 			},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				for range 3 {
-					totpReq := controller.TotpRequest{
+					totpReq := TotpRequest{
 						Code: "000000", // invalid code
 					}
 
@@ -334,7 +451,7 @@ func TestUserController(t *testing.T) {
 			description: "Login uses name and email from user attributes",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{Username: "attruser", Password: "password"}
+				loginReq := LoginRequest{Username: "attruser", Password: "password"}
 				body, err := json.Marshal(loginReq)
 				require.NoError(t, err)
 
@@ -352,7 +469,7 @@ func TestUserController(t *testing.T) {
 			description: "Login with TOTP uses name and email from user attributes in pending session",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				loginReq := controller.LoginRequest{Username: "attrtotpuser", Password: "password"}
+				loginReq := LoginRequest{Username: "attrtotpuser", Password: "password"}
 				body, err := json.Marshal(loginReq)
 				require.NoError(t, err)
 
@@ -388,7 +505,7 @@ func TestUserController(t *testing.T) {
 				code, err := totp.GenerateCode("JPIEBDKJH6UGWJMX66RR3S55UFP2SGKK", time.Now())
 				require.NoError(t, err)
 
-				totpReq := controller.TotpRequest{Code: code}
+				totpReq := TotpRequest{Code: code}
 				body, err := json.Marshal(totpReq)
 				require.NoError(t, err)
 
@@ -414,11 +531,29 @@ func TestUserController(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	policyEngine, err := service.NewPolicyEngine(cfg, log)
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	require.NoError(t, err)
 
-	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, dg, nil, store, broker, nil, policyEngine)
+	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
+		Log:     log,
+		Runtime: &runtime,
+		Ctx:     ctx,
+	})
+	authService := service.NewAuthService(service.AuthServiceInput{
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		Ctx:          ctx,
+		Ding:         dg,
+		LDAP:         nil,
+		Queries:      store,
+		OAuthBroker:  broker,
+		Tailscale:    nil,
+		PolicyEngine: policyEngine,
+	})
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test
@@ -437,7 +572,12 @@ func TestUserController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewUserController(log, runtime, group, authService)
+			NewUserController(UserControllerInput{
+				Log:           log,
+				RuntimeConfig: &runtime,
+				RouterGroup:   group,
+				AuthService:   authService,
+			})
 
 			recorder := httptest.NewRecorder()
 
