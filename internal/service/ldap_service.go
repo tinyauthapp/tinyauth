@@ -75,9 +75,9 @@ func NewLdapService(i LdapServiceInput) (*LdapService, error) {
 
 	_, err := ldap.connect()
 
-	// Warn: This will hang the tinyauth startup for a good 45 seconds until it fails
 	if err != nil {
-		err = ldap.reconnect(10 * time.Second)
+		// 3s + 4.5s (3x1.5) = ~6.75-8.25s total wait time before giving up
+		err = ldap.reconnect(3 * time.Second)
 		return nil, fmt.Errorf("failed to connect to ldap server: %w", err)
 	}
 
