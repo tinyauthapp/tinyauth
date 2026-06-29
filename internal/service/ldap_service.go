@@ -93,7 +93,7 @@ func NewLdapService(i LdapServiceInput) (*LdapService, error) {
 				err := ldap.heartbeat()
 				if err != nil {
 					ldap.log.App.Warn().Err(err).Msg("LDAP connection heartbeat failed, attempting to reconnect")
-					if reconnectErr := ldap.reconnect(5 * time.Second); reconnectErr != nil {
+					if reconnectErr := ldap.reconnect(1 * time.Second); reconnectErr != nil {
 						ldap.log.App.Error().Err(reconnectErr).Msg("Failed to reconnect to LDAP server")
 						continue
 					}
