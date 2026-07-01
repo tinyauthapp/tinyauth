@@ -53,7 +53,7 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to add version command")
 	}
 
-	err = cmdTinyauth.AddCommand(configDump(tConfig, loaders))
+	err = cmdTinyauth.AddCommand(configCmd(tConfig, loaders))
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to add config-dump command")

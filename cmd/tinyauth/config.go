@@ -8,9 +8,9 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 )
 
-func configDump(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
+func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
 	return &cli.Command{
-		Name:          "config-dump",
+		Name:          "config",
 		Description:   "Print the configuration of Tinyauth",
 		Configuration: tconfig,
 		Resources:     loaders,
