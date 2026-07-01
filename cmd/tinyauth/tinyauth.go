@@ -13,7 +13,8 @@ import (
 )
 
 func main() {
-	tConfig := model.NewDefaultConfiguration()
+	env := model.DetectRuntimeEnv()
+	tConfig := model.NewDefaultConfiguration(env)
 
 	loaders := []cli.ResourceLoader{
 		&loaders.FileLoader{},
@@ -50,6 +51,12 @@ func main() {
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to add version command")
+	}
+
+	err = cmdTinyauth.AddCommand(configDump(tConfig, loaders))
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to add config-dump command")
 	}
 
 	err = cmdUser.AddCommand(verifyUserCmd())

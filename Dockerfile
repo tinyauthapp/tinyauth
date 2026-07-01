@@ -52,15 +52,17 @@ WORKDIR /tinyauth
 
 COPY --from=builder /tinyauth/tinyauth ./
 
-RUN mkdir -p /data
-
 EXPOSE 3000
+
+# Make the data directory with a non-root user
+RUN addgroup tinyauth && adduser -DH tinyauth -G tinyauth
+RUN mkdir -p /data/resources /data/oidc /data/tailscale
+RUN chown -R tinyauth:tinyauth /data
 
 VOLUME ["/data"]
 
-ENV TINYAUTH_DATABASE_PATH=/data/tinyauth.db
-
-ENV TINYAUTH_RESOURCES_PATH=/data/resources
+# Tell tinyauth that it's running in a container and where to find the data directory
+ENV RUNTIME_ENV=docker
 
 ENV PATH=$PATH:/tinyauth
 

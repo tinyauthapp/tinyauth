@@ -20,7 +20,7 @@ type EnvEntry struct {
 }
 
 func generateExampleEnv() {
-	cfg := model.NewDefaultConfiguration()
+	cfg := model.NewDefaultConfiguration(model.RuntimeEnvUnknown)
 	entries := make([]EnvEntry, 0)
 
 	root := reflect.TypeOf(cfg).Elem()

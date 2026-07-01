@@ -1,8 +1,27 @@
 package model
 
+import "os"
+
+type RuntimeEnv int
+
+const (
+	RuntimeEnvUnknown RuntimeEnv = iota
+	RuntimeEnvDocker
+)
+
+func DetectRuntimeEnv() RuntimeEnv {
+	env := os.Getenv("RUNTIME_ENV")
+	switch env {
+	case "docker":
+		return RuntimeEnvDocker
+	default:
+		return RuntimeEnvUnknown
+	}
+}
+
 // Default configuration
-func NewDefaultConfiguration() *Config {
-	return &Config{
+func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
+	cfg := &Config{
 		Database: DatabaseConfig{
 			Driver: "sqlite",
 			Path:   "./tinyauth.db",
@@ -67,25 +86,36 @@ func NewDefaultConfiguration() *Config {
 		},
 		LabelProvider: "auto",
 	}
+
+	// apply path overrides for docker runtime
+	if runtimeEnv == RuntimeEnvDocker {
+		cfg.Database.Path = "/data/tinyauth.db"
+		cfg.Resources.Path = "/data/resources"
+		cfg.OIDC.PrivateKeyPath = "/data/oidc/key.pem"
+		cfg.OIDC.PublicKeyPath = "/data/oidc/key.pub"
+		cfg.Tailscale.Dir = "/data/tailscale"
+	}
+
+	return cfg
 }
 
 type Config struct {
-	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
-	Database      DatabaseConfig     `description:"Database configuration." yaml:"database"`
-	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics"`
-	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources"`
-	Server        ServerConfig       `description:"Server configuration." yaml:"server"`
-	Auth          AuthConfig         `description:"Authentication configuration." yaml:"auth"`
-	Apps          map[string]App     `description:"Application ACLs configuration." yaml:"apps"`
-	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth"`
-	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc"`
-	UI            UIConfig           `description:"UI customization." yaml:"ui"`
-	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
-	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
-	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
-	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
-	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale"`
-	ConfigFile    string             `description:"Path to config file." yaml:"-"`
+	AppURL    string          `description:"The base URL where the app is hosted." yaml:"appUrl"`
+	Database  DatabaseConfig  `description:"Database configuration." yaml:"database"`
+	Analytics AnalyticsConfig `description:"Analytics configuration." yaml:"analytics"`
+	Resources ResourcesConfig `description:"Resources configuration." yaml:"resources"`
+	Server    ServerConfig    `description:"Server configuration." yaml:"server"`
+	Auth      AuthConfig      `description:"Authentication configuration." yaml:"auth"`
+	Apps      map[string]App  `description:"Application ACLs configuration." yaml:"apps"`
+	OAuth     OAuthConfig     `description:"OAuth configuration." yaml:"oauth"`
+	OIDC      OIDCConfig      `description:"OIDC configuration." yaml:"oidc"`
+	UI        UIConfig        `description:"UI customization." yaml:"ui"`
+	LDAP      LDAPConfig      `description:"LDAP configuration." yaml:"ldap"`
+	// Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
+	LabelProvider string          `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
+	Log           LogConfig       `description:"Logging configuration." yaml:"log"`
+	Tailscale     TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale"`
+	ConfigFile    string          `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {

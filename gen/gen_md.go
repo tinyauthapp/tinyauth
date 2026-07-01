@@ -21,7 +21,7 @@ type MarkdownEntry struct {
 }
 
 func generateMarkdown() {
-	cfg := model.NewDefaultConfiguration()
+	cfg := model.NewDefaultConfiguration(model.RuntimeEnvUnknown)
 	entries := make([]MarkdownEntry, 0)
 
 	root := reflect.TypeOf(cfg).Elem()
