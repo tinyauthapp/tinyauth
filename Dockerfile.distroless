@@ -58,7 +58,7 @@ WORKDIR /tinyauth
 COPY --from=builder /tinyauth/tinyauth ./
 
 # Since it's distroless, we need to copy the data directory from the builder stage
-COPY --from=builder /tinyauth/data /data
+COPY --from=builder /data /data
 
 EXPOSE 3000
 
