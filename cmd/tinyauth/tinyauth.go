@@ -56,7 +56,7 @@ func main() {
 	err = cmdTinyauth.AddCommand(configCmd(tConfig, loaders))
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add config-dump command")
+		log.Fatal().Err(err).Msg("Failed to add config command")
 	}
 
 	err = cmdUser.AddCommand(verifyUserCmd())
