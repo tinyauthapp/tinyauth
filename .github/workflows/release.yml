@@ -126,7 +126,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/tinyauth
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -182,7 +182,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/tinyauth
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -238,7 +238,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/tinyauth
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -294,7 +294,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/tinyauth
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -349,7 +349,7 @@ jobs:
           merge-multiple: true
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -390,7 +390,7 @@ jobs:
           merge-multiple: true
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
