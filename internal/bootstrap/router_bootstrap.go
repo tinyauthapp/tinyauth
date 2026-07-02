@@ -130,7 +130,7 @@ func (app *BootstrapApp) setupRouter() error {
 // 2. Unix socket (if server.socketPath)
 // 3. HTTP - default
 func (app *BootstrapApp) getListenerFunc() (func(ctx context.Context) error, error) {
-	if app.config.Tailscale.Listen {
+	if app.config.Experimental.Tailscale.Listen {
 		if app.services.tailscaleService == nil {
 			return nil, fmt.Errorf("tailscale.listen is enabled but tailscale service is not initialized")
 		}

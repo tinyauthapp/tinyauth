@@ -81,8 +81,10 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			PrivateKeyPath: "./tinyauth_oidc_key",
 			PublicKeyPath:  "./tinyauth_oidc_key.pub",
 		},
-		Tailscale: TailscaleConfig{
-			Dir: "./tailscale_state",
+		Experimental: ExperimentalConfig{
+			Tailscale: TailscaleConfig{
+				Dir: "./tailscale_state",
+			},
 		},
 		LabelProvider: "auto",
 	}
@@ -93,29 +95,28 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 		cfg.Resources.Path = "/data/resources"
 		cfg.OIDC.PrivateKeyPath = "/data/oidc/key.pem"
 		cfg.OIDC.PublicKeyPath = "/data/oidc/key.pub"
-		cfg.Tailscale.Dir = "/data/tailscale"
+		cfg.Experimental.Tailscale.Dir = "/data/tailscale"
 	}
 
 	return cfg
 }
 
 type Config struct {
-	AppURL    string          `description:"The base URL where the app is hosted." yaml:"appUrl"`
-	Database  DatabaseConfig  `description:"Database configuration." yaml:"database"`
-	Analytics AnalyticsConfig `description:"Analytics configuration." yaml:"analytics"`
-	Resources ResourcesConfig `description:"Resources configuration." yaml:"resources"`
-	Server    ServerConfig    `description:"Server configuration." yaml:"server"`
-	Auth      AuthConfig      `description:"Authentication configuration." yaml:"auth"`
-	Apps      map[string]App  `description:"Application ACLs configuration." yaml:"apps"`
-	OAuth     OAuthConfig     `description:"OAuth configuration." yaml:"oauth"`
-	OIDC      OIDCConfig      `description:"OIDC configuration." yaml:"oidc"`
-	UI        UIConfig        `description:"UI customization." yaml:"ui"`
-	LDAP      LDAPConfig      `description:"LDAP configuration." yaml:"ldap"`
-	// Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
-	LabelProvider string          `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
-	Log           LogConfig       `description:"Logging configuration." yaml:"log"`
-	Tailscale     TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale"`
-	ConfigFile    string          `description:"Path to config file." yaml:"-"`
+	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl"`
+	Database      DatabaseConfig     `description:"Database configuration." yaml:"database"`
+	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics"`
+	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources"`
+	Server        ServerConfig       `description:"Server configuration." yaml:"server"`
+	Auth          AuthConfig         `description:"Authentication configuration." yaml:"auth"`
+	Apps          map[string]App     `description:"Application ACLs configuration." yaml:"apps"`
+	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth"`
+	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc"`
+	UI            UIConfig           `description:"UI customization." yaml:"ui"`
+	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap"`
+	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider"`
+	Log           LogConfig          `description:"Logging configuration." yaml:"log"`
+	ConfigFile    string             `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {
@@ -237,8 +238,9 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level"`
 }
 
-// no experimental features
-type ExperimentalConfig struct{}
+type ExperimentalConfig struct {
+	Tailscale TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale"`
+}
 
 type TailscaleConfig struct {
 	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled"`
