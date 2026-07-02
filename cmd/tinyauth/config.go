@@ -11,7 +11,7 @@ import (
 func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
 	return &cli.Command{
 		Name:          "config",
-		Description:   "Print the configuration of Tinyauth",
+		Description:   "Dump the current configuration in JSON format, useful for debugging",
 		Configuration: tconfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {

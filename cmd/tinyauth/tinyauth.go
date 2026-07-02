@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/loaders"
 
-	"github.com/rs/zerolog/log"
 	"github.com/tinyauthapp/paerser/cli"
 )
 
@@ -34,83 +35,104 @@ func main() {
 
 	cmdUser := &cli.Command{
 		Name:        "user",
-		Description: "Manage Tinyauth users",
+		Description: "Manage users",
 	}
 
 	cmdTotp := &cli.Command{
 		Name:        "totp",
-		Description: "Manage Tinyauth TOTP users",
+		Description: "Manage TOTP users",
 	}
 
 	cmdOidc := &cli.Command{
 		Name:        "oidc",
-		Description: "Manage Tinyauth OIDC clients",
+		Description: "Manage OIDC clients",
 	}
 
-	err := cmdTinyauth.AddCommand(versionCmd())
+	helpCmd := &cli.Command{
+		Name:        "help",
+		Description: "Show the help message",
+		Run: func(_ []string) error {
+			return cmdTinyauth.PrintHelp(os.Stdout)
+		},
+	}
+
+	err := cmdTinyauth.AddCommand(helpCmd)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add version command")
+		fatalf(err, "Failed to add help command")
+	}
+
+	err = cmdTinyauth.AddCommand(versionCmd())
+
+	if err != nil {
+		fatalf(err, "Failed to add version command")
 	}
 
 	err = cmdTinyauth.AddCommand(configCmd(tConfig, loaders))
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add config command")
+		fatalf(err, "Failed to add config command")
 	}
 
 	err = cmdUser.AddCommand(verifyUserCmd())
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add verify command")
+		fatalf(err, "Failed to add user verify command")
 	}
 
 	err = cmdTinyauth.AddCommand(healthcheckCmd())
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add healthcheck command")
+		fatalf(err, "Failed to add healthcheck command")
 	}
 
 	err = cmdTotp.AddCommand(generateTotpCmd())
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add generate command")
+		fatalf(err, "Failed to add totp generate command")
 	}
 
 	err = cmdUser.AddCommand(createUserCmd())
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add create command")
+		fatalf(err, "Failed to add create user command")
 	}
 
 	err = cmdOidc.AddCommand(createOidcClientCmd())
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add create command")
+		fatalf(err, "Failed to add create oidc client command")
 	}
 
 	err = cmdTinyauth.AddCommand(cmdUser)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add user command")
+		fatalf(err, "Failed to add user command")
 	}
 
 	err = cmdTinyauth.AddCommand(cmdTotp)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add totp command")
+		fatalf(err, "Failed to add totp command")
 	}
 
 	err = cmdTinyauth.AddCommand(cmdOidc)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add oidc command")
+		fatalf(err, "Failed to add oidc command")
 	}
 
 	err = cli.Execute(cmdTinyauth)
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to execute command")
+		if strings.Contains(err.Error(), "command not found") {
+			fmt.Println("Command not found. Use 'tinyauth help' to see available commands.")
+			return
+		}
+		if strings.Contains(err.Error(), "command is not runnable") {
+			return
+		}
+		fatalf(err, "Failed to execute command")
 	}
 }
 
@@ -130,4 +152,9 @@ type themeBase struct{}
 
 func (t *themeBase) Theme(isDark bool) *huh.Styles {
 	return huh.ThemeBase(isDark)
+}
+
+func fatalf(err error, msg string) {
+	fmt.Printf("%s: %v\n", msg, err)
+	os.Exit(1)
 }
