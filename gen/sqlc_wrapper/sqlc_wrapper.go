@@ -1,4 +1,4 @@
-// gen/sqlc-wrapper generates store.go wrapper files for each sqlc driver package under
+// gen/sqlc_wrapper generates store.go wrapper files for each sqlc driver package under
 // internal/repository/<driver>/. Run via:
 //
 //	go generate ./internal/repository/...
@@ -32,7 +32,7 @@ import (
 var storeSrc string
 
 func main() {
-	fmt.Println("sqlc-wrapper: generating store.go files for sqlc driver packages...")
+	fmt.Println("sqlc_wrapper: generating store.go files for sqlc driver packages...")
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}

@@ -36,9 +36,9 @@ jobs:
       - name: Check codegen is up to date
         run: |
           sqlc generate
-          go generate ./internal/repository/...
-          git diff --exit-code -- internal/repository/
-          git status --porcelain -- internal/repository/ | grep -q . && echo "untracked files in internal/repository/" && exit 1 || true
+          go generate ./...
+          git diff --exit-code
+          git status --porcelain | grep -q . && echo "untracked files code gen files" && exit 1 || true
 
       - name: Install frontend dependencies
         working-directory: ./frontend
