@@ -53,19 +53,37 @@ func createOidcClientCmd() *cli.Command {
 
 			// end variables
 			fmt.Fprintf(&buf, "Environment variables:\n\n")
-			renderToBuf(&buf, map[string]string{
-				fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTID", uclientName):     clientId,
-				fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTSECRET", uclientName): clientSecret,
-				fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_NAME", uclientName):         utils.Capitalize(lclientName),
+			renderToBuf(&buf, []kv{
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTID", uclientName),
+					v: clientId,
+				},
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTSECRET", uclientName),
+					v: clientSecret,
+				},
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_NAME", uclientName),
+					v: utils.Capitalize(lclientName),
+				},
 			}, "=")
 			fmt.Fprintf(&buf, "\n")
 
 			// cli flags
 			fmt.Fprintf(&buf, "CLI flags:\n\n")
-			renderToBuf(&buf, map[string]string{
-				fmt.Sprintf("--oidc-clients-%s-clientid", lclientName):     clientId,
-				fmt.Sprintf("--oidc-clients-%s-clientsecret", lclientName): clientSecret,
-				fmt.Sprintf("--oidc-clients-%s-name", lclientName):         utils.Capitalize(lclientName),
+			renderToBuf(&buf, []kv{
+				{
+					k: fmt.Sprintf("--oidc-clients-%s-clientid", lclientName),
+					v: clientId,
+				},
+				{
+					k: fmt.Sprintf("--oidc-clients-%s-clientsecret", lclientName),
+					v: clientSecret,
+				},
+				{
+					k: fmt.Sprintf("--oidc-clients-%s-name", lclientName),
+					v: utils.Capitalize(lclientName),
+				},
 			}, "=")
 			fmt.Fprintf(&buf, "\n")
 

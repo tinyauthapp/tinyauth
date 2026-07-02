@@ -168,11 +168,16 @@ func fatalf(err error, msg string) {
 	os.Exit(1)
 }
 
-func renderToBuf(buf *strings.Builder, kv map[string]string, sep string) {
-	for k, v := range kv {
-		buf.WriteString(redStyle.Render(k))
+type kv struct {
+	k string
+	v string
+}
+
+func renderToBuf(buf *strings.Builder, kv []kv, sep string) {
+	for _, i := range kv {
+		buf.WriteString(redStyle.Render(i.k))
 		buf.WriteString(grayStyle.Render(sep))
-		buf.WriteString(greenStyle.Render(v))
+		buf.WriteString(greenStyle.Render(i.v))
 		buf.WriteString("\n")
 	}
 }

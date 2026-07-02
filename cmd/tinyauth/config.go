@@ -12,7 +12,7 @@ import (
 func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
 	return &cli.Command{
 		Name:          "config",
-		Description:   "Dump the current configuration in JSON format, useful for debugging",
+		Description:   "Dump the current configuration in YAML format, useful for debugging",
 		Configuration: tconfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
@@ -30,11 +30,15 @@ func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command
 				if l == "" {
 					continue
 				}
+				if strings.HasPrefix(strings.TrimLeft(l, " "), "- ") {
+					buf.WriteString(greenStyle.Render(l))
+					buf.WriteString("\n")
+					continue
+				}
 				lp := strings.SplitN(l, ":", 2)
 				buf.WriteString(redStyle.Render(lp[0]))
 				buf.WriteString(grayStyle.Render(":"))
 				if len(lp) == 2 {
-					buf.WriteString("")
 					buf.WriteString(greenStyle.Render(lp[1]))
 				}
 				buf.WriteString("\n")

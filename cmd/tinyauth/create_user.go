@@ -88,13 +88,14 @@ func createUserCmd() *cli.Command {
 
 		// Only the docker compose output needs $ escaped, the raw hash is correct everywhere else
 		passwdStr := string(passwd)
-		dockerStr := passwdStr
+		outputStr := passwdStr
+
 		if tCfg.Docker {
-			dockerStr = strings.ReplaceAll(passwdStr, "$", "$$")
+			outputStr = strings.ReplaceAll(passwdStr, "$", "$$")
 		}
 
-		user := fmt.Sprintf("%s:%s", tCfg.Username, dockerStr)
-		escapedUser := strings.ReplaceAll(user, "$", "$$")
+		user := fmt.Sprintf("%s:%s", tCfg.Username, passwdStr)
+		escapedUser := fmt.Sprintf("%s:%s", tCfg.Username, outputStr)
 		escapedUser = `"` + escapedUser + `"`
 
 		buf := strings.Builder{}
@@ -104,14 +105,14 @@ func createUserCmd() *cli.Command {
 
 		// environment variable
 		fmt.Fprint(&buf, "Environment variable:\n\n")
-		renderToBuf(&buf, map[string]string{
-			"TINYAUTH_AUTH_USERS": escapedUser,
+		renderToBuf(&buf, []kv{
+			{"TINYAUTH_AUTH_USERS", escapedUser},
 		}, "=")
 
 		// cli flags
 		fmt.Fprint(&buf, "\nCLI flags:\n\n")
-		renderToBuf(&buf, map[string]string{
-			"--auth.users": escapedUser,
+		renderToBuf(&buf, []kv{
+			{"--auth.users", escapedUser},
 		}, "=")
 
 		// yaml config
