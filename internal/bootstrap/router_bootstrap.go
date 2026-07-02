@@ -132,7 +132,7 @@ func (app *BootstrapApp) setupRouter() error {
 func (app *BootstrapApp) getListenerFunc() (func(ctx context.Context) error, error) {
 	if app.config.Experimental.Tailscale.Listen {
 		if app.services.tailscaleService == nil {
-			return nil, fmt.Errorf("tailscale.listen is enabled but tailscale service is not initialized")
+			return nil, fmt.Errorf("tailscale.experimental.listen is enabled but tailscale service is not initialized")
 		}
 		return app.serveTailscale, nil
 	}
