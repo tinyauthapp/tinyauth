@@ -156,11 +156,11 @@ func (t *themeBase) Theme(isDark bool) *huh.Styles {
 }
 
 var (
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Red)
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Green)
-	grayStyle   = lipgloss.NewStyle().Foreground(lipgloss.Lighten(lipgloss.Black, 0.8))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
-	blueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Blue)
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(160))
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(34))
+	grayStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(247))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(214))
+	blueStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(75))
 )
 
 func fatalf(err error, msg string) {
