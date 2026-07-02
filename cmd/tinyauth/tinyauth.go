@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/loaders"
@@ -129,7 +130,7 @@ func main() {
 			fmt.Println("Command not found. Use 'tinyauth help' to see available commands.")
 			return
 		}
-		if strings.Contains(err.Error(), "command is not runnable") {
+		if strings.Contains(err.Error(), "is not runnable") {
 			return
 		}
 		fatalf(err, "Failed to execute command")
@@ -154,7 +155,24 @@ func (t *themeBase) Theme(isDark bool) *huh.Styles {
 	return huh.ThemeBase(isDark)
 }
 
+var (
+	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Red)
+	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Green)
+	grayStyle   = lipgloss.NewStyle().Foreground(lipgloss.Lighten(lipgloss.Black, 0.8))
+	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
+	blueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Blue)
+)
+
 func fatalf(err error, msg string) {
 	fmt.Printf("%s: %v\n", msg, err)
 	os.Exit(1)
+}
+
+func renderToBuf(buf *strings.Builder, kv map[string]string, sep string) {
+	for k, v := range kv {
+		buf.WriteString(redStyle.Render(k))
+		buf.WriteString(grayStyle.Render(sep))
+		buf.WriteString(greenStyle.Render(v))
+		buf.WriteString("\n")
+	}
 }

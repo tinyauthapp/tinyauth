@@ -3,9 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 
 	"charm.land/huh/v2"
 	"github.com/pquerna/otp/totp"
@@ -38,81 +38,85 @@ func verifyUserCmd() *cli.Command {
 		&cli.FlagLoader{},
 	}
 
-	return &cli.Command{
+	cmd := &cli.Command{
 		Name:          "verify",
 		Description:   "Verify a user is set up correctly",
 		Configuration: tCfg,
 		Resources:     loaders,
-		Run: func(_ []string) error {
-			log := logger.NewLogger().WithSimpleConfig()
-			log.Init()
-
-			if tCfg.Interactive {
-				form := huh.NewForm(
-					huh.NewGroup(
-						huh.NewInput().Title("User (username:hash:totp)").Value(&tCfg.User).Validate((func(s string) error {
-							if s == "" {
-								return errors.New("user cannot be empty")
-							}
-							return nil
-						})),
-						huh.NewInput().Title("Username").Value(&tCfg.Username).Validate((func(s string) error {
-							if s == "" {
-								return errors.New("username cannot be empty")
-							}
-							return nil
-						})),
-						huh.NewInput().Title("Password").Value(&tCfg.Password).Validate((func(s string) error {
-							if s == "" {
-								return errors.New("password cannot be empty")
-							}
-							return nil
-						})),
-						huh.NewInput().Title("TOTP Code (optional)").Value(&tCfg.Totp),
-					),
-				)
-
-				theme := new(themeBase)
-				err := form.WithTheme(theme).Run()
-
-				if err != nil {
-					return fmt.Errorf("failed to run interactive prompt: %w", err)
-				}
-			}
-
-			user, err := utils.ParseUser(tCfg.User)
-
-			if err != nil {
-				return fmt.Errorf("failed to parse user: %w", err)
-			}
-
-			if user.Username != tCfg.Username {
-				return fmt.Errorf("username is incorrect")
-			}
-
-			err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(tCfg.Password))
-
-			if err != nil {
-				return fmt.Errorf("password is incorrect: %w", err)
-			}
-
-			if user.TOTPSecret == "" {
-				if tCfg.Totp != "" {
-					log.App.Warn().Msg("User does not have TOTP secret")
-				}
-				log.App.Info().Msg("User verified")
-				return nil
-			}
-
-			ok := totp.Validate(tCfg.Totp, user.TOTPSecret)
-
-			if !ok {
-				return fmt.Errorf("TOTP code incorrect")
-			}
-
-			log.App.Info().Msg("User verified")
-
-			return nil
-		},
 	}
+
+	cmd.Run = func(_ []string) error {
+		if tCfg.Interactive {
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().Title("User (username:hash:totp)").Value(&tCfg.User).Validate((func(s string) error {
+						if s == "" {
+							return errors.New("user cannot be empty")
+						}
+						return nil
+					})),
+					huh.NewInput().Title("Username").Value(&tCfg.Username).Validate((func(s string) error {
+						if s == "" {
+							return errors.New("username cannot be empty")
+						}
+						return nil
+					})),
+					huh.NewInput().Title("Password").Value(&tCfg.Password).Validate((func(s string) error {
+						if s == "" {
+							return errors.New("password cannot be empty")
+						}
+						return nil
+					})),
+					huh.NewInput().Title("TOTP Code (optional)").Value(&tCfg.Totp),
+				),
+			)
+
+			theme := new(themeBase)
+			err := form.WithTheme(theme).Run()
+
+			if err != nil {
+				return fmt.Errorf("failed to run interactive prompt: %w", err)
+			}
+		}
+
+		if tCfg.User == "" || tCfg.Username == "" || tCfg.Password == "" {
+			cmd.PrintHelp(os.Stdout)
+			return fmt.Errorf("user, username, and password are required")
+		}
+
+		user, err := utils.ParseUser(tCfg.User)
+
+		if err != nil {
+			return fmt.Errorf("failed to parse user: %w", err)
+		}
+
+		if user.Username != tCfg.Username {
+			return fmt.Errorf("username is incorrect")
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(tCfg.Password))
+
+		if err != nil {
+			return fmt.Errorf("password is incorrect: %w", err)
+		}
+
+		if user.TOTPSecret == "" {
+			if tCfg.Totp != "" {
+				fmt.Println(yellowStyle.Render("⚠") + " TOTP code provided but user does not have TOTP enabled")
+			}
+			fmt.Println(greenStyle.Render("✓") + " User verified")
+			return nil
+		}
+
+		ok := totp.Validate(tCfg.Totp, user.TOTPSecret)
+		if !ok {
+			return fmt.Errorf("TOTP code incorrect")
+		}
+
+		fmt.Println(greenStyle.Render("✓") + " User verified")
+
+		return nil
+	}
+
+	return cmd
 }

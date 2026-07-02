@@ -14,9 +14,9 @@ func versionCmd() *cli.Command {
 		Configuration: nil,
 		Resources:     nil,
 		Run: func(_ []string) error {
-			fmt.Printf("Version: %s\n", model.Version)
-			fmt.Printf("Commit Hash: %s\n", model.CommitHash)
-			fmt.Printf("Build Timestamp: %s\n", model.BuildTimestamp)
+			fmt.Printf("Version: %s\n", blueStyle.Render(model.Version))
+			fmt.Printf("Commit Hash: %s\n", blueStyle.Render(model.CommitHash))
+			fmt.Printf("Build Timestamp: %s\n", blueStyle.Render(model.BuildTimestamp))
 			return nil
 		},
 	}

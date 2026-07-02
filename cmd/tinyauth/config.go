@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/tinyauthapp/paerser/cli"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"gopkg.in/yaml.v3"
 )
 
 func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
@@ -15,11 +16,31 @@ func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command
 		Configuration: tconfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			jsonBytes, err := json.MarshalIndent(tconfig, "", "  ")
+			buf := strings.Builder{}
+
+			fmt.Fprint(&buf, "Your current configuration in YAML is:\n\n")
+
+			yout, err := yaml.Marshal(&tconfig)
+
 			if err != nil {
-				return fmt.Errorf("failed to marshal configuration: %w", err)
+				return fmt.Errorf("failed to marshal yaml: %w", err)
 			}
-			fmt.Println(string(jsonBytes))
+
+			for l := range strings.SplitSeq(string(yout), "\n") {
+				if l == "" {
+					continue
+				}
+				lp := strings.SplitN(l, ":", 2)
+				buf.WriteString(redStyle.Render(lp[0]))
+				buf.WriteString(grayStyle.Render(":"))
+				if len(lp) == 2 {
+					buf.WriteString("")
+					buf.WriteString(greenStyle.Render(lp[1]))
+				}
+				buf.WriteString("\n")
+			}
+
+			fmt.Println(buf.String())
 			return nil
 		},
 	}

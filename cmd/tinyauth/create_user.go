@@ -3,11 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/tinyauthapp/paerser/cli"
-	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -34,62 +34,104 @@ func createUserCmd() *cli.Command {
 		&cli.FlagLoader{},
 	}
 
-	return &cli.Command{
+	cmd := &cli.Command{
 		Name:          "create",
 		Description:   "Create a user",
 		Configuration: tCfg,
 		Resources:     loaders,
-		Run: func(_ []string) error {
-			log := logger.NewLogger().WithSimpleConfig()
-			log.Init()
-
-			if tCfg.Interactive {
-				form := huh.NewForm(
-					huh.NewGroup(
-						huh.NewInput().Title("Username").Value(&tCfg.Username).Validate((func(s string) error {
-							if s == "" {
-								return errors.New("username cannot be empty")
-							}
-							return nil
-						})),
-						huh.NewInput().Title("Password").Value(&tCfg.Password).Validate((func(s string) error {
-							if s == "" {
-								return errors.New("password cannot be empty")
-							}
-							return nil
-						})),
-						huh.NewSelect[bool]().Title("Format the output for Docker?").Options(huh.NewOption("Yes", true), huh.NewOption("No", false)).Value(&tCfg.Docker),
-					),
-				)
-
-				theme := new(themeBase)
-				err := form.WithTheme(theme).Run()
-
-				if err != nil {
-					return fmt.Errorf("failed to run interactive prompt: %w", err)
-				}
-			}
-
-			if tCfg.Username == "" || tCfg.Password == "" {
-				return errors.New("username and password cannot be empty")
-			}
-
-			log.App.Info().Str("username", tCfg.Username).Msg("Creating user")
-
-			passwd, err := bcrypt.GenerateFromPassword([]byte(tCfg.Password), bcrypt.DefaultCost)
-			if err != nil {
-				return fmt.Errorf("failed to hash password: %w", err)
-			}
-
-			// If docker format is enabled, escape the dollar sign
-			passwdStr := string(passwd)
-			if tCfg.Docker {
-				passwdStr = strings.ReplaceAll(passwdStr, "$", "$$")
-			}
-
-			log.App.Info().Str("user", fmt.Sprintf("%s:%s", tCfg.Username, passwdStr)).Msg("User created")
-
-			return nil
-		},
 	}
+
+	cmd.Run = func(_ []string) error {
+		if tCfg.Interactive {
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().Title("Username").Value(&tCfg.Username).Validate(func(s string) error {
+						if s == "" {
+							return errors.New("username cannot be empty")
+						}
+						if strings.Contains(s, ":") {
+							return errors.New("username cannot contain ':'")
+						}
+						return nil
+					}),
+					huh.NewInput().Title("Password").Value(&tCfg.Password).Validate(func(s string) error {
+						if s == "" {
+							return errors.New("password cannot be empty")
+						}
+						return nil
+					}),
+					huh.NewSelect[bool]().Title("Format the output for Docker?").Options(huh.NewOption("Yes", true), huh.NewOption("No", false)).Value(&tCfg.Docker),
+				),
+			)
+
+			theme := new(themeBase)
+
+			err := form.WithTheme(theme).Run()
+			if err != nil {
+				return fmt.Errorf("failed to run interactive prompt: %w", err)
+			}
+		}
+
+		if tCfg.Username == "" || tCfg.Password == "" {
+			cmd.PrintHelp(os.Stdout)
+			return errors.New("username and password cannot be empty")
+		}
+
+		if strings.Contains(tCfg.Username, ":") {
+			return errors.New("username cannot contain ':'")
+		}
+
+		passwd, err := bcrypt.GenerateFromPassword([]byte(tCfg.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
+
+		// Only the docker compose output needs $ escaped, the raw hash is correct everywhere else
+		passwdStr := string(passwd)
+		dockerStr := passwdStr
+		if tCfg.Docker {
+			dockerStr = strings.ReplaceAll(passwdStr, "$", "$$")
+		}
+
+		user := fmt.Sprintf("%s:%s", tCfg.Username, dockerStr)
+		escapedUser := strings.ReplaceAll(user, "$", "$$")
+		escapedUser = `"` + escapedUser + `"`
+
+		buf := strings.Builder{}
+
+		// header
+		fmt.Fprintf(&buf, "Created user '%s'.\n\n", tCfg.Username)
+
+		// environment variable
+		fmt.Fprint(&buf, "Environment variable:\n\n")
+		renderToBuf(&buf, map[string]string{
+			"TINYAUTH_AUTH_USERS": escapedUser,
+		}, "=")
+
+		// cli flags
+		fmt.Fprint(&buf, "\nCLI flags:\n\n")
+		renderToBuf(&buf, map[string]string{
+			"--auth.users": escapedUser,
+		}, "=")
+
+		// yaml config
+		fmt.Fprint(&buf, "\nYAML config:\n\n")
+
+		buf.WriteString(redStyle.Render("auth"))
+		buf.WriteString(grayStyle.Render(":"))
+		buf.WriteString("\n")
+		buf.WriteString(redStyle.Render("  users"))
+		buf.WriteString(grayStyle.Render(":"))
+		buf.WriteString(" ")
+		buf.WriteString(greenStyle.Render(user))
+		buf.WriteString("\n\n")
+
+		// footer
+		fmt.Fprint(&buf, "Use your config option of choice to add the user to Tinyauth and then restart.")
+
+		fmt.Println(buf.String())
+		return nil
+	}
+
+	return cmd
 }
