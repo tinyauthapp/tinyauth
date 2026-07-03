@@ -32,8 +32,8 @@ func createOidcClientCmd() *cli.Command {
 				return errors.New("client name can only contain alphanumeric characters and hyphens")
 			}
 
-			uuid := uuid.New()
-			clientId := uuid.String()
+			u := uuid.New()
+			clientId := u.String()
 			clientSecret := "ta-" + utils.GenerateString(61)
 
 			uclientName := strings.ToUpper(clientName)
@@ -72,15 +72,15 @@ func createOidcClientCmd() *cli.Command {
 			fmt.Fprintf(&buf, "CLI flags:\n\n")
 			renderToBuf(&buf, []kv{
 				{
-					k: fmt.Sprintf("--oidc-clients-%s-clientid", lclientName),
+					k: fmt.Sprintf("--oidc.clients.%s.clientid", lclientName),
 					v: clientId,
 				},
 				{
-					k: fmt.Sprintf("--oidc-clients-%s-clientsecret", lclientName),
+					k: fmt.Sprintf("--oidc.clients.%s.clientsecret", lclientName),
 					v: clientSecret,
 				},
 				{
-					k: fmt.Sprintf("--oidc-clients-%s-name", lclientName),
+					k: fmt.Sprintf("--oidc.clients.%s.name", lclientName),
 					v: utils.Capitalize(lclientName),
 				},
 			}, "=")
