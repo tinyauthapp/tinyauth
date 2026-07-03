@@ -279,7 +279,7 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.ConfiguredProviders = configuredProviders
 
 	// if tailscale is enabled and listening, replace the app url with the tailscale hostname
-	if app.services.tailscaleService != nil && app.config.Tailscale.Listen {
+	if app.services.tailscaleService != nil && app.config.Experimental.Tailscale.Listen {
 		tailscaleUrl := "https://" + app.services.tailscaleService.GetHostname()
 
 		// if the tailscale url is different from the app url, replace it

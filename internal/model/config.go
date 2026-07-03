@@ -81,8 +81,10 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			PrivateKeyPath: "./tinyauth_oidc_key",
 			PublicKeyPath:  "./tinyauth_oidc_key.pub",
 		},
-		Tailscale: TailscaleConfig{
-			Dir: "./tailscale_state",
+		Experimental: ExperimentalConfig{
+			Tailscale: TailscaleConfig{
+				Dir: "./tailscale_state",
+			},
 		},
 		LabelProvider: "auto",
 	}
@@ -93,29 +95,28 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 		cfg.Resources.Path = "/data/resources"
 		cfg.OIDC.PrivateKeyPath = "/data/oidc/key.pem"
 		cfg.OIDC.PublicKeyPath = "/data/oidc/key.pub"
-		cfg.Tailscale.Dir = "/data/tailscale"
+		cfg.Experimental.Tailscale.Dir = "/data/tailscale"
 	}
 
 	return cfg
 }
 
 type Config struct {
-	AppURL    string          `description:"The base URL where the app is hosted." yaml:"appUrl,omitempty"`
-	Database  DatabaseConfig  `description:"Database configuration." yaml:"database,omitempty"`
-	Analytics AnalyticsConfig `description:"Analytics configuration." yaml:"analytics,omitempty"`
-	Resources ResourcesConfig `description:"Resources configuration." yaml:"resources,omitempty"`
-	Server    ServerConfig    `description:"Server configuration." yaml:"server,omitempty"`
-	Auth      AuthConfig      `description:"Authentication configuration." yaml:"auth,omitempty"`
-	Apps      map[string]App  `description:"Application ACLs configuration." yaml:"apps,omitempty"`
-	OAuth     OAuthConfig     `description:"OAuth configuration." yaml:"oauth,omitempty"`
-	OIDC      OIDCConfig      `description:"OIDC configuration." yaml:"oidc,omitempty"`
-	UI        UIConfig        `description:"UI customization." yaml:"ui,omitempty"`
-	LDAP      LDAPConfig      `description:"LDAP configuration." yaml:"ldap,omitempty"`
-	// Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
-	LabelProvider string          `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
-	Log           LogConfig       `description:"Logging configuration." yaml:"log,omitempty"`
-	Tailscale     TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
-	ConfigFile    string          `description:"Path to config file." yaml:"-"`
+	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl,omitempty"`
+	Database      DatabaseConfig     `description:"Database configuration." yaml:"database,omitempty"`
+	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics,omitempty"`
+	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources,omitempty"`
+	Server        ServerConfig       `description:"Server configuration." yaml:"server,omitempty"`
+	Auth          AuthConfig         `description:"Authentication configuration." yaml:"auth,omitempty"`
+	Apps          map[string]App     `description:"Application ACLs configuration." yaml:"apps,omitempty"`
+	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth,omitempty"`
+	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc,omitempty"`
+	UI            UIConfig           `description:"UI customization." yaml:"ui,omitempty"`
+	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap,omitempty"`
+	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
+	Log           LogConfig          `description:"Logging configuration." yaml:"log,omitempty"`
+	ConfigFile    string             `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {
@@ -237,8 +238,9 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level,omitempty"`
 }
 
-// no experimental features
-type ExperimentalConfig struct{}
+type ExperimentalConfig struct {
+	Tailscale TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale"`
+}
 
 type TailscaleConfig struct {
 	Enabled   bool   `description:"Enable Tailscale integration." yaml:"enabled,omitempty"`

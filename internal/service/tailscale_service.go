@@ -45,17 +45,17 @@ type TailscaleServiceInput struct {
 }
 
 func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
-	if !i.Config.Tailscale.Enabled {
+	if !i.Config.Experimental.Tailscale.Enabled {
 		return nil, nil
 	}
 
 	srv := new(tsnet.Server)
 
 	// node options
-	srv.Dir = i.Config.Tailscale.Dir
-	srv.Hostname = i.Config.Tailscale.Hostname
-	srv.AuthKey = i.Config.Tailscale.AuthKey
-	srv.Ephemeral = i.Config.Tailscale.Ephemeral
+	srv.Dir = i.Config.Experimental.Tailscale.Dir
+	srv.Hostname = i.Config.Experimental.Tailscale.Hostname
+	srv.AuthKey = i.Config.Experimental.Tailscale.AuthKey
+	srv.Ephemeral = i.Config.Experimental.Tailscale.Ephemeral
 
 	// redirect logs to zerolog
 	srv.Logf = i.Log.App.Printf
@@ -94,7 +94,7 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 
 	i.Ding.Go(service.watchAndClose, ding.RingMajor)
 
-	if i.Config.Tailscale.Funnel && !i.Config.Tailscale.Listen {
+	if i.Config.Experimental.Tailscale.Funnel && !i.Config.Experimental.Tailscale.Listen {
 		service.log.App.Warn().Msg("Tailscale Funnel is enabled but listen is disabled. Funnel will not work without listen enabled.")
 	}
 
@@ -153,7 +153,7 @@ func (ts *TailscaleService) CreateListener() (net.Listener, error) {
 		return *ts.ln, nil
 	}
 
-	if ts.config.Tailscale.Funnel {
+	if ts.config.Experimental.Tailscale.Funnel {
 		ln, err := ts.srv.ListenFunnel("tcp", ":443")
 		if err != nil {
 			return nil, err

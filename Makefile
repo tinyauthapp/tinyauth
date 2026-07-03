@@ -93,8 +93,7 @@ sql:
 
 # Go gen
 generate:
-	go run ./gen
-	go generate ./internal/repository/...
+	go generate ./...
 
 # Docker image
 docker:
