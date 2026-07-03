@@ -10,6 +10,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/loaders"
+	"gopkg.in/yaml.v3"
 
 	"github.com/tinyauthapp/paerser/cli"
 )
@@ -218,4 +219,34 @@ func renderToBuf(buf *strings.Builder, kv []kv, sep string) {
 		buf.WriteString(colors.green.Render(i.v))
 		buf.WriteString("\n")
 	}
+}
+
+func renderYamlToBuf(buf *strings.Builder, i any) error {
+	colors := getColors()
+
+	yout, err := yaml.Marshal(i)
+
+	if err != nil {
+		return fmt.Errorf("failed to marshal yaml: %w", err)
+	}
+
+	for l := range strings.SplitSeq(string(yout), "\n") {
+		if l == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimLeft(l, " "), "- ") {
+			buf.WriteString(colors.green.Render(l))
+			buf.WriteString("\n")
+			continue
+		}
+		lp := strings.SplitN(l, ":", 2)
+		buf.WriteString(colors.red.Render(lp[0]))
+		buf.WriteString(colors.gray.Render(":"))
+		if len(lp) == 2 {
+			buf.WriteString(colors.green.Render(lp[1]))
+		}
+		buf.WriteString("\n")
+	}
+
+	return nil
 }

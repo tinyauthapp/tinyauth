@@ -10,7 +10,6 @@ import (
 	"github.com/tinyauthapp/paerser/cli"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
-	"gopkg.in/yaml.v3"
 )
 
 func createOidcClientCmd() *cli.Command {
@@ -21,8 +20,6 @@ func createOidcClientCmd() *cli.Command {
 		Resources:     nil,
 		AllowArg:      true,
 		Run: func(args []string) error {
-			colors := getColors()
-
 			if len(args) == 0 {
 				return errors.New("client name is required. use tinyauth oidc create <name>")
 			}
@@ -92,7 +89,7 @@ func createOidcClientCmd() *cli.Command {
 			// yaml config
 			fmt.Fprintf(&buf, "YAML config:\n\n")
 
-			yout, err := yaml.Marshal(&model.OIDCConfig{
+			err = renderYamlToBuf(&buf, &model.OIDCConfig{
 				Clients: map[string]model.OIDCClientConfig{
 					lclientName: {
 						ClientID:     clientId,
@@ -103,21 +100,7 @@ func createOidcClientCmd() *cli.Command {
 			})
 
 			if err != nil {
-				return fmt.Errorf("failed to marshal yaml: %w", err)
-			}
-
-			for l := range strings.SplitSeq(string(yout), "\n") {
-				if l == "" {
-					continue
-				}
-				lp := strings.SplitN(l, ":", 2)
-				buf.WriteString(colors.red.Render(lp[0]))
-				buf.WriteString(colors.gray.Render(":"))
-				if len(lp) == 2 {
-					buf.WriteString("")
-					buf.WriteString(colors.green.Render(lp[1]))
-				}
-				buf.WriteString("\n")
+				return fmt.Errorf("failed to render yaml config: %w", err)
 			}
 
 			buf.WriteString("\n")

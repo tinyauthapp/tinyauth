@@ -8,6 +8,7 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/tinyauthapp/paerser/cli"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -42,8 +43,6 @@ func createUserCmd() *cli.Command {
 	}
 
 	cmd.Run = func(_ []string) error {
-		colors := getColors()
-
 		if tCfg.Interactive {
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -98,7 +97,6 @@ func createUserCmd() *cli.Command {
 
 		user := fmt.Sprintf("%s:%s", tCfg.Username, passwdStr)
 		escapedUser := fmt.Sprintf("%s:%s", tCfg.Username, outputStr)
-		escapedUser = `"` + escapedUser + `"`
 
 		buf := strings.Builder{}
 
@@ -114,20 +112,23 @@ func createUserCmd() *cli.Command {
 		// cli flags
 		fmt.Fprint(&buf, "\nCLI flags:\n\n")
 		renderToBuf(&buf, []kv{
-			{"--auth.users", escapedUser},
+			{"--auth.users", user},
 		}, "=")
 
 		// yaml config
 		fmt.Fprint(&buf, "\nYAML config:\n\n")
 
-		buf.WriteString(colors.red.Render("auth"))
-		buf.WriteString(colors.gray.Render(":"))
+		err = renderYamlToBuf(&buf, &model.Config{
+			Auth: model.AuthConfig{
+				Users: []string{user},
+			},
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to render yaml config: %w", err)
+		}
+
 		buf.WriteString("\n")
-		buf.WriteString(colors.red.Render("  users"))
-		buf.WriteString(colors.gray.Render(":"))
-		buf.WriteString(" ")
-		buf.WriteString(colors.green.Render(user))
-		buf.WriteString("\n\n")
 
 		// footer
 		fmt.Fprint(&buf, "Use your config option of choice to add the user to Tinyauth and then restart.")

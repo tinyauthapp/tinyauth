@@ -6,7 +6,6 @@ import (
 
 	"github.com/tinyauthapp/paerser/cli"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"gopkg.in/yaml.v3"
 )
 
 func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command {
@@ -16,37 +15,17 @@ func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command
 		Configuration: tconfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			colors := getColors()
-
 			buf := strings.Builder{}
 
 			fmt.Fprint(&buf, "Your current configuration in YAML is:\n\n")
 
-			yout, err := yaml.Marshal(&tconfig)
+			err := renderYamlToBuf(&buf, tconfig)
 
 			if err != nil {
-				return fmt.Errorf("failed to marshal yaml: %w", err)
+				return fmt.Errorf("failed to render yaml config: %w", err)
 			}
 
-			for l := range strings.SplitSeq(string(yout), "\n") {
-				if l == "" {
-					continue
-				}
-				if strings.HasPrefix(strings.TrimLeft(l, " "), "- ") {
-					buf.WriteString(colors.green.Render(l))
-					buf.WriteString("\n")
-					continue
-				}
-				lp := strings.SplitN(l, ":", 2)
-				buf.WriteString(colors.red.Render(lp[0]))
-				buf.WriteString(colors.gray.Render(":"))
-				if len(lp) == 2 {
-					buf.WriteString(colors.green.Render(lp[1]))
-				}
-				buf.WriteString("\n")
-			}
-
-			fmt.Println(buf.String())
+			fmt.Print(buf.String())
 			return nil
 		},
 	}
