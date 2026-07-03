@@ -7,6 +7,10 @@ const (
 	FrontendLoginForApp  FrontendLoginFor = "app"
 )
 
+type SimpleResponse struct {
+	Status  int    `json:"status"`
+	Message string `json:"message,omitempty"`
+}
 type UnauthorizedQuery struct {
 	Username string `url:"username"`
 	Resource string `url:"resource"`

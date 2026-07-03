@@ -22,12 +22,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @title Tinyauth API
-// @version development
-// @description Swagger documentation for Tinyauth's API.
-// @license.name AGPL-3.0
-// @license.url https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE
-// @BasePath /api
+// @title			Tinyauth API
+// @version		development
+// @description	Swagger documentation for Tinyauth's API.
+// @license.name	AGPL-3.0
+// @license.url	https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE
+// @BasePath		/
 func (app *BootstrapApp) setupRouter() error {
 	// we don't want gin debug mode
 	gin.SetMode(gin.ReleaseMode)

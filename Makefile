@@ -16,7 +16,7 @@ PROD_COMPOSE := $(shell test -f "docker-compose.test.prod.yml" && echo "docker-c
 
 .DEFAULT_GOAL := binary
 
-.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless swagger
+.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless swagger swagger-fmt
 
 # Deps
 deps:
@@ -105,4 +105,8 @@ docker-distroless:
 
 # Swagger
 swagger:
-	swag init -d ./internal/bootstrap -g router_bootstrap.go -o ./internal/swagger
+	swag init -d ./internal -g bootstrap/router_bootstrap.go -o ./internal/swagger
+
+# Swagger Format
+swagger-fmt:
+	swag fmt -d ./internal -g bootstrap/router_bootstrap.go
