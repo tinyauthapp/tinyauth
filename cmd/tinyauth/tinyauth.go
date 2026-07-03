@@ -157,11 +157,11 @@ func (t *themeBase) Theme(isDark bool) *huh.Styles {
 }
 
 type colors struct {
-	red    lipgloss.Style
-	green  lipgloss.Style
-	gray   lipgloss.Style
-	yellow lipgloss.Style
-	blue   lipgloss.Style
+	blue      lipgloss.Style
+	gray      lipgloss.Style
+	lightGray lipgloss.Style
+	green     lipgloss.Style
+	yellow    lipgloss.Style
 }
 
 func getColors() colors {
@@ -169,19 +169,19 @@ func getColors() colors {
 	forceColor := os.Getenv("FORCE_COLOR")
 
 	colorOut := colors{
-		red:    lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(160)),
-		green:  lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(34)),
-		gray:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(247)),
-		yellow: lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(214)),
-		blue:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(75)),
+		green:     lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(34)),
+		gray:      lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(245)),
+		yellow:    lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(214)),
+		blue:      lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(75)),
+		lightGray: lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(250)),
 	}
 
 	noColorOut := colors{
-		red:    lipgloss.NewStyle(),
-		green:  lipgloss.NewStyle(),
-		gray:   lipgloss.NewStyle(),
-		yellow: lipgloss.NewStyle(),
-		blue:   lipgloss.NewStyle(),
+		green:     lipgloss.NewStyle(),
+		gray:      lipgloss.NewStyle(),
+		yellow:    lipgloss.NewStyle(),
+		blue:      lipgloss.NewStyle(),
+		lightGray: lipgloss.NewStyle(),
 	}
 
 	useColors := true
@@ -214,9 +214,9 @@ type kv struct {
 func renderToBuf(buf *strings.Builder, kv []kv, sep string) {
 	colors := getColors()
 	for _, i := range kv {
-		buf.WriteString(colors.red.Render(i.k))
+		buf.WriteString(colors.blue.Render(i.k))
 		buf.WriteString(colors.gray.Render(sep))
-		buf.WriteString(colors.green.Render(i.v))
+		buf.WriteString(colors.lightGray.Render(i.v))
 		buf.WriteString("\n")
 	}
 }
@@ -235,15 +235,15 @@ func renderYamlToBuf(buf *strings.Builder, i any) error {
 			continue
 		}
 		if strings.HasPrefix(strings.TrimLeft(l, " "), "- ") {
-			buf.WriteString(colors.green.Render(l))
+			buf.WriteString(colors.lightGray.Render(l))
 			buf.WriteString("\n")
 			continue
 		}
 		lp := strings.SplitN(l, ":", 2)
-		buf.WriteString(colors.red.Render(lp[0]))
+		buf.WriteString(colors.blue.Render(lp[0]))
 		buf.WriteString(colors.gray.Render(":"))
 		if len(lp) == 2 {
-			buf.WriteString(colors.green.Render(lp[1]))
+			buf.WriteString(colors.lightGray.Render(lp[1]))
 		}
 		buf.WriteString("\n")
 	}
