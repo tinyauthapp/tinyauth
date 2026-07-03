@@ -16,6 +16,8 @@ func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command
 		Configuration: tconfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
+			colors := getColors()
+
 			buf := strings.Builder{}
 
 			fmt.Fprint(&buf, "Your current configuration in YAML is:\n\n")
@@ -31,15 +33,15 @@ func configCmd(tconfig *model.Config, loaders []cli.ResourceLoader) *cli.Command
 					continue
 				}
 				if strings.HasPrefix(strings.TrimLeft(l, " "), "- ") {
-					buf.WriteString(greenStyle.Render(l))
+					buf.WriteString(colors.green.Render(l))
 					buf.WriteString("\n")
 					continue
 				}
 				lp := strings.SplitN(l, ":", 2)
-				buf.WriteString(redStyle.Render(lp[0]))
-				buf.WriteString(grayStyle.Render(":"))
+				buf.WriteString(colors.red.Render(lp[0]))
+				buf.WriteString(colors.gray.Render(":"))
 				if len(lp) == 2 {
-					buf.WriteString(greenStyle.Render(lp[1]))
+					buf.WriteString(colors.green.Render(lp[1]))
 				}
 				buf.WriteString("\n")
 			}

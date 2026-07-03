@@ -42,6 +42,8 @@ func createUserCmd() *cli.Command {
 	}
 
 	cmd.Run = func(_ []string) error {
+		colors := getColors()
+
 		if tCfg.Interactive {
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -118,13 +120,13 @@ func createUserCmd() *cli.Command {
 		// yaml config
 		fmt.Fprint(&buf, "\nYAML config:\n\n")
 
-		buf.WriteString(redStyle.Render("auth"))
-		buf.WriteString(grayStyle.Render(":"))
+		buf.WriteString(colors.red.Render("auth"))
+		buf.WriteString(colors.gray.Render(":"))
 		buf.WriteString("\n")
-		buf.WriteString(redStyle.Render("  users"))
-		buf.WriteString(grayStyle.Render(":"))
+		buf.WriteString(colors.red.Render("  users"))
+		buf.WriteString(colors.gray.Render(":"))
 		buf.WriteString(" ")
-		buf.WriteString(greenStyle.Render(user))
+		buf.WriteString(colors.green.Render(user))
 		buf.WriteString("\n\n")
 
 		// footer

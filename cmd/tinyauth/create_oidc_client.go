@@ -21,6 +21,8 @@ func createOidcClientCmd() *cli.Command {
 		Resources:     nil,
 		AllowArg:      true,
 		Run: func(args []string) error {
+			colors := getColors()
+
 			if len(args) == 0 {
 				return errors.New("client name is required. use tinyauth oidc create <name>")
 			}
@@ -109,11 +111,11 @@ func createOidcClientCmd() *cli.Command {
 					continue
 				}
 				lp := strings.SplitN(l, ":", 2)
-				buf.WriteString(redStyle.Render(lp[0]))
-				buf.WriteString(grayStyle.Render(":"))
+				buf.WriteString(colors.red.Render(lp[0]))
+				buf.WriteString(colors.gray.Render(":"))
 				if len(lp) == 2 {
 					buf.WriteString("")
-					buf.WriteString(greenStyle.Render(lp[1]))
+					buf.WriteString(colors.green.Render(lp[1]))
 				}
 				buf.WriteString("\n")
 			}

@@ -155,13 +155,50 @@ func (t *themeBase) Theme(isDark bool) *huh.Styles {
 	return huh.ThemeBase(isDark)
 }
 
-var (
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(160))
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(34))
-	grayStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(247))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(214))
-	blueStyle   = lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(75))
-)
+type colors struct {
+	red    lipgloss.Style
+	green  lipgloss.Style
+	gray   lipgloss.Style
+	yellow lipgloss.Style
+	blue   lipgloss.Style
+}
+
+func getColors() colors {
+	noColor := os.Getenv("NO_COLOR")
+	forceColor := os.Getenv("FORCE_COLOR")
+
+	colorOut := colors{
+		red:    lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(160)),
+		green:  lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(34)),
+		gray:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(247)),
+		yellow: lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(214)),
+		blue:   lipgloss.NewStyle().Foreground(lipgloss.ANSIColor(75)),
+	}
+
+	noColorOut := colors{
+		red:    lipgloss.NewStyle(),
+		green:  lipgloss.NewStyle(),
+		gray:   lipgloss.NewStyle(),
+		yellow: lipgloss.NewStyle(),
+		blue:   lipgloss.NewStyle(),
+	}
+
+	useColors := true
+
+	if noColor == "true" || noColor == "1" {
+		useColors = false
+	}
+
+	if forceColor == "true" || forceColor == "1" {
+		useColors = true
+	}
+
+	if !useColors {
+		return noColorOut
+	}
+
+	return colorOut
+}
 
 func fatalf(err error, msg string) {
 	fmt.Printf("%s: %v\n", msg, err)
@@ -174,10 +211,11 @@ type kv struct {
 }
 
 func renderToBuf(buf *strings.Builder, kv []kv, sep string) {
+	colors := getColors()
 	for _, i := range kv {
-		buf.WriteString(redStyle.Render(i.k))
-		buf.WriteString(grayStyle.Render(sep))
-		buf.WriteString(greenStyle.Render(i.v))
+		buf.WriteString(colors.red.Render(i.k))
+		buf.WriteString(colors.gray.Render(sep))
+		buf.WriteString(colors.green.Render(i.v))
 		buf.WriteString("\n")
 	}
 }

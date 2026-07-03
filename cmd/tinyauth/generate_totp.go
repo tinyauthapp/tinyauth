@@ -41,6 +41,8 @@ func generateTotpCmd() *cli.Command {
 	}
 
 	cmd.Run = func(_ []string) error {
+		colors := getColors()
+
 		if tCfg.Interactive {
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -114,11 +116,11 @@ func generateTotpCmd() *cli.Command {
 		userStr := fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TOTPSecret)
 
 		fmt.Print("\nOr add the following TOTP secret to your authenticator app: ")
-		fmt.Print(greenStyle.Render(secret))
+		fmt.Print(colors.green.Render(secret))
 		fmt.Print("\n\n")
 
 		fmt.Printf("Finally, add your user '%s' back to your configuration: ", user.Username)
-		fmt.Print(greenStyle.Render(userStr))
+		fmt.Print(colors.green.Render(userStr))
 		fmt.Print("\n")
 
 		return nil

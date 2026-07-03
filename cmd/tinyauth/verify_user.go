@@ -46,6 +46,8 @@ func verifyUserCmd() *cli.Command {
 	}
 
 	cmd.Run = func(_ []string) error {
+		colors := getColors()
+
 		if tCfg.Interactive {
 			form := huh.NewForm(
 				huh.NewGroup(
@@ -102,9 +104,9 @@ func verifyUserCmd() *cli.Command {
 
 		if user.TOTPSecret == "" {
 			if tCfg.Totp != "" {
-				fmt.Println(yellowStyle.Render("⚠") + " TOTP code provided but user does not have TOTP enabled")
+				fmt.Println(colors.yellow.Render("⚠") + " TOTP code provided but user does not have TOTP enabled")
 			}
-			fmt.Println(greenStyle.Render("✓") + " User verified")
+			fmt.Println(colors.green.Render("✓") + " User verified")
 			return nil
 		}
 
@@ -113,7 +115,7 @@ func verifyUserCmd() *cli.Command {
 			return fmt.Errorf("TOTP code incorrect")
 		}
 
-		fmt.Println(greenStyle.Render("✓") + " User verified")
+		fmt.Println(colors.green.Render("✓") + " User verified")
 
 		return nil
 	}
