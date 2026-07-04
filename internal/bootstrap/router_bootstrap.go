@@ -89,10 +89,12 @@ func (app *BootstrapApp) setupRouter() error {
 		return fmt.Errorf("failed to provide api router group: %w", err)
 	}
 
-	err = app.setupScalar()
+	if app.config.Server.ScalarEnabled {
+		err = app.setupScalar()
 
-	if err != nil {
-		return fmt.Errorf("failed to setup scalar: %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to setup scalar: %w", err)
+		}
 	}
 
 	controllerProvideFor := []any{

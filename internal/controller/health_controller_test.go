@@ -23,9 +23,9 @@ func TestHealthController(t *testing.T) {
 			path:        "/api/healthz",
 			method:      "GET",
 			expected: func() string {
-				expectedHealthResponse := map[string]any{
-					"status":  200,
-					"message": "Healthy",
+				expectedHealthResponse := SimpleResponse{
+					Status:  200,
+					Message: "Healthy",
 				}
 				bytes, err := json.Marshal(expectedHealthResponse)
 				require.NoError(t, err)
@@ -37,9 +37,9 @@ func TestHealthController(t *testing.T) {
 			path:        "/api/healthz",
 			method:      "HEAD",
 			expected: func() string {
-				expectedHealthResponse := map[string]any{
-					"status":  200,
-					"message": "Healthy",
+				expectedHealthResponse := SimpleResponse{
+					Status:  200,
+					Message: "Healthy",
 				}
 				bytes, err := json.Marshal(expectedHealthResponse)
 				require.NoError(t, err)
