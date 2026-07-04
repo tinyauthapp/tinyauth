@@ -8,11 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	ginScalar "github.com/tinyauthapp/gin-scalar"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -24,7 +22,7 @@ import (
 
 // @title			Tinyauth API
 // @version		development
-// @description	Swagger documentation for Tinyauth's API.
+// @description	Documentation for Tinyauth's API.
 // @license.name	AGPL-3.0
 // @license.url	https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE
 // @BasePath		/
@@ -91,10 +89,10 @@ func (app *BootstrapApp) setupRouter() error {
 		return fmt.Errorf("failed to provide api router group: %w", err)
 	}
 
-	err = app.setupSwagger()
+	err = app.setupScalar()
 
 	if err != nil {
-		return fmt.Errorf("failed to setup swagger: %w", err)
+		return fmt.Errorf("failed to setup scalar: %w", err)
 	}
 
 	controllerProvideFor := []any{
@@ -142,7 +140,7 @@ func (app *BootstrapApp) setupRouter() error {
 	return nil
 }
 
-func (app *BootstrapApp) setupSwagger() error {
+func (app *BootstrapApp) setupScalar() error {
 	appUrl, err := url.Parse(app.runtime.AppURL)
 
 	if err != nil {
@@ -153,26 +151,18 @@ func (app *BootstrapApp) setupSwagger() error {
 	docs.SwaggerInfo.Schemes = []string{appUrl.Scheme}
 	docs.SwaggerInfo.Version = model.Version
 
-	type swaggerInput struct {
+	type scalarInput struct {
 		dig.In
 
 		RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
 	}
 
-	err = app.dig.Invoke(func(i swaggerInput) {
-		i.RouterGroup.Use(func(c *gin.Context) {
-			if strings.TrimSuffix(c.Request.URL.Path, "/") == "/swagger" {
-				c.Redirect(http.StatusFound, "/swagger/index.html")
-				c.Abort()
-				return
-			}
-			c.Next()
-		})
-		i.RouterGroup.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	err = app.dig.Invoke(func(i scalarInput) {
+		i.RouterGroup.GET("/scalar/*any", ginScalar.WrapHandler(nil))
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to invoke swagger: %w", err)
+		return fmt.Errorf("failed to invoke scalar: %w", err)
 	}
 
 	return nil

@@ -62,10 +62,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/authorize/, ""),
       },
-      "/swagger": {
-        target: "http://tinyauth-backend:3000/swagger",
+      "/scalar": {
+        target: "http://tinyauth-backend:3000/scalar",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/swagger/, ""),
+        rewrite: (path) => path.replace(/^\/scalar/, ""),
       }
     },
     allowedHosts: true,
