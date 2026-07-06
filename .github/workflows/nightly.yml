@@ -53,7 +53,7 @@ jobs:
           echo "VERSION=nightly" >> "$GITHUB_OUTPUT"
           echo "COMMIT_HASH=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "BUILD_TIMESTAMP=$(date '+%Y-%m-%dT%H:%M:%S')" >> "$GITHUB_OUTPUT"
-          export TAILSCALE_BUILD_TAGS=$(go run tailscale.com/cmd/featuretags@latest -min -add acme,serve,netstack)
+          export TAILSCALE_BUILD_TAGS=$(go run tailscale.com/cmd/featuretags@v1.100.0 -min -add acme,serve,netstack)
           export GIN_BUILD_TAGS=nomsgpack
           echo "BUILD_TAGS=$TAILSCALE_BUILD_TAGS,$GIN_BUILD_TAGS" >> "$GITHUB_OUTPUT"
 

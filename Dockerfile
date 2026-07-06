@@ -41,7 +41,7 @@ COPY ./cmd ./cmd
 COPY ./internal ./internal
 COPY --from=frontend-builder /frontend/dist ./internal/assets/dist
 
-RUN CGO_ENABLED=0 go build -tags ${BUILD_TAGS} -ldflags "${LDFLAGS} \
+RUN CGO_ENABLED=0 go build -tags "${BUILD_TAGS}" -ldflags "${LDFLAGS} \
     -X github.com/tinyauthapp/tinyauth/internal/model.Version=${VERSION} \
     -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
     -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" \
