@@ -82,6 +82,15 @@ type AuthorizeCompleteRequest struct {
 	Ticket string `json:"ticket" binding:"required"`
 }
 
+type AuthorizeCompleteResponse struct {
+	SimpleResponse
+	RedirectURI string `json:"redirect_uri"`
+}
+
+type OIDCErrorResponse struct {
+	Error string `json:"error"`
+}
+
 type OIDCControllerInput struct {
 	dig.In
 
@@ -114,6 +123,36 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 // This endpoint does **not** return a code, it handles param validation, ticket creation
 // and then redirects to the frontend to handle the consent screen. It performs no destructive
 // actions (like logging out an existing session)
+// Authorize godoc
+//
+//	@Summary		Authorize
+//	@Description	OpenID Connect Authorize Endpoint
+//	@Accept			x-www-form-urlencoded
+//	@Tags			oidc
+//	@Param			scope					query		string	false	"OAuth scopes (space separated, must include openid)"
+//	@Param			response_type			query		string	false	"Response type (e.g. code)"
+//	@Param			client_id				query		string	false	"Client ID"
+//	@Param			redirect_uri			query		string	false	"Redirect URI"
+//	@Param			state					query		string	false	"Opaque state value returned to the client"
+//	@Param			nonce					query		string	false	"Nonce for ID token replay protection"
+//	@Param			code_challenge			query		string	false	"PKCE code challenge"
+//	@Param			code_challenge_method	query		string	false	"PKCE code challenge method (S256 or plain)"
+//	@Param			prompt					query		string	false	"Prompt parameter (none, login, consent)"
+//	@Param			max_age					query		string	false	"Max authentication age in seconds"
+//	@Param			scope					formData	string	false	"OAuth scopes (space separated, must include openid)"
+//	@Param			response_type			formData	string	false	"Response type (e.g. code)"
+//	@Param			client_id				formData	string	false	"Client ID"
+//	@Param			redirect_uri			formData	string	false	"Redirect URI"
+//	@Param			state					formData	string	false	"Opaque state value returned to the client"
+//	@Param			nonce					formData	string	false	"Nonce for ID token replay protection"
+//	@Param			code_challenge			formData	string	false	"PKCE code challenge"
+//	@Param			code_challenge_method	formData	string	false	"PKCE code challenge method (S256 or plain)"
+//	@Param			prompt					formData	string	false	"Prompt parameter (none, login, consent)"
+//	@Param			max_age					formData	string	false	"Max authentication age in seconds"
+//	@Success		302
+//	@Failure		302
+//	@Router			/authorize [get]
+//	@Router			/authorize [post]
 func (controller *OIDCController) authorize(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.authorizeError(c, authorizeErrorParams{
@@ -261,6 +300,16 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 // The actual **internal** endpoint that actually creates the code and session.
 // It is called by the frontend after the user has logged in and given consent.
+// AuthorizeComplete godoc
+//
+//	@Summary		Authorize Complete
+//	@Description	Internal endpoint for the completion of the OpenID Connect authorization flow
+//	@Tags			oidc
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	AuthorizeCompleteResponse
+//	@Failure		500
+//	@Router			/api/oidc/authorize-complete [post]
 func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	if controller.oidc == nil {
 		// For this endpoint we return JSON errors since it's called
@@ -361,17 +410,44 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"status":       200,
-		"redirect_uri": fmt.Sprintf("%s?%s", authorizeReq.RedirectURI, queries.Encode()),
+	c.JSON(200, AuthorizeCompleteResponse{
+		SimpleResponse: SimpleResponse{
+			Status: 200,
+		},
+		RedirectURI: fmt.Sprintf("%s?%s", authorizeReq.RedirectURI, queries.Encode()),
 	})
 }
 
+// Token godoc
+//
+//	@Summary		Token
+//	@Description	OpenID Connect Token Endpoint
+//	@Tags			oidc
+//	@Accept			x-www-form-urlencoded
+//	@Produce		json
+//	@Param			grant_type		query		string	true	"Grant type (authorization_code or refresh_token)"
+//	@Param			code			query		string	false	"Authorization code (required for authorization_code grant)"
+//	@Param			redirect_uri	query		string	false	"Redirect URI (must match the one from the authorize request)"
+//	@Param			refresh_token	query		string	false	"Refresh token (required for refresh_token grant)"
+//	@Param			client_id		query		string	false	"Client ID (required if not using Basic auth)"
+//	@Param			client_secret	query		string	false	"Client secret (required for confidential clients without Basic auth)"
+//	@Param			code_verifier	query		string	false	"PKCE code verifier (required if code_challenge was sent)"
+//	@Param			grant_type		formData	string	false	"Grant type (authorization_code or refresh_token)"
+//	@Param			code			formData	string	false	"Authorization code (required for authorization_code grant)"
+//	@Param			redirect_uri	formData	string	false	"Redirect URI (must match the one from the authorize request)"
+//	@Param			refresh_token	formData	string	false	"Refresh token (required for refresh_token grant)"
+//	@Param			client_id		formData	string	false	"Client ID (required if not using Basic auth)"
+//	@Param			client_secret	formData	string	false	"Client secret (required for confidential clients without Basic auth)"
+//	@Param			code_verifier	formData	string	false	"PKCE code verifier (required if code_challenge was sent)"
+//	@Success		200				{object}	service.TokenResponse
+//	@Failure		400				{object}	OIDCErrorResponse
+//	@Failure		500				{object}	OIDCErrorResponse
+//	@Router			/oidc/token [post]
 func (controller *OIDCController) Token(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC request but OIDC server is not configured")
-		c.JSON(500, gin.H{
-			"error": "server_error",
+		c.JSON(500, OIDCErrorResponse{
+			Error: "server_error",
 		})
 		return
 	}
@@ -381,8 +457,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	err := c.Bind(&req)
 	if err != nil {
 		controller.log.App.Warn().Err(err).Msg("Failed to bind token request")
-		c.JSON(400, gin.H{
-			"error": "invalid_request",
+		c.JSON(400, OIDCErrorResponse{
+			Error: "invalid_request",
 		})
 		return
 	}
@@ -390,8 +466,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	err = controller.oidc.ValidateGrantType(req.GrantType)
 	if err != nil {
 		controller.log.App.Warn().Err(err).Msg("Invalid grant type")
-		c.JSON(400, gin.H{
-			"error": err.Error(),
+		c.JSON(400, OIDCErrorResponse{
+			Error: err.Error(),
 		})
 		return
 	}
@@ -411,8 +487,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		if !ok {
 			controller.log.App.Warn().Msg("Client credentials not found in basic auth")
 			c.Header("www-authenticate", `Basic realm="Tinyauth OIDC Token Endpoint"`)
-			c.JSON(400, gin.H{
-				"error": "invalid_client",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "invalid_client",
 			})
 			return
 		}
@@ -427,16 +503,16 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 	if !ok {
 		controller.log.App.Warn().Str("clientId", creds.ClientID).Msg("Client not found")
-		c.JSON(400, gin.H{
-			"error": "invalid_client",
+		c.JSON(400, OIDCErrorResponse{
+			Error: "invalid_client",
 		})
 		return
 	}
 
 	if client.ClientSecret != creds.ClientSecret {
 		controller.log.App.Warn().Str("clientId", creds.ClientID).Msg("Invalid client secret")
-		c.JSON(400, gin.H{
-			"error": "invalid_client",
+		c.JSON(400, OIDCErrorResponse{
+			Error: "invalid_client",
 		})
 		return
 	}
@@ -457,15 +533,15 @@ func (controller *OIDCController) Token(c *gin.Context) {
 				if err != nil {
 					controller.log.App.Error().Err(err).Msg("Failed to delete session for reused code")
 				}
-				c.JSON(400, gin.H{
-					"error": "invalid_grant",
+				c.JSON(400, OIDCErrorResponse{
+					Error: "invalid_grant",
 				})
 				return
 			}
 
 			controller.log.App.Warn().Msg("Code not found")
-			c.JSON(400, gin.H{
-				"error": "invalid_grant",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "invalid_grant",
 			})
 			return
 		}
@@ -475,8 +551,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 		if entry.RedirectURI != req.RedirectURI {
 			controller.log.App.Warn().Msg("Redirect URI does not match")
-			c.JSON(400, gin.H{
-				"error": "invalid_grant",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "invalid_grant",
 			})
 			return
 		}
@@ -485,8 +561,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 		if !ok {
 			controller.log.App.Warn().Msg("PKCE validation failed")
-			c.JSON(400, gin.H{
-				"error": "invalid_grant",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "invalid_grant",
 			})
 			return
 		}
@@ -495,8 +571,8 @@ func (controller *OIDCController) Token(c *gin.Context) {
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to generate access token")
-			c.JSON(400, gin.H{
-				"error": "server_error",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "server_error",
 			})
 			return
 		}
@@ -508,23 +584,23 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		if err != nil {
 			if errors.Is(err, service.ErrTokenExpired) {
 				controller.log.App.Warn().Msg("Refresh token expired")
-				c.JSON(400, gin.H{
-					"error": "invalid_grant",
+				c.JSON(400, OIDCErrorResponse{
+					Error: "invalid_grant",
 				})
 				return
 			}
 
 			if errors.Is(err, service.ErrInvalidClient) {
 				controller.log.App.Warn().Msg("Refresh token does not belong to client")
-				c.JSON(400, gin.H{
-					"error": "invalid_grant",
+				c.JSON(400, OIDCErrorResponse{
+					Error: "invalid_grant",
 				})
 				return
 			}
 
 			controller.log.App.Error().Err(err).Msg("Failed to refresh access token")
-			c.JSON(400, gin.H{
-				"error": "server_error",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "server_error",
 			})
 			return
 		}
@@ -538,11 +614,25 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	c.JSON(200, tokenResponse)
 }
 
+// Userinfo godoc
+//
+//	@Summary		Userinfo
+//	@Description	OpenID Connect Userinfo Endpoint
+//	@Accept			x-www-form-urlencoded
+//	@Tags			oidc
+//	@Param			access_token	formData	string	false	"OpenID Connect Access Token"
+//	@Produce		json
+//	@Success		200	{object}	service.UserinfoResponse
+//	@Failure		400	{object}	OIDCErrorResponse
+//	@Failure		401	{object}	OIDCErrorResponse
+//	@Failure		500	{object}	OIDCErrorResponse
+//	@Router			/oidc/userinfo [get]
+//	@Router			/oidc/userinfo [post]
 func (controller *OIDCController) Userinfo(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
-		c.JSON(500, gin.H{
-			"error": "server_error",
+		c.JSON(500, OIDCErrorResponse{
+			Error: "server_error",
 		})
 		return
 	}
@@ -554,16 +644,16 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		tokenType, bearerToken, ok := strings.Cut(authorization, " ")
 		if !ok {
 			controller.log.App.Warn().Msg("OIDC userinfo accessed with invalid authorization header")
-			c.JSON(401, gin.H{
-				"error": "invalid_request",
+			c.JSON(401, OIDCErrorResponse{
+				Error: "invalid_request",
 			})
 			return
 		}
 
 		if strings.ToLower(tokenType) != "bearer" {
 			controller.log.App.Warn().Msg("OIDC userinfo accessed with non-bearer token")
-			c.JSON(401, gin.H{
-				"error": "invalid_request",
+			c.JSON(401, OIDCErrorResponse{
+				Error: "invalid_request",
 			})
 			return
 		}
@@ -572,23 +662,23 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	} else if c.Request.Method == http.MethodPost {
 		if c.ContentType() != "application/x-www-form-urlencoded" {
 			controller.log.App.Warn().Msg("OIDC userinfo POST accessed with invalid content type")
-			c.JSON(400, gin.H{
-				"error": "invalid_request",
+			c.JSON(400, OIDCErrorResponse{
+				Error: "invalid_request",
 			})
 			return
 		}
 		token = c.PostForm("access_token")
 		if token == "" {
 			controller.log.App.Warn().Msg("OIDC userinfo POST accessed without access_token")
-			c.JSON(401, gin.H{
-				"error": "invalid_request",
+			c.JSON(401, OIDCErrorResponse{
+				Error: "invalid_request",
 			})
 			return
 		}
 	} else {
 		controller.log.App.Warn().Msg("OIDC userinfo accessed without authorization header or POST body")
-		c.JSON(401, gin.H{
-			"error": "invalid_request",
+		c.JSON(401, OIDCErrorResponse{
+			Error: "invalid_request",
 		})
 		return
 	}
@@ -598,15 +688,15 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, service.ErrTokenNotFound) {
 			controller.log.App.Warn().Msg("OIDC userinfo accessed with invalid token")
-			c.JSON(401, gin.H{
-				"error": "invalid_grant",
+			c.JSON(401, OIDCErrorResponse{
+				Error: "invalid_grant",
 			})
 			return
 		}
 
 		controller.log.App.Error().Err(err).Msg("Failed to get access token")
-		c.JSON(401, gin.H{
-			"error": "server_error",
+		c.JSON(401, OIDCErrorResponse{
+			Error: "server_error",
 		})
 		return
 	}
@@ -614,8 +704,8 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 	// If we don't have the openid scope, return an error
 	if !slices.Contains(strings.Split(entry.Scope, " "), "openid") {
 		controller.log.App.Warn().Msg("OIDC userinfo accessed with missing openid scope")
-		c.JSON(401, gin.H{
-			"error": "invalid_scope",
+		c.JSON(401, OIDCErrorResponse{
+			Error: "invalid_scope",
 		})
 		return
 	}
@@ -626,8 +716,8 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get user info")
-		c.JSON(401, gin.H{
-			"error": "server_error",
+		c.JSON(401, OIDCErrorResponse{
+			Error: "server_error",
 		})
 		return
 	}
@@ -662,9 +752,11 @@ func (controller *OIDCController) authorizeError(c *gin.Context, params authoriz
 		redirectUrl := fmt.Sprintf("%s?%s", params.callback, queries.Encode())
 
 		if params.json {
-			c.JSON(200, gin.H{
-				"status":       200,
-				"redirect_uri": redirectUrl,
+			c.JSON(200, AuthorizeCompleteResponse{
+				SimpleResponse: SimpleResponse{
+					Status: 200,
+				},
+				RedirectURI: redirectUrl,
 			})
 			return
 		}
@@ -694,9 +786,11 @@ func (controller *OIDCController) authorizeError(c *gin.Context, params authoriz
 	}
 
 	if params.json {
-		c.JSON(200, gin.H{
-			"status":       200,
-			"redirect_uri": redirectUrl,
+		c.JSON(200, AuthorizeCompleteResponse{
+			SimpleResponse: SimpleResponse{
+				Status: 200,
+			},
+			RedirectURI: redirectUrl,
 		})
 		return
 	}

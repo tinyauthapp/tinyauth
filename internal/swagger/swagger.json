@@ -1,0 +1,1896 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Swagger documentation for Tinyauth's API.",
+        "title": "Tinyauth API",
+        "contact": {},
+        "license": {
+            "name": "AGPL-3.0",
+            "url": "https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE"
+        },
+        "version": "development"
+    },
+    "basePath": "/",
+    "paths": {
+        "/.well-known/jwks.json": {
+            "get": {
+                "description": "JWKS Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "well-known"
+                ],
+                "summary": "JWKS",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/.well-known/openid-configuration": {
+            "get": {
+                "description": "OpenID Connect Configuration Discovery Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "well-known"
+                ],
+                "summary": "OpenID Connect Configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OpenIDConnectConfiguration"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/.well-known/webfinger": {
+            "get": {
+                "description": "WebFinger Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "well-known"
+                ],
+                "summary": "WebFinger",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Resource",
+                        "name": "resource",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rel",
+                        "name": "rel",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.WebfingerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/caddy": {
+            "get": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/envoy": {
+            "get": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "options": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "head": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/nginx": {
+            "get": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/traefik": {
+            "get": {
+                "description": "Forward-Auth Proxy Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-auth"
+                ],
+                "summary": "Proxy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "302": {
+                        "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/context/app": {
+            "get": {
+                "description": "Get the app context",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "context"
+                ],
+                "summary": "App context",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.AppContextResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/context/user": {
+            "get": {
+                "description": "Get the user context",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "context"
+                ],
+                "summary": "User context",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.UserContextResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/healthz": {
+            "get": {
+                "description": "Check if the server is up and running",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Healthcheck",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            },
+            "head": {
+                "description": "Check if the server is up and running",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Healthcheck",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/oauth/callback/{id}": {
+            "get": {
+                "description": "Callback URL for OAuth providers",
+                "tags": [
+                    "oauth"
+                ],
+                "summary": "OAuth Callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "State",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Code",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
+        "/api/oauth/url/{id}": {
+            "get": {
+                "description": "Get an OAuth URL for the specified provider",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oauth"
+                ],
+                "summary": "OAuth URL",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Login for",
+                        "name": "login_for",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OpenID Connect Ticket",
+                        "name": "oidc_ticket",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OpenID Connect Scope",
+                        "name": "oidc_scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OpenID Connect Name",
+                        "name": "oidc_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OAuthURLSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/oidc/authorize-complete": {
+            "post": {
+                "description": "Internal endpoint for the completion of the OpenID Connect authorization flow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Authorize Complete",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.AuthorizeCompleteResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/user/login": {
+            "post": {
+                "description": "Login Endpoint",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Login",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.TotpPendingResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/user/logout": {
+            "post": {
+                "description": "Logout Endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/user/tailscale": {
+            "post": {
+                "description": "Tailscale Auth Endpoint (Experimental)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Tailscale",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/user/totp": {
+            "post": {
+                "description": "TOTP Endpoint",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "TOTP",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/authorize": {
+            "get": {
+                "description": "OpenID Connect Authorize Endpoint",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Authorize",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OAuth scopes (space separated, must include openid)",
+                        "name": "scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Response type (e.g. code)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque state value returned to the client",
+                        "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nonce for ID token replay protection",
+                        "name": "nonce",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge",
+                        "name": "code_challenge",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge method (S256 or plain)",
+                        "name": "code_challenge_method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Prompt parameter (none, login, consent)",
+                        "name": "prompt",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Max authentication age in seconds",
+                        "name": "max_age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth scopes (space separated, must include openid)",
+                        "name": "scope",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Response type (e.g. code)",
+                        "name": "response_type",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI",
+                        "name": "redirect_uri",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque state value returned to the client",
+                        "name": "state",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nonce for ID token replay protection",
+                        "name": "nonce",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge",
+                        "name": "code_challenge",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge method (S256 or plain)",
+                        "name": "code_challenge_method",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Prompt parameter (none, login, consent)",
+                        "name": "prompt",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Max authentication age in seconds",
+                        "name": "max_age",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            },
+            "post": {
+                "description": "OpenID Connect Authorize Endpoint",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Authorize",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OAuth scopes (space separated, must include openid)",
+                        "name": "scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Response type (e.g. code)",
+                        "name": "response_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque state value returned to the client",
+                        "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nonce for ID token replay protection",
+                        "name": "nonce",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge",
+                        "name": "code_challenge",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge method (S256 or plain)",
+                        "name": "code_challenge_method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Prompt parameter (none, login, consent)",
+                        "name": "prompt",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Max authentication age in seconds",
+                        "name": "max_age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth scopes (space separated, must include openid)",
+                        "name": "scope",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Response type (e.g. code)",
+                        "name": "response_type",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI",
+                        "name": "redirect_uri",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque state value returned to the client",
+                        "name": "state",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nonce for ID token replay protection",
+                        "name": "nonce",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge",
+                        "name": "code_challenge",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code challenge method (S256 or plain)",
+                        "name": "code_challenge_method",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Prompt parameter (none, login, consent)",
+                        "name": "prompt",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Max authentication age in seconds",
+                        "name": "max_age",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
+        "/oidc/token": {
+            "post": {
+                "description": "OpenID Connect Token Endpoint",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Grant type (authorization_code or refresh_token)",
+                        "name": "grant_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authorization code (required for authorization_code grant)",
+                        "name": "code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI (must match the one from the authorize request)",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Refresh token (required for refresh_token grant)",
+                        "name": "refresh_token",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID (required if not using Basic auth)",
+                        "name": "client_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client secret (required for confidential clients without Basic auth)",
+                        "name": "client_secret",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code verifier (required if code_challenge was sent)",
+                        "name": "code_verifier",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Grant type (authorization_code or refresh_token)",
+                        "name": "grant_type",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authorization code (required for authorization_code grant)",
+                        "name": "code",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI (must match the one from the authorize request)",
+                        "name": "redirect_uri",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Refresh token (required for refresh_token grant)",
+                        "name": "refresh_token",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID (required if not using Basic auth)",
+                        "name": "client_id",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client secret (required for confidential clients without Basic auth)",
+                        "name": "client_secret",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE code verifier (required if code_challenge was sent)",
+                        "name": "code_verifier",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.TokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/oidc/userinfo": {
+            "get": {
+                "description": "OpenID Connect Userinfo Endpoint",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Userinfo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OpenID Connect Access Token",
+                        "name": "access_token",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.UserinfoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "OpenID Connect Userinfo Endpoint",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "oidc"
+                ],
+                "summary": "Userinfo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "OpenID Connect Access Token",
+                        "name": "access_token",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/service.UserinfoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.OIDCErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/{resource}": {
+            "get": {
+                "description": "Get a resource by file name",
+                "tags": [
+                    "resources"
+                ],
+                "summary": "Resources Endpoint",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Resource Name",
+                        "name": "resource",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/controller.SimpleResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "controller.ACRApp": {
+            "type": "object",
+            "properties": {
+                "appUrl": {
+                    "type": "string"
+                },
+                "cookieDomain": {
+                    "type": "string"
+                },
+                "subdomainsEnabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "controller.ACRAuth": {
+            "type": "object",
+            "properties": {
+                "providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Provider"
+                    }
+                }
+            }
+        },
+        "controller.ACROAuth": {
+            "type": "object",
+            "properties": {
+                "autoRedirect": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.ACRUI": {
+            "type": "object",
+            "properties": {
+                "backgroundImage": {
+                    "type": "string"
+                },
+                "forgotPasswordMessage": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "warningsEnabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "controller.AppContextResponse": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "$ref": "#/definitions/controller.ACRApp"
+                },
+                "auth": {
+                    "$ref": "#/definitions/controller.ACRAuth"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "oauth": {
+                    "$ref": "#/definitions/controller.ACROAuth"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "ui": {
+                    "$ref": "#/definitions/controller.ACRUI"
+                }
+            }
+        },
+        "controller.AuthorizeCompleteResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "redirect_uri": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "controller.OAuthURLSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.OIDCErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.OpenIDConnectConfiguration": {
+            "type": "object",
+            "properties": {
+                "authorization_endpoint": {
+                    "type": "string"
+                },
+                "claims_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "grant_types_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id_token_signing_alg_values_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "jwks_uri": {
+                    "type": "string"
+                },
+                "request_object_signing_alg_values_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_parameter_supported": {
+                    "type": "boolean"
+                },
+                "response_types_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scopes_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "service_documentation": {
+                    "type": "string"
+                },
+                "subject_types_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_endpoint": {
+                    "type": "string"
+                },
+                "token_endpoint_auth_methods_supported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "userinfo_endpoint": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.SimpleResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "controller.TotpPendingResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "totpPending": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "controller.UCRAuth": {
+            "type": "object",
+            "properties": {
+                "authenticated": {
+                    "type": "boolean"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "providerId": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.UCROAuth": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "displayName": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.UCRTOTP": {
+            "type": "object",
+            "properties": {
+                "pending": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "controller.UCRTailscale": {
+            "type": "object",
+            "properties": {
+                "nodeName": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.UserContextResponse": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "$ref": "#/definitions/controller.UCRAuth"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "oauth": {
+                    "$ref": "#/definitions/controller.UCROAuth"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "tailscale": {
+                    "$ref": "#/definitions/controller.UCRTailscale"
+                },
+                "totp": {
+                    "$ref": "#/definitions/controller.UCRTOTP"
+                }
+            }
+        },
+        "controller.WebfingerResponse": {
+            "type": "object",
+            "properties": {
+                "links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.WebfingerResponseLink"
+                    }
+                },
+                "subject": {
+                    "type": "string"
+                }
+            }
+        },
+        "controller.WebfingerResponseLink": {
+            "type": "object",
+            "properties": {
+                "href": {
+                    "type": "string"
+                },
+                "rel": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.AddressClaim": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "formatted": {
+                    "type": "string"
+                },
+                "locality": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "region": {
+                    "type": "string"
+                },
+                "street_address": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Provider": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "oauth": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "service.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "id_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.UserinfoResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/model.AddressClaim"
+                },
+                "birthdate": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "family_name": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "given_name": {
+                    "type": "string"
+                },
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "locale": {
+                    "type": "string"
+                },
+                "middle_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "phone_number": {
+                    "type": "string"
+                },
+                "phone_number_verified": {
+                    "type": "boolean"
+                },
+                "picture": {
+                    "type": "string"
+                },
+                "preferred_username": {
+                    "type": "string"
+                },
+                "profile": {
+                    "type": "string"
+                },
+                "sub": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                },
+                "website": {
+                    "type": "string"
+                },
+                "zoneinfo": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

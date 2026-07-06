@@ -44,7 +44,7 @@ func (m *UIMiddleware) Middleware() gin.HandlerFunc {
 		path := strings.TrimPrefix(c.Request.URL.Path, "/")
 
 		switch strings.SplitN(path, "/", 2)[0] {
-		case "api", "resources", ".well-known", "authorize":
+		case "api", "resources", ".well-known", "authorize", "scalar":
 			c.Next()
 			return
 		case "robots.txt":

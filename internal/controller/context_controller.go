@@ -107,6 +107,14 @@ func NewContextController(i ContextControllerInput) *ContextController {
 	return controller
 }
 
+// UserContext godoc
+//
+//	@Summary		User context
+//	@Description	Get the user context
+//	@Tags			context
+//	@Produce		json
+//	@Success		200	{object}	UserContextResponse
+//	@Router			/api/context/user [get]
 func (controller *ContextController) userContextHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
@@ -147,6 +155,14 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	c.JSON(200, userContext)
 }
 
+// AppContext godoc
+//
+//	@Summary		App context
+//	@Description	Get the app context
+//	@Tags			context
+//	@Produce		json
+//	@Success		200	{object}	AppContextResponse
+//	@Router			/api/context/app [get]
 func (controller *ContextController) appContextHandler(c *gin.Context) {
 	c.JSON(200, AppContextResponse{
 		Status:  200,

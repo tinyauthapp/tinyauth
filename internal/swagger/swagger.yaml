@@ -1,0 +1,1252 @@
+basePath: /
+definitions:
+  controller.ACRApp:
+    properties:
+      appUrl:
+        type: string
+      cookieDomain:
+        type: string
+      subdomainsEnabled:
+        type: boolean
+    type: object
+  controller.ACRAuth:
+    properties:
+      providers:
+        items:
+          $ref: '#/definitions/model.Provider'
+        type: array
+    type: object
+  controller.ACROAuth:
+    properties:
+      autoRedirect:
+        type: string
+    type: object
+  controller.ACRUI:
+    properties:
+      backgroundImage:
+        type: string
+      forgotPasswordMessage:
+        type: string
+      title:
+        type: string
+      warningsEnabled:
+        type: boolean
+    type: object
+  controller.AppContextResponse:
+    properties:
+      app:
+        $ref: '#/definitions/controller.ACRApp'
+      auth:
+        $ref: '#/definitions/controller.ACRAuth'
+      message:
+        type: string
+      oauth:
+        $ref: '#/definitions/controller.ACROAuth'
+      status:
+        type: integer
+      ui:
+        $ref: '#/definitions/controller.ACRUI'
+    type: object
+  controller.AuthorizeCompleteResponse:
+    properties:
+      message:
+        type: string
+      redirect_uri:
+        type: string
+      status:
+        type: integer
+    type: object
+  controller.OAuthURLSuccessResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+      url:
+        type: string
+    type: object
+  controller.OIDCErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  controller.OpenIDConnectConfiguration:
+    properties:
+      authorization_endpoint:
+        type: string
+      claims_supported:
+        items:
+          type: string
+        type: array
+      grant_types_supported:
+        items:
+          type: string
+        type: array
+      id_token_signing_alg_values_supported:
+        items:
+          type: string
+        type: array
+      issuer:
+        type: string
+      jwks_uri:
+        type: string
+      request_object_signing_alg_values_supported:
+        items:
+          type: string
+        type: array
+      request_parameter_supported:
+        type: boolean
+      response_types_supported:
+        items:
+          type: string
+        type: array
+      scopes_supported:
+        items:
+          type: string
+        type: array
+      service_documentation:
+        type: string
+      subject_types_supported:
+        items:
+          type: string
+        type: array
+      token_endpoint:
+        type: string
+      token_endpoint_auth_methods_supported:
+        items:
+          type: string
+        type: array
+      userinfo_endpoint:
+        type: string
+    type: object
+  controller.SimpleResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+  controller.TotpPendingResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+      totpPending:
+        type: boolean
+    type: object
+  controller.UCRAuth:
+    properties:
+      authenticated:
+        type: boolean
+      email:
+        type: string
+      name:
+        type: string
+      providerId:
+        type: string
+      username:
+        type: string
+    type: object
+  controller.UCROAuth:
+    properties:
+      active:
+        type: boolean
+      displayName:
+        type: string
+    type: object
+  controller.UCRTOTP:
+    properties:
+      pending:
+        type: boolean
+    type: object
+  controller.UCRTailscale:
+    properties:
+      nodeName:
+        type: string
+    type: object
+  controller.UserContextResponse:
+    properties:
+      auth:
+        $ref: '#/definitions/controller.UCRAuth'
+      message:
+        type: string
+      oauth:
+        $ref: '#/definitions/controller.UCROAuth'
+      status:
+        type: integer
+      tailscale:
+        $ref: '#/definitions/controller.UCRTailscale'
+      totp:
+        $ref: '#/definitions/controller.UCRTOTP'
+    type: object
+  controller.WebfingerResponse:
+    properties:
+      links:
+        items:
+          $ref: '#/definitions/controller.WebfingerResponseLink'
+        type: array
+      subject:
+        type: string
+    type: object
+  controller.WebfingerResponseLink:
+    properties:
+      href:
+        type: string
+      rel:
+        type: string
+    type: object
+  model.AddressClaim:
+    properties:
+      country:
+        type: string
+      formatted:
+        type: string
+      locality:
+        type: string
+      postal_code:
+        type: string
+      region:
+        type: string
+      street_address:
+        type: string
+    type: object
+  model.Provider:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      oauth:
+        type: boolean
+    type: object
+  service.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      id_token:
+        type: string
+      refresh_token:
+        type: string
+      scope:
+        type: string
+      token_type:
+        type: string
+    type: object
+  service.UserinfoResponse:
+    properties:
+      address:
+        $ref: '#/definitions/model.AddressClaim'
+      birthdate:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      family_name:
+        type: string
+      gender:
+        type: string
+      given_name:
+        type: string
+      groups:
+        items:
+          type: string
+        type: array
+      locale:
+        type: string
+      middle_name:
+        type: string
+      name:
+        type: string
+      nickname:
+        type: string
+      phone_number:
+        type: string
+      phone_number_verified:
+        type: boolean
+      picture:
+        type: string
+      preferred_username:
+        type: string
+      profile:
+        type: string
+      sub:
+        type: string
+      updated_at:
+        type: integer
+      website:
+        type: string
+      zoneinfo:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Swagger documentation for Tinyauth's API.
+  license:
+    name: AGPL-3.0
+    url: https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE
+  title: Tinyauth API
+  version: development
+paths:
+  /.well-known/jwks.json:
+    get:
+      description: JWKS Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: JWKS
+      tags:
+      - well-known
+  /.well-known/openid-configuration:
+    get:
+      description: OpenID Connect Configuration Discovery Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.OpenIDConnectConfiguration'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: OpenID Connect Configuration
+      tags:
+      - well-known
+  /.well-known/webfinger:
+    get:
+      description: WebFinger Endpoint
+      parameters:
+      - description: Resource
+        in: query
+        name: resource
+        required: true
+        type: string
+      - description: Rel
+        in: query
+        name: rel
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.WebfingerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: WebFinger
+      tags:
+      - well-known
+  /api/auth/caddy:
+    get:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+  /api/auth/envoy:
+    delete:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    get:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    head:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    options:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    patch:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    post:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+    put:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+  /api/auth/nginx:
+    get:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+  /api/auth/traefik:
+    get:
+      description: Forward-Auth Proxy Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "302":
+          description: Found
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Proxy
+      tags:
+      - forward-auth
+  /api/context/app:
+    get:
+      description: Get the app context
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.AppContextResponse'
+      summary: App context
+      tags:
+      - context
+  /api/context/user:
+    get:
+      description: Get the user context
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.UserContextResponse'
+      summary: User context
+      tags:
+      - context
+  /api/healthz:
+    get:
+      description: Check if the server is up and running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Healthcheck
+      tags:
+      - health
+    head:
+      description: Check if the server is up and running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Healthcheck
+      tags:
+      - health
+  /api/oauth/callback/{id}:
+    get:
+      description: Callback URL for OAuth providers
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: State
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: Code
+        in: query
+        name: state
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: OAuth Callback
+      tags:
+      - oauth
+  /api/oauth/url/{id}:
+    get:
+      description: Get an OAuth URL for the specified provider
+      parameters:
+      - description: Provider ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Login for
+        in: query
+        name: login_for
+        type: string
+      - description: OpenID Connect Ticket
+        in: query
+        name: oidc_ticket
+        type: string
+      - description: OpenID Connect Scope
+        in: query
+        name: oidc_scope
+        type: string
+      - description: OpenID Connect Name
+        in: query
+        name: oidc_name
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.OAuthURLSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: OAuth URL
+      tags:
+      - oauth
+  /api/oidc/authorize-complete:
+    post:
+      consumes:
+      - application/json
+      description: Internal endpoint for the completion of the OpenID Connect authorization
+        flow
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.AuthorizeCompleteResponse'
+        "500":
+          description: Internal Server Error
+      summary: Authorize Complete
+      tags:
+      - oidc
+  /api/user/login:
+    post:
+      consumes:
+      - application/json
+      description: Login Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.TotpPendingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Login
+      tags:
+      - accounts
+  /api/user/logout:
+    post:
+      description: Logout Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Logout
+      tags:
+      - accounts
+  /api/user/tailscale:
+    post:
+      consumes:
+      - application/json
+      description: Tailscale Auth Endpoint (Experimental)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Tailscale
+      tags:
+      - accounts
+  /api/user/totp:
+    post:
+      consumes:
+      - application/json
+      description: TOTP Endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: TOTP
+      tags:
+      - accounts
+  /authorize:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: OpenID Connect Authorize Endpoint
+      parameters:
+      - description: OAuth scopes (space separated, must include openid)
+        in: query
+        name: scope
+        type: string
+      - description: Response type (e.g. code)
+        in: query
+        name: response_type
+        type: string
+      - description: Client ID
+        in: query
+        name: client_id
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      - description: Opaque state value returned to the client
+        in: query
+        name: state
+        type: string
+      - description: Nonce for ID token replay protection
+        in: query
+        name: nonce
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE code challenge method (S256 or plain)
+        in: query
+        name: code_challenge_method
+        type: string
+      - description: Prompt parameter (none, login, consent)
+        in: query
+        name: prompt
+        type: string
+      - description: Max authentication age in seconds
+        in: query
+        name: max_age
+        type: string
+      - description: OAuth scopes (space separated, must include openid)
+        in: formData
+        name: scope
+        type: string
+      - description: Response type (e.g. code)
+        in: formData
+        name: response_type
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Redirect URI
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: Opaque state value returned to the client
+        in: formData
+        name: state
+        type: string
+      - description: Nonce for ID token replay protection
+        in: formData
+        name: nonce
+        type: string
+      - description: PKCE code challenge
+        in: formData
+        name: code_challenge
+        type: string
+      - description: PKCE code challenge method (S256 or plain)
+        in: formData
+        name: code_challenge_method
+        type: string
+      - description: Prompt parameter (none, login, consent)
+        in: formData
+        name: prompt
+        type: string
+      - description: Max authentication age in seconds
+        in: formData
+        name: max_age
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: Authorize
+      tags:
+      - oidc
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: OpenID Connect Authorize Endpoint
+      parameters:
+      - description: OAuth scopes (space separated, must include openid)
+        in: query
+        name: scope
+        type: string
+      - description: Response type (e.g. code)
+        in: query
+        name: response_type
+        type: string
+      - description: Client ID
+        in: query
+        name: client_id
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      - description: Opaque state value returned to the client
+        in: query
+        name: state
+        type: string
+      - description: Nonce for ID token replay protection
+        in: query
+        name: nonce
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE code challenge method (S256 or plain)
+        in: query
+        name: code_challenge_method
+        type: string
+      - description: Prompt parameter (none, login, consent)
+        in: query
+        name: prompt
+        type: string
+      - description: Max authentication age in seconds
+        in: query
+        name: max_age
+        type: string
+      - description: OAuth scopes (space separated, must include openid)
+        in: formData
+        name: scope
+        type: string
+      - description: Response type (e.g. code)
+        in: formData
+        name: response_type
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Redirect URI
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: Opaque state value returned to the client
+        in: formData
+        name: state
+        type: string
+      - description: Nonce for ID token replay protection
+        in: formData
+        name: nonce
+        type: string
+      - description: PKCE code challenge
+        in: formData
+        name: code_challenge
+        type: string
+      - description: PKCE code challenge method (S256 or plain)
+        in: formData
+        name: code_challenge_method
+        type: string
+      - description: Prompt parameter (none, login, consent)
+        in: formData
+        name: prompt
+        type: string
+      - description: Max authentication age in seconds
+        in: formData
+        name: max_age
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: Authorize
+      tags:
+      - oidc
+  /oidc/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: OpenID Connect Token Endpoint
+      parameters:
+      - description: Grant type (authorization_code or refresh_token)
+        in: query
+        name: grant_type
+        required: true
+        type: string
+      - description: Authorization code (required for authorization_code grant)
+        in: query
+        name: code
+        type: string
+      - description: Redirect URI (must match the one from the authorize request)
+        in: query
+        name: redirect_uri
+        type: string
+      - description: Refresh token (required for refresh_token grant)
+        in: query
+        name: refresh_token
+        type: string
+      - description: Client ID (required if not using Basic auth)
+        in: query
+        name: client_id
+        type: string
+      - description: Client secret (required for confidential clients without Basic
+          auth)
+        in: query
+        name: client_secret
+        type: string
+      - description: PKCE code verifier (required if code_challenge was sent)
+        in: query
+        name: code_verifier
+        type: string
+      - description: Grant type (authorization_code or refresh_token)
+        in: formData
+        name: grant_type
+        type: string
+      - description: Authorization code (required for authorization_code grant)
+        in: formData
+        name: code
+        type: string
+      - description: Redirect URI (must match the one from the authorize request)
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: Refresh token (required for refresh_token grant)
+        in: formData
+        name: refresh_token
+        type: string
+      - description: Client ID (required if not using Basic auth)
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret (required for confidential clients without Basic
+          auth)
+        in: formData
+        name: client_secret
+        type: string
+      - description: PKCE code verifier (required if code_challenge was sent)
+        in: formData
+        name: code_verifier
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+      summary: Token
+      tags:
+      - oidc
+  /oidc/userinfo:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: OpenID Connect Userinfo Endpoint
+      parameters:
+      - description: OpenID Connect Access Token
+        in: formData
+        name: access_token
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.UserinfoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+      summary: Userinfo
+      tags:
+      - oidc
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: OpenID Connect Userinfo Endpoint
+      parameters:
+      - description: OpenID Connect Access Token
+        in: formData
+        name: access_token
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.UserinfoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controller.OIDCErrorResponse'
+      summary: Userinfo
+      tags:
+      - oidc
+  /resources/{resource}:
+    get:
+      description: Get a resource by file name
+      parameters:
+      - description: Resource Name
+        in: path
+        name: resource
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/controller.SimpleResponse'
+      summary: Resources Endpoint
+      tags:
+      - resources
+swagger: "2.0"

@@ -33,18 +33,28 @@ func NewResourcesController(i ResourcesControllerInput) *ResourcesController {
 	return controller
 }
 
+// Resources godoc
+//
+//	@Summary		Resources Endpoint
+//	@Description	Get a resource by file name
+//	@Tags			resources
+//	@Param			resource	path	string	true	"Resource Name"
+//	@Success		200
+//	@Failure		404	{object}	SimpleResponse
+//	@Failure		403	{object}	SimpleResponse
+//	@Router			/resources/{resource} [get]
 func (controller *ResourcesController) resourcesHandler(c *gin.Context) {
 	if controller.config.Resources.Path == "" {
-		c.JSON(404, gin.H{
-			"status":  404,
-			"message": "Resource not found",
+		c.JSON(404, SimpleResponse{
+			Status:  404,
+			Message: "Resource not found",
 		})
 		return
 	}
 	if !controller.config.Resources.Enabled {
-		c.JSON(403, gin.H{
-			"status":  403,
-			"message": "Resources are disabled",
+		c.JSON(403, SimpleResponse{
+			Status:  403,
+			Message: "Resources are disabled",
 		})
 		return
 	}

@@ -54,6 +54,27 @@ func NewOAuthController(i OAuthControllerInput) *OAuthController {
 	return controller
 }
 
+type OAuthURLSuccessResponse struct {
+	SimpleResponse
+	URL string `json:"url"`
+}
+
+// OAuthURL godoc
+//
+//	@Summary		OAuth URL
+//	@Description	Get an OAuth URL for the specified provider
+//	@Tags			oauth
+//	@Produce		json
+//	@Param			id				path		string	true	"Provider ID"
+//	@Param			login_for		query		string	false	"Login for"
+//	@Param			oidc_ticket		query		string	false	"OpenID Connect Ticket"
+//	@Param			oidc_scope		query		string	false	"OpenID Connect Scope"
+//	@Param			oidc_name		query		string	false	"OpenID Connect Name"
+//	@Param			redirect_uri	query		string	false	"Redirect URI"
+//	@Success		200				{object}	OAuthURLSuccessResponse
+//	@Failure		400				{object}	SimpleResponse
+//	@Failure		500				{object}	SimpleResponse
+//	@Router			/api/oauth/url/{id} [get]
 func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	var req OAuthRequest
 
@@ -111,23 +132,33 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 
 	c.SetCookie(controller.runtime.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
 
-	c.JSON(200, gin.H{
-		"status":  200,
-		"message": "OK",
-		"url":     authUrl,
+	c.JSON(200, OAuthURLSuccessResponse{
+		SimpleResponse: SimpleResponse{
+			Status:  200,
+			Message: "OK",
+		},
+		URL: authUrl,
 	})
 }
 
+// OAuthCallback godoc
+//
+//	@Summary		OAuth Callback
+//	@Description	Callback URL for OAuth providers
+//	@Tags			oauth
+//	@Param			id		path	string	true	"Provider ID"
+//	@Param			code	query	string	true	"State"
+//	@Param			state	query	string	true	"Code"
+//	@Success		302
+//	@Failure		302
+//	@Router			/api/oauth/callback/{id} [get]
 func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	var req OAuthRequest
 
 	err := c.BindUri(&req)
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to bind URI")
-		c.JSON(400, gin.H{
-			"status":  400,
-			"message": "Bad Request",
-		})
+		controller.log.App.Error().Err(err).Msg("Failed to get provider ID")
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -135,7 +166,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get OAuth session cookie")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -145,7 +176,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get pending OAuth session")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -154,7 +185,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	state := c.Query("state")
 	if state != oauthPendingSession.State {
 		controller.log.App.Warn().Msg("OAuth state mismatch")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -163,7 +194,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to exchange code for token")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -171,19 +202,19 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get user info from OAuth provider")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	if user == nil {
 		controller.log.App.Warn().Msg("OAuth provider did not return user info")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	if user.Email == "" {
 		controller.log.App.Warn().Msg("OAuth provider did not return an email")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -191,13 +222,13 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get OAuth service for session")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	if svc.ID() != req.Provider {
 		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, svc.ID())
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -211,11 +242,11 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to encode unauthorized query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/unauthorized?%s", controller.runtime.AppURL, queries.Encode()))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/unauthorized?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
@@ -260,7 +291,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create session cookie")
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
@@ -273,10 +304,10 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		queries, err := query.Values(oauthPendingSession.CallbackParams)
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to encode OIDC callback query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/oidc/authorize?%s", controller.runtime.AppURL, queries.Encode()))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/oidc/authorize?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
@@ -288,15 +319,15 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to encode redirect query")
-			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/continue?%s", controller.runtime.AppURL, queries.Encode()))
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s/continue?%s", controller.runtime.AppURL, queries.Encode()))
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, controller.runtime.AppURL)
+	c.Redirect(http.StatusFound, controller.runtime.AppURL)
 }
 
 func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {

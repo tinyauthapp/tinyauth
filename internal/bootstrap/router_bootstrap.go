@@ -6,17 +6,26 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
+	ginScalar "github.com/tinyauthapp/gin-scalar"
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	docs "github.com/tinyauthapp/tinyauth/internal/swagger"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
 
+// @title			Tinyauth API
+// @version		development
+// @description	Documentation for Tinyauth's API.
+// @license.name	AGPL-3.0
+// @license.url	https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE
+// @BasePath		/
 func (app *BootstrapApp) setupRouter() error {
 	// we don't want gin debug mode
 	gin.SetMode(gin.ReleaseMode)
@@ -80,6 +89,14 @@ func (app *BootstrapApp) setupRouter() error {
 		return fmt.Errorf("failed to provide api router group: %w", err)
 	}
 
+	if app.config.Server.ScalarEnabled {
+		err = app.setupScalar()
+
+		if err != nil {
+			return fmt.Errorf("failed to setup scalar: %w", err)
+		}
+	}
+
 	controllerProvideFor := []any{
 		controller.NewContextController,
 		controller.NewOAuthController,
@@ -122,6 +139,34 @@ func (app *BootstrapApp) setupRouter() error {
 	}
 
 	app.router = engine
+	return nil
+}
+
+func (app *BootstrapApp) setupScalar() error {
+	appUrl, err := url.Parse(app.runtime.AppURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to parse app url: %w", err)
+	}
+
+	docs.SwaggerInfo.Host = appUrl.Host
+	docs.SwaggerInfo.Schemes = []string{appUrl.Scheme}
+	docs.SwaggerInfo.Version = model.Version
+
+	type scalarInput struct {
+		dig.In
+
+		RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
+	}
+
+	err = app.dig.Invoke(func(i scalarInput) {
+		i.RouterGroup.GET("/scalar/*any", ginScalar.WrapHandler(nil))
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke scalar: %w", err)
+	}
+
 	return nil
 }
 

@@ -58,18 +58,27 @@ func NewWellKnownController(i WellKnownControllerInput) *WellKnownController {
 		oidc: i.OIDCService,
 	}
 
-	i.RouterGroup.GET("/.well-known/openid-configuration", controller.OpenIDConnectConfiguration)
-	i.RouterGroup.GET("/.well-known/jwks.json", controller.JWKS)
-	i.RouterGroup.GET("/.well-known/webfinger", controller.WebFinger)
+	i.RouterGroup.GET("/.well-known/openid-configuration", controller.openIDConnectConfiguration)
+	i.RouterGroup.GET("/.well-known/jwks.json", controller.jwks)
+	i.RouterGroup.GET("/.well-known/webfinger", controller.webFinger)
 
 	return controller
 }
 
-func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context) {
+// OpenIDConnectConfiguration godoc
+//
+//	@Summary		OpenID Connect Configuration
+//	@Description	OpenID Connect Configuration Discovery Endpoint
+//	@Tags			well-known
+//	@Produce		json
+//	@Success		200	{object}	OpenIDConnectConfiguration
+//	@Failure		500	{object}	SimpleResponse
+//	@Router			/.well-known/openid-configuration [get]
+func (controller *WellKnownController) openIDConnectConfiguration(c *gin.Context) {
 	if controller.oidc == nil {
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "OIDC service not configured",
+		c.JSON(500, SimpleResponse{
+			Status:  500,
+			Message: "OIDC service not configured",
 		})
 		return
 	}
@@ -94,11 +103,20 @@ func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context
 	})
 }
 
-func (controller *WellKnownController) JWKS(c *gin.Context) {
+// JWKS godoc
+//
+//	@Summary		JWKS
+//	@Description	JWKS Endpoint
+//	@Tags			well-known
+//	@Produce		json
+//	@Success		200
+//	@Failure		500	{object}	SimpleResponse
+//	@Router			/.well-known/jwks.json [get]
+func (controller *WellKnownController) jwks(c *gin.Context) {
 	if controller.oidc == nil {
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "OIDC service not configured",
+		c.JSON(500, SimpleResponse{
+			Status:  500,
+			Message: "OIDC service not configured",
 		})
 		return
 	}
@@ -106,9 +124,9 @@ func (controller *WellKnownController) JWKS(c *gin.Context) {
 	jwks, err := controller.oidc.GetJWK()
 
 	if err != nil {
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "failed to get JWK",
+		c.JSON(500, SimpleResponse{
+			Status:  500,
+			Message: "failed to get JWK",
 		})
 		return
 	}
@@ -122,16 +140,27 @@ func (controller *WellKnownController) JWKS(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (controller *WellKnownController) WebFinger(c *gin.Context) {
+// WebFinger godoc
+//
+//	@Summary		WebFinger
+//	@Description	WebFinger Endpoint
+//	@Tags			well-known
+//	@Produce		json
+//	@Param			resource	query		string	true	"Resource"
+//	@Param			rel			query		string	false	"Rel"
+//	@Success		200			{object}	WebfingerResponse
+//	@Failure		400			{object}	SimpleResponse
+//	@Router			/.well-known/webfinger [get]
+func (controller *WellKnownController) webFinger(c *gin.Context) {
 	c.Header("Content-Type", "application/jrd+json")
 	c.Header("Access-Control-Allow-Origin", "*")
 
 	resource := c.Query("resource")
 
 	if !controller.validateWebFingerResource(resource) {
-		c.JSON(400, gin.H{
-			"status":  400,
-			"message": "invalid resource",
+		c.JSON(400, SimpleResponse{
+			Status:  400,
+			Message: "invalid resource",
 		})
 		return
 	}

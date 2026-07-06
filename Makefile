@@ -16,7 +16,7 @@ PROD_COMPOSE := $(shell test -f "docker-compose.test.prod.yml" && echo "docker-c
 
 .DEFAULT_GOAL := binary
 
-.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless
+.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless swagger swagger-fmt
 
 # Deps
 deps:
@@ -102,3 +102,11 @@ docker:
 # Docker image distroless
 docker-distroless:
 	docker buildx build -t tinyauthapp/tinyauth:dev-distroless --build-arg=VERSION=$(TAG_NAME) --build-arg=COMMIT_HASH=$(COMMIT_HASH) --build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) -f Dockerfile.distroless .
+
+# Swagger
+swagger:
+	swag init -d ./internal -g bootstrap/router_bootstrap.go -o ./internal/swagger
+
+# Swagger Format
+swagger-fmt:
+	swag fmt -d ./internal -g bootstrap/router_bootstrap.go

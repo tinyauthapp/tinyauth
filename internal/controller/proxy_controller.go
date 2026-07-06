@@ -86,15 +86,38 @@ func NewProxyController(i ProxyControllerInput) *ProxyController {
 	return controller
 }
 
+// Proxy godoc
+//
+//	@Summary		Proxy
+//	@Description	Forward-Auth Proxy Endpoint
+//	@Tags			forward-auth
+//	@Produce		json
+//	@Param			proxy	path		string	true	"Proxy Name"
+//	@Success		200		{object}	SimpleResponse
+//	@Failure		302
+//	@Failure		400	{object}	SimpleResponse
+//	@Failure		401	{object}	SimpleResponse
+//	@Failure		403	{object}	SimpleResponse
+//	@Failure		500	{object}	SimpleResponse
+//	@Router			/api/auth/traefik [get]
+//	@Router			/api/auth/caddy [get]
+//	@Router			/api/auth/nginx [get]
+//	@Router			/api/auth/envoy [get]
+//	@Router			/api/auth/envoy [post]
+//	@Router			/api/auth/envoy [head]
+//	@Router			/api/auth/envoy [put]
+//	@Router			/api/auth/envoy [patch]
+//	@Router			/api/auth/envoy [delete]
+//	@Router			/api/auth/envoy [options]
 func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	// Load proxy context based on the request type
 	proxyCtx, err := controller.getProxyContext(c)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get proxy context from request")
-		c.JSON(400, gin.H{
-			"status":  400,
-			"message": "Bad request",
+		c.JSON(400, SimpleResponse{
+			Status:  400,
+			Message: "Bad request",
 		})
 		return
 	}
@@ -118,9 +141,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	if controller.policyEngine.Evaluate(service.RuleIPBypassed, aclsCtx) {
 		controller.setHeaders(c, acls)
-		c.JSON(200, gin.H{
-			"status":  200,
-			"message": "Authenticated",
+		c.JSON(200, SimpleResponse{
+			Status:  200,
+			Message: "Authenticated",
 		})
 		return
 	}
@@ -128,9 +151,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	if controller.policyEngine.Evaluate(service.RuleAuthEnabled, aclsCtx) {
 		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
 		controller.setHeaders(c, acls)
-		c.JSON(200, gin.H{
-			"status":  200,
-			"message": "Authenticated",
+		c.JSON(200, SimpleResponse{
+			Status:  200,
+			Message: "Authenticated",
 		})
 		return
 	}
@@ -151,9 +174,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 		if !controller.useBrowserResponse(proxyCtx) {
 			c.Header("x-tinyauth-location", redirectURL)
-			c.JSON(403, gin.H{
-				"status":  403,
-				"message": "Forbidden",
+			c.JSON(403, SimpleResponse{
+				Status:  403,
+				Message: "Forbidden",
 			})
 			return
 		}
@@ -200,9 +223,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 			if !controller.useBrowserResponse(proxyCtx) {
 				c.Header("x-tinyauth-location", redirectURL)
-				c.JSON(403, gin.H{
-					"status":  403,
-					"message": "Forbidden",
+				c.JSON(403, SimpleResponse{
+					Status:  403,
+					Message: "Forbidden",
 				})
 				return
 			}
@@ -244,9 +267,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 				if !controller.useBrowserResponse(proxyCtx) {
 					c.Header("x-tinyauth-location", redirectURL)
-					c.JSON(403, gin.H{
-						"status":  403,
-						"message": "Forbidden",
+					c.JSON(403, SimpleResponse{
+						Status:  403,
+						Message: "Forbidden",
 					})
 					return
 				}
@@ -271,9 +294,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 		controller.setHeaders(c, acls)
 
-		c.JSON(200, gin.H{
-			"status":  200,
-			"message": "Authenticated",
+		c.JSON(200, SimpleResponse{
+			Status:  200,
+			Message: "Authenticated",
 		})
 		return
 	}
@@ -293,9 +316,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	if !controller.useBrowserResponse(proxyCtx) {
 		c.Header("x-tinyauth-location", redirectURL)
-		c.JSON(401, gin.H{
-			"status":  401,
-			"message": "Unauthorized",
+		c.JSON(401, SimpleResponse{
+			Status:  401,
+			Message: "Unauthorized",
 		})
 		return
 	}
@@ -329,9 +352,9 @@ func (controller *ProxyController) handleError(c *gin.Context, proxyCtx ProxyCon
 
 	if !controller.useBrowserResponse(proxyCtx) {
 		c.Header("x-tinyauth-location", redirectURL)
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
+		c.JSON(500, SimpleResponse{
+			Status:  500,
+			Message: "Internal Server Error",
 		})
 		return
 	}

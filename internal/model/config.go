@@ -34,8 +34,9 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			Path:    "./resources",
 		},
 		Server: ServerConfig{
-			Port:    3000,
-			Address: "0.0.0.0",
+			Port:          3000,
+			Address:       "0.0.0.0",
+			ScalarEnabled: true,
 		},
 		Auth: AuthConfig{
 			SubdomainsEnabled:  true,
@@ -134,9 +135,10 @@ type ResourcesConfig struct {
 }
 
 type ServerConfig struct {
-	Port       int    `description:"The port on which the server listens." yaml:"port,omitempty"`
-	Address    string `description:"The address on which the server listens." yaml:"address,omitempty"`
-	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath,omitempty"`
+	Port          int    `description:"The port on which the server listens." yaml:"port,omitempty"`
+	Address       string `description:"The address on which the server listens." yaml:"address,omitempty"`
+	SocketPath    string `description:"The path to the Unix socket." yaml:"socketPath,omitempty"`
+	ScalarEnabled bool   `description:"Enable API docs with Scalar under /scalar." yaml:"scalarEnabled,omitempty"`
 }
 
 type AuthConfig struct {
