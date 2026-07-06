@@ -102,8 +102,18 @@ generate:
 
 # Docker image
 docker:
-	docker buildx build -t tinyauthapp/tinyauth:dev --build-arg=VERSION=$(TAG_NAME) --build-arg=COMMIT_HASH=$(COMMIT_HASH) --build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) -f Dockerfile .
+	docker buildx build -t tinyauthapp/tinyauth:dev \
+		--build-arg=VERSION=$(TAG_NAME) \
+		--build-arg=COMMIT_HASH=$(COMMIT_HASH) \
+		--build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) \
+		--build-arg=BUILD_TAGS=$(BUILD_TAGS) \
+		-f Dockerfile .
 
 # Docker image distroless
 docker-distroless:
-	docker buildx build -t tinyauthapp/tinyauth:dev-distroless --build-arg=VERSION=$(TAG_NAME) --build-arg=COMMIT_HASH=$(COMMIT_HASH) --build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) -f Dockerfile.distroless .
+	docker buildx build -t tinyauthapp/tinyauth:dev-distroless \
+		--build-arg=VERSION=$(TAG_NAME) \
+		--build-arg=COMMIT_HASH=$(COMMIT_HASH) \
+		--build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) \
+		--build-arg=BUILD_TAGS=$(BUILD_TAGS) \
+		-f Dockerfile.distroless .
