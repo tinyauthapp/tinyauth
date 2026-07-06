@@ -9,6 +9,11 @@ COMMIT_HASH := $(shell git rev-parse HEAD)
 BUILD_TIMESTAMP := $(shell date '+%Y-%m-%dT%H:%M:%S')
 BIN_NAME := tinyauth-$(GOARCH)
 LDFLAGS := -s -w
+# We don't want all of the tailscale feature-set
+TAILSCALE_BUILD_TAGS := $(shell go run tailscale.com/cmd/featuretags@latest -min -add acme,serve,netstack)
+# Whatever 6MB serialization lib Gin is using
+GIN_BUILD_TAGS := nomsgpack
+BUILD_TAGS := $(GIN_BUILD_TAGS),$(TAILSCALE_BUILD_TAGS)
 
 # Development vars
 DEV_COMPOSE := $(shell test -f "docker-compose.test.yml" && echo "docker-compose.test.yml" || echo "docker-compose.dev.yml" )
@@ -39,7 +44,7 @@ webui: clean-webui
 
 # Build the binary
 binary: webui
-	CGO_ENABLED=$(CGO_ENABLED) go build -ldflags "${LDFLAGS} \
+	CGO_ENABLED=$(CGO_ENABLED) go build -tags "${BUILD_TAGS}" -ldflags "${LDFLAGS} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.Version=${TAG_NAME} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
 	-X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" \

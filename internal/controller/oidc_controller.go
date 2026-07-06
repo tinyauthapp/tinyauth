@@ -739,7 +739,7 @@ func (controller *OIDCController) resolveRequestObject(c *gin.Context) (*service
 func (controller *OIDCController) resolveNormalParams(c *gin.Context) (*service.AuthorizeRequest, error) {
 	var req service.AuthorizeRequest
 
-	bind := binding.Query
+	var bind binding.Binding = binding.Query
 
 	if c.Request.Method == http.MethodPost {
 		bind = binding.Form

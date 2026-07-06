@@ -35,11 +35,17 @@ jobs:
       VERSION: ${{ steps.metadata.outputs.VERSION }}
       COMMIT_HASH: ${{ steps.metadata.outputs.COMMIT_HASH }}
       BUILD_TIMESTAMP: ${{ steps.metadata.outputs.BUILD_TIMESTAMP }}
+      BUILD_TAGS: ${{ steps.metadata.outputs.BUILD_TAGS }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: nightly
+
+      - name: Install go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "^1.26.4"
 
       - name: Generate metadata
         id: metadata
@@ -47,6 +53,9 @@ jobs:
           echo "VERSION=nightly" >> "$GITHUB_OUTPUT"
           echo "COMMIT_HASH=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "BUILD_TIMESTAMP=$(date '+%Y-%m-%dT%H:%M:%S')" >> "$GITHUB_OUTPUT"
+          export TAILSCALE_BUILD_TAGS=$(go run tailscale.com/cmd/featuretags@latest -min -add acme,serve,netstack)
+          export GIN_BUILD_TAGS=nomsgpack
+          echo "BUILD_TAGS=$TAILSCALE_BUILD_TAGS,$GIN_BUILD_TAGS" >> "$GITHUB_OUTPUT"
 
   binary-build:
     runs-on: ubuntu-latest
@@ -83,7 +92,11 @@ jobs:
       - name: Build
         run: |
           cp -r frontend/dist internal/assets/dist
-          go build -ldflags "-X github.com/tinyauthapp/tinyauth/internal/model.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-amd64 ./cmd/tinyauth
+          go build -tags ${{ needs.generate-metadata.outputs.BUILD_TAGS }} \
+            -ldflags "-X github.com/tinyauthapp/tinyauth/internal/model.Version=${{ needs.generate-metadata.outputs.VERSION }} \
+            -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} \
+            -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" \
+            -o tinyauth-amd64 ./cmd/tinyauth
         env:
           CGO_ENABLED: 0
 
@@ -128,7 +141,11 @@ jobs:
       - name: Build
         run: |
           cp -r frontend/dist internal/assets/dist
-          go build -ldflags "-X github.com/tinyauthapp/tinyauth/internal/model.Version=${{ needs.generate-metadata.outputs.VERSION }} -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" -o tinyauth-arm64 ./cmd/tinyauth
+          go build -tags ${{ needs.generate-metadata.outputs.BUILD_TAGS }} \
+            -ldflags "-X github.com/tinyauthapp/tinyauth/internal/model.Version=${{ needs.generate-metadata.outputs.VERSION }} \
+            -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${{ needs.generate-metadata.outputs.COMMIT_HASH }} \
+            -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}" \
+            -o tinyauth-arm64 ./cmd/tinyauth
         env:
           CGO_ENABLED: 0
 
@@ -180,6 +197,7 @@ jobs:
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
             COMMIT_HASH=${{ needs.generate-metadata.outputs.COMMIT_HASH }}
             BUILD_TIMESTAMP=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}
+            BUILD_TAGS=${{ needs.generate-metadata.outputs.BUILD_TAGS }}
 
       - name: Export digest
         run: |
@@ -190,7 +208,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: digests-linux-amd64
+          name: digests-alpine-linux-amd64
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -239,6 +257,7 @@ jobs:
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
             COMMIT_HASH=${{ needs.generate-metadata.outputs.COMMIT_HASH }}
             BUILD_TIMESTAMP=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}
+            BUILD_TAGS=${{ needs.generate-metadata.outputs.BUILD_TAGS }}
 
       - name: Export digest
         run: |
@@ -296,6 +315,7 @@ jobs:
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
             COMMIT_HASH=${{ needs.generate-metadata.outputs.COMMIT_HASH }}
             BUILD_TIMESTAMP=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}
+            BUILD_TAGS=${{ needs.generate-metadata.outputs.BUILD_TAGS }}
 
       - name: Export digest
         run: |
@@ -306,7 +326,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: digests-linux-arm64
+          name: digests-alpine-linux-arm64
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -355,6 +375,7 @@ jobs:
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
             COMMIT_HASH=${{ needs.generate-metadata.outputs.COMMIT_HASH }}
             BUILD_TIMESTAMP=${{ needs.generate-metadata.outputs.BUILD_TIMESTAMP }}
+            BUILD_TAGS=${{ needs.generate-metadata.outputs.BUILD_TAGS }}
 
       - name: Export digest
         run: |
@@ -380,7 +401,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: digests-alpine-*
           merge-multiple: true
 
       - name: Login to GitHub Container Registry
