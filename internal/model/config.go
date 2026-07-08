@@ -244,6 +244,7 @@ type ExperimentalConfig struct{}
 type TailscaleConfig struct {
 	Enabled       bool   `description:"Enable Tailscale integration." yaml:"enabled,omitempty"`
 	APIToken      string `description:"Tailscale API token." yaml:"apiToken,omitempty"`
+	APITokenFile  string `description:"Path to the file containing the Tailscale API token." yaml:"apiTokenFile,omitempty"`
 	Tailnet       string `description:"Tailnet name." yaml:"tailnet,omitempty"`
 	CacheDuration int    `description:"Cache duration for Tailscale device and user lists in seconds." yaml:"cacheDuration,omitempty"`
 }

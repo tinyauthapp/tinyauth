@@ -8,6 +8,7 @@ import (
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"go.uber.org/dig"
 )
@@ -55,6 +56,8 @@ type TailscaleService struct {
 	client *http.Client
 	ctx    context.Context
 
+	apiToken string
+
 	caches struct {
 		devices *CacheStore[tailscaleAPIDevices]
 		users   *CacheStore[tailscaleAPIUsers]
@@ -80,18 +83,21 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 		return nil, nil
 	}
 
-	if i.Config.Tailscale.APIToken == "" {
-		return nil, fmt.Errorf("tailscale api token not set")
-	}
-
 	if i.Config.Tailscale.Tailnet == "" {
 		return nil, fmt.Errorf("tailscale tailnet not set")
 	}
 
+	apiToken := utils.GetSecret(i.Config.Tailscale.APIToken, i.Config.Tailscale.APITokenFile)
+
+	if apiToken == "" {
+		return nil, fmt.Errorf("tailscale api token not set")
+	}
+
 	s := &TailscaleService{
-		config: i.Config,
-		log:    i.Log,
-		ctx:    i.Ctx,
+		config:   i.Config,
+		log:      i.Log,
+		ctx:      i.Ctx,
+		apiToken: apiToken,
 	}
 
 	devicesCache := NewCacheStore[tailscaleAPIDevices](0)
@@ -139,7 +145,7 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 }
 
 func (s *TailscaleService) buildAuthorizationHeader() string {
-	return "Bearer " + s.config.Tailscale.APIToken
+	return "Bearer " + s.apiToken
 }
 
 func (s *TailscaleService) getDeviceList() (*tailscaleAPIDevices, bool, error) {
