@@ -246,6 +246,12 @@ func (ldap *LdapService) BindService(rebind bool) error {
 	if ldap.cert != nil {
 		return ldap.conn.ExternalBind()
 	}
+
+	// attempt unauthenticated/anonymous bind if both BindDN and bindpw are unset
+	if ldap.config.LDAP.BindDN == "" && ldap.bindPw == "" {
+		return ldap.conn.UnauthenticatedBind("")
+	}
+
 	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.bindPw)
 }
 
