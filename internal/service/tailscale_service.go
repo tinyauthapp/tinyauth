@@ -53,6 +53,7 @@ type TailscaleService struct {
 	config *model.Config
 	log    *logger.Logger
 	client *http.Client
+	ctx    context.Context
 
 	caches struct {
 		devices *CacheStore[tailscaleAPIDevices]
@@ -71,6 +72,7 @@ type TailscaleServiceInput struct {
 	Ding   *ding.Ding
 	Config *model.Config
 	Log    *logger.Logger
+	Ctx    context.Context
 }
 
 func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
@@ -89,6 +91,7 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 	s := &TailscaleService{
 		config: i.Config,
 		log:    i.Log,
+		ctx:    i.Ctx,
 	}
 
 	devicesCache := NewCacheStore[tailscaleAPIDevices](0)
@@ -114,7 +117,9 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 
 	s.urls.devices = tailscaleAPIDeviceList(i.Config.Tailscale.Tailnet)
 	s.urls.users = tailscaleAPIUserList(i.Config.Tailscale.Tailnet)
-	s.client = &http.Client{}
+	s.client = &http.Client{
+		Timeout: 10 * time.Second,
+	}
 
 	_, _, err := s.getDeviceList()
 
@@ -144,7 +149,7 @@ func (s *TailscaleService) getDeviceList() (*tailscaleAPIDevices, bool, error) {
 		return &cached, true, nil
 	}
 
-	devices, err := simpleReq[tailscaleAPIDevices](s.client, s.urls.devices, map[string]string{
+	devices, err := simpleReq[tailscaleAPIDevices](s.client, s.ctx, s.urls.devices, map[string]string{
 		"Authorization": s.buildAuthorizationHeader(),
 	})
 
@@ -164,7 +169,7 @@ func (s *TailscaleService) getUsersList() (*tailscaleAPIUsers, bool, error) {
 		return &cached, true, nil
 	}
 
-	users, err := simpleReq[tailscaleAPIUsers](s.client, s.urls.users, map[string]string{
+	users, err := simpleReq[tailscaleAPIUsers](s.client, s.ctx, s.urls.users, map[string]string{
 		"Authorization": s.buildAuthorizationHeader(),
 	})
 

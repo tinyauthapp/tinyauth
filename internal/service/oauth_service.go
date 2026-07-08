@@ -10,7 +10,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type OAuthUserinfoExtractor func(client *http.Client, url string) (*model.Claims, error)
+type OAuthUserinfoExtractor func(client *http.Client, ctx context.Context, url string) (*model.Claims, error)
 
 type OAuthService struct {
 	serviceCfg        model.OAuthServiceConfig
@@ -80,7 +80,7 @@ func (s *OAuthService) GetToken(code string, verifier string) (*oauth2.Token, er
 
 func (s *OAuthService) GetUserinfo(token *oauth2.Token) (*model.Claims, error) {
 	client := oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(token))
-	return s.userinfoExtractor(client, s.serviceCfg.UserinfoURL)
+	return s.userinfoExtractor(client, s.ctx, s.serviceCfg.UserinfoURL)
 }
 
 func (s *OAuthService) GetConfig() model.OAuthServiceConfig {

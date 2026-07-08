@@ -1,16 +1,17 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 )
 
-func simpleReq[T any](client *http.Client, url string, headers map[string]string) (*T, error) {
+func simpleReq[T any](client *http.Client, ctx context.Context, url string, headers map[string]string) (*T, error) {
 	var decodedRes T
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +27,11 @@ func simpleReq[T any](client *http.Client, url string, headers map[string]string
 	defer res.Body.Close()
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed with status: %s", res.Status)
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, fmt.Errorf("request failed with status: %s", res.Status)
+		}
+		return nil, fmt.Errorf("request failed with status: %s and body: %s", res.Status, body)
 	}
 
 	body, err := io.ReadAll(res.Body)
