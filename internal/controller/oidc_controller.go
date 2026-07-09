@@ -205,20 +205,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		return
 	}
 
-	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
-
-	values := AuthorizeScreenParams{
-		LoginFor:   FrontendLoginForOIDC,
-		OIDCTicket: ticket,
-		OIDCScope:  req.Scope,
-		OIDCName:   client.Name,
-	}
-
-	if slices.Contains(prompts, service.OIDCPromptLogin) {
-		values.OIDCPrompt = service.OIDCPromptLogin
-	} else if slices.Contains(prompts, service.OIDCPromptNone) {
-		values.OIDCPrompt = service.OIDCPromptNone
-	}
+	forceLogin := slices.Contains(prompts, service.OIDCPromptLogin)
 
 	if req.MaxAge != "" && userContext != nil {
 		maxAge, err := strconv.Atoi(req.MaxAge)
@@ -237,12 +224,14 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		if userContext.Authenticated {
 			authTime := time.Unix(userContext.AuthTime, 0)
 			if authTime.Add(time.Duration(maxAge) * time.Second).Before(time.Now()) {
-				values.OIDCPrompt = service.OIDCPromptLogin
+				forceLogin = true
 			}
 		}
 	}
 
-	if client.SkipAuthorization && values.OIDCPrompt != service.OIDCPromptLogin && userContext != nil && userContext.Authenticated {
+	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
+
+	if client.SkipAuthorization && userContext != nil && userContext.Authenticated && !forceLogin {
 		controller.oidc.DeleteAuthorizeRequestTicket(ticket)
 		sub := controller.oidc.CreateSub(*userContext, req.ClientID)
 		if err := controller.oidc.DeleteOldSession(c, sub); err != nil {
@@ -275,6 +264,19 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		redirectURL.RawQuery = redirectQueries.Encode()
 		c.Redirect(http.StatusFound, redirectURL.String())
 		return
+	}
+
+	values := AuthorizeScreenParams{
+		LoginFor:   FrontendLoginForOIDC,
+		OIDCTicket: ticket,
+		OIDCScope:  req.Scope,
+		OIDCName:   client.Name,
+	}
+
+	if forceLogin {
+		values.OIDCPrompt = service.OIDCPromptLogin
+	} else if slices.Contains(prompts, service.OIDCPromptNone) {
+		values.OIDCPrompt = service.OIDCPromptNone
 	}
 
 	queries, err := query.Values(values)
