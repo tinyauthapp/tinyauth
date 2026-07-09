@@ -271,8 +271,9 @@ type OIDCClientConfig struct {
 	ClientID            string   `description:"OIDC client ID." yaml:"clientId,omitempty"`
 	ClientSecret        string   `description:"OIDC client secret." yaml:"clientSecret,omitempty"`
 	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile,omitempty"`
-	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris,omitempty"`
-	Name                string   `description:"Client name in UI." yaml:"name,omitempty"`
+	TrustedRedirectURIs  []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris,omitempty"`
+	Name                 string   `description:"Client name in UI." yaml:"name,omitempty"`
+	SkipAuthorization    bool     `description:"Skip the authorization consent screen for this client." yaml:"skipAuthorization,omitempty"`
 }
 
 type ACLsConfig struct {
