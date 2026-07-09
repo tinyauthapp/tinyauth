@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -256,19 +257,23 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 			return
 		}
 		code := controller.oidc.CreateCode(*req, *userContext)
-		queries, err := query.Values(AuthorizeCallback{Code: code, State: req.State})
+		redirectURL, err := url.Parse(req.RedirectURI)
 		if err != nil {
 			controller.authorizeError(c, authorizeErrorParams{
 				err:           err,
-				reason:        "Failed to build query",
-				reasonPublic:  "Failed to build query",
+				reason:        "Failed to build callback URL",
+				reasonPublic:  "Failed to build callback URL",
 				callback:      req.RedirectURI,
 				callbackError: "server_error",
 				state:         req.State,
 			})
 			return
 		}
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?%s", req.RedirectURI, queries.Encode()))
+		redirectQueries := redirectURL.Query()
+		redirectQueries.Set("code", code)
+		redirectQueries.Set("state", req.State)
+		redirectURL.RawQuery = redirectQueries.Encode()
+		c.Redirect(http.StatusFound, redirectURL.String())
 		return
 	}
 
