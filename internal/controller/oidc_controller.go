@@ -206,37 +206,6 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 	ticket := controller.oidc.CreateAuthorizeRequestTicket(*req)
 
-	if client.SkipAuthorization && userContext != nil && userContext.Authenticated {
-		controller.oidc.DeleteAuthorizeRequestTicket(ticket)
-		sub := controller.oidc.CreateSub(*userContext, req.ClientID)
-		if err := controller.oidc.DeleteOldSession(c, sub); err != nil {
-			controller.authorizeError(c, authorizeErrorParams{
-				err:           err,
-				reason:        "Failed to delete old sessions",
-				reasonPublic:  "Failed to delete old sessions",
-				callback:      req.RedirectURI,
-				callbackError: "server_error",
-				state:         req.State,
-			})
-			return
-		}
-		code := controller.oidc.CreateCode(*req, *userContext)
-		queries, err := query.Values(AuthorizeCallback{Code: code, State: req.State})
-		if err != nil {
-			controller.authorizeError(c, authorizeErrorParams{
-				err:           err,
-				reason:        "Failed to build query",
-				reasonPublic:  "Failed to build query",
-				callback:      req.RedirectURI,
-				callbackError: "server_error",
-				state:         req.State,
-			})
-			return
-		}
-		c.Redirect(http.StatusFound, fmt.Sprintf("%s?%s", req.RedirectURI, queries.Encode()))
-		return
-	}
-
 	values := AuthorizeScreenParams{
 		LoginFor:   FrontendLoginForOIDC,
 		OIDCTicket: ticket,
@@ -270,6 +239,37 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 				values.OIDCPrompt = service.OIDCPromptLogin
 			}
 		}
+	}
+
+	if client.SkipAuthorization && values.OIDCPrompt != service.OIDCPromptLogin && userContext != nil && userContext.Authenticated {
+		controller.oidc.DeleteAuthorizeRequestTicket(ticket)
+		sub := controller.oidc.CreateSub(*userContext, req.ClientID)
+		if err := controller.oidc.DeleteOldSession(c, sub); err != nil {
+			controller.authorizeError(c, authorizeErrorParams{
+				err:           err,
+				reason:        "Failed to delete old sessions",
+				reasonPublic:  "Failed to delete old sessions",
+				callback:      req.RedirectURI,
+				callbackError: "server_error",
+				state:         req.State,
+			})
+			return
+		}
+		code := controller.oidc.CreateCode(*req, *userContext)
+		queries, err := query.Values(AuthorizeCallback{Code: code, State: req.State})
+		if err != nil {
+			controller.authorizeError(c, authorizeErrorParams{
+				err:           err,
+				reason:        "Failed to build query",
+				reasonPublic:  "Failed to build query",
+				callback:      req.RedirectURI,
+				callbackError: "server_error",
+				state:         req.State,
+			})
+			return
+		}
+		c.Redirect(http.StatusFound, fmt.Sprintf("%s?%s", req.RedirectURI, queries.Encode()))
+		return
 	}
 
 	queries, err := query.Values(values)
