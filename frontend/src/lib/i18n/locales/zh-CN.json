@@ -98,7 +98,7 @@
   "quickActionsThemeDark": "暗色主题",
   "quickActionsThemeSystem": "跟随系统",
   "quickActionsLogout": "登出",
-  "quickActionsTitle": "快速行動",
+  "quickActionsTitle": "快速操作",
   "quickActionsProviderLocal": "本地",
   "quickActionsProviderLDAP": "LDAP",
   "quickActionsProviderOAuth": "{{provider}} OAuth"
