@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -305,6 +307,9 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 
 	for id, client := range i.Config.OIDC.Clients {
 		client.ID = id
+		if err := uuid.Validate(client.ClientID); err != nil {
+			return nil, fmt.Errorf("invalid client id: %w", err)
+		}
 		if client.Name == "" {
 			client.Name = utils.Capitalize(client.ID)
 		}
@@ -318,6 +323,9 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 			client.ClientSecret = secret
 		}
 		client.ClientSecretFile = ""
+		if len(client.ClientSecret) < 32 {
+			return nil, fmt.Errorf("client secret for client %s is too short, must be >= 32 chars", client.ClientID)
+		}
 		clients[id] = client
 		i.Log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
 	}
@@ -968,4 +976,22 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	}
 
 	return parsedPromps
+}
+
+func (service *OIDCService) CreateSignedValue(key string, data []byte) string {
+	// create the signature
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(data)
+	sig := base64.URLEncoding.EncodeToString(h.Sum(nil))
+
+	// hash the data
+	hasher := sha256.New()
+	hasher.Write(data)
+	hash := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+
+	return fmt.Sprintf("%s.%s", hash, sig)
+}
+
+func (service *OIDCService) VerifySignedValue(key string, data []byte, signedValue string) bool {
+	return service.CreateSignedValue(key, data) == signedValue
 }
