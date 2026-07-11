@@ -77,7 +77,7 @@
   "emailScopeName": "E-mail",
   "emailScopeDescription": "Zezwala aplikacji na dostęp do adresów e-mail.",
   "profileScopeName": "Profil",
-  "profileScopeDescription": "Zezwala aplikacji na dostęp do informacji o profilu.",
+  "profileScopeDescription": "Zezwala aplikacji na dostęp do informacji o porfilu.",
   "groupsScopeName": "Grupy",
   "groupsScopeDescription": "Zezwala aplikacji na dostęp do informacji o grupie.",
   "backToLoginButton": "Wróć do logowania",
