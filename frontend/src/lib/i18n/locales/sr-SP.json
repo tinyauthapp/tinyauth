@@ -99,7 +99,7 @@
   "quickActionsThemeSystem": "Систем",
   "quickActionsLogout": "Одјава",
   "quickActionsTitle": "Брзе радње",
-  "quickActionsProviderLocal": "Lokalno",
+  "quickActionsProviderLocal": "Локално",
   "quickActionsProviderLDAP": "LDAP",
   "quickActionsProviderOAuth": "{{provider}} OAuth"
 }
