@@ -86,7 +86,7 @@
   "addressScopeName": "Adres",
   "addressScopeDescription": "Geeft de app toegang tot je adres.",
   "loginTailscaleTitle": "Doorgaan met Tailscale",
-  "loginTailscaleDescription": "Je lijkt toegang te hebben tot Tinyauth vanaf een geautoriseerd Tailscale-apparaat. Wil je doorgaan met je Tailscale-verbinding?",
+  "loginTailscaleDescription": "Je lijkt toegang te hebben tot Tinyauth vanaf een geautoriseerd Tailscale-apparaat. Wil je doorgaan met jeTailscale-verbinding?",
   "loginTailscaleDeviceName": "Apparaatnaam:",
   "loginTailscaleOtherMethod": "Op een andere manier inloggen",
   "loginTailscaleSuccess": "Succesvol geauthenticeerd met Tailscale.",
