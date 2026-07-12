@@ -103,6 +103,8 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 
 type Config struct {
 	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl,omitempty"`
+	ConfigFile    string             `description:"Path to config file." yaml:"-" gen:"include"`
+	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
 	Database      DatabaseConfig     `description:"Database configuration." yaml:"database,omitempty"`
 	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics,omitempty"`
 	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources,omitempty"`
@@ -115,9 +117,7 @@ type Config struct {
 	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap,omitempty"`
 	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
 	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
-	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
 	Log           LogConfig          `description:"Logging configuration." yaml:"log,omitempty"`
-	ConfigFile    string             `description:"Path to config file." yaml:"-"`
 }
 
 type DatabaseConfig struct {

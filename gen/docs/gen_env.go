@@ -46,8 +46,9 @@ func generateExampleEnv() {
 func buildEnvEntry(child reflect.StructField, childValue reflect.Value, parentPath string, entries *[]EnvEntry) {
 	desc := child.Tag.Get("description")
 	tag := child.Tag.Get("yaml")
+	gen := child.Tag.Get("gen")
 
-	if tag == "-" {
+	if tag == "-" && gen != "include" {
 		return
 	}
 
