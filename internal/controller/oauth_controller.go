@@ -350,7 +350,10 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 		return false
 	}
 
-	if strings.EqualFold(u.Hostname(), au.Hostname()) {
+	nu := strings.TrimSuffix(u.Hostname(), ".")
+	nau := strings.TrimSuffix(au.Hostname(), ".")
+
+	if strings.EqualFold(nu, nau) {
 		return true
 	}
 
