@@ -250,6 +250,9 @@ func TestDomainValidator_Validate(t *testing.T) {
 			description: "Non matching hostnames should fail",
 			expected:    "example.com",
 			actual:      "foo.com",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "expected hostname example.com, got foo.com")
+			},
 		},
 	}
 
