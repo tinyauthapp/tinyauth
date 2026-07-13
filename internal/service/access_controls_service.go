@@ -1,12 +1,11 @@
 package service
 
 import (
-	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 )
 
@@ -40,13 +39,17 @@ func NewAccessControlsService(i AccessControlServiceInput) *AccessControlsServic
 func (service *AccessControlsService) lookupStaticACLs(domain string) (*model.App, error) {
 	var nameMatch *model.App
 
+	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
+
 	// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
 	for app, config := range service.config.Apps {
-		match, err := service.checkDomain(domain, config.Config.Domain)
-		if err != nil {
+		err := v.Validate(config.Config.Domain, domain)
+		// Maybe not the best way to check if a match succeeded, but expected is only
+		// used on match errors and not parsing errors
+		if err != nil && !strings.HasPrefix(err.Error(), "expected") {
 			return nil, err
 		}
-		if match {
+		if err == nil {
 			service.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
 			return &config, nil
 		}
@@ -79,36 +82,4 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 
 	// no labels
 	return nil, nil
-}
-
-func (service *AccessControlsService) checkDomain(check, target string) (bool, error) {
-	// Domains don't have a scheme, so we use a mock one
-	cu, err := url.Parse("tinyauth://" + check)
-
-	if err != nil {
-		return false, fmt.Errorf("failed to parse check domain: %w", err)
-	}
-
-	if cu.Host == "" {
-		return false, fmt.Errorf("check domain is empty")
-	}
-
-	tu, err := url.Parse("tinyauth://" + target)
-
-	if err != nil {
-		return false, fmt.Errorf("failed to parse target domain: %w", err)
-	}
-
-	if tu.Host == "" {
-		return false, fmt.Errorf("target domain is empty")
-	}
-
-	// non-dns check url
-	ndcu := strings.TrimSuffix(cu.Hostname(), ".")
-
-	// non-dns target url
-	ndtu := strings.TrimSuffix(tu.Hostname(), ".")
-
-	// Strip out the port
-	return strings.EqualFold(ndcu, ndtu), nil
 }

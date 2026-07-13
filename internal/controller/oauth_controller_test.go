@@ -9,7 +9,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func TestOAuthControllerIsRedirectSafe(t *testing.T) {
+func TestOAuthController_isRedirectSafe(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 

@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -311,57 +311,46 @@ func (controller *OAuthController) getCookieDomain() string {
 }
 
 func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
-	u, err := url.Parse(redirectURI)
+	v := validators.NewDomainValidator(validators.DomainValidatorOptions{
+		WithScheme: true,
+		WithPort:   true,
+	})
+
+	_, err := v.SafeHostname(controller.runtime.AppURL)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to parse redirect URI")
+		controller.log.App.Error().Err(err).Msg("App URL is invalid, cannot validate redirect URI")
 		return false
 	}
 
-	if u.Scheme == "" || u.Host == "" {
-		controller.log.App.Warn().Msg("Redirect URI has invalid scheme or host")
-		return false
-	}
+	err = v.Validate(redirectURI, controller.runtime.AppURL)
 
-	au, err := url.Parse(controller.runtime.AppURL)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to parse app URL")
-		return false
-	}
-
-	if u.Scheme != au.Scheme {
-		controller.log.App.Warn().Msg("Redirect URI scheme does not match app URL scheme")
-		return false
-	}
-
-	getEffectivePort := func(u *url.URL) string {
-		if u.Port() != "" {
-			return u.Port()
-		}
-		if u.Scheme == "https" {
-			return "443"
-		}
-		return "80"
-	}
-
-	if getEffectivePort(u) != getEffectivePort(au) {
-		controller.log.App.Warn().Msg("Redirect URI port does not match app URL port")
-		return false
-	}
-
-	nu := strings.TrimSuffix(u.Hostname(), ".")
-	nau := strings.TrimSuffix(au.Hostname(), ".")
-
-	if strings.EqualFold(nu, nau) {
+	if err == nil {
 		return true
+	}
+
+	controller.log.App.Debug().Err(err).Msg("Failed to validate redirect URI")
+
+	if strings.HasPrefix(err.Error(), "expected port") ||
+		strings.HasPrefix(err.Error(), "expected scheme") ||
+		err.Error() == "input url is invalid" {
+		return false
 	}
 
 	if !controller.config.Auth.SubdomainsEnabled {
 		return false
 	}
 
-	if strings.HasSuffix(strings.ToLower(u.Hostname()), "."+strings.ToLower(controller.runtime.CookieDomain)) {
+	v = validators.NewDomainValidator(validators.DomainValidatorOptions{})
+
+	hostname, err := v.SafeHostname(redirectURI)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to get safe hostname from redirect URI")
+		return false
+	}
+
+	if strings.HasSuffix(hostname, "."+strings.ToLower(controller.runtime.CookieDomain)) {
 		return true
 	}
 

@@ -92,7 +92,8 @@ func TestLookupStaticACLs(t *testing.T) {
 				Config:        &model.Config{Apps: tt.apps},
 				LabelProvider: nil,
 			})
-			got := svc.lookupStaticACLs(tt.domain)
+			got, err := svc.lookupStaticACLs(tt.domain)
+			require.NoError(t, err)
 			if tt.expectNil {
 				assert.Nil(t, got)
 				return

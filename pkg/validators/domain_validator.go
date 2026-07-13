@@ -23,6 +23,7 @@ type DomainValidatorOptions struct {
 	// Ensure domains have the same port.
 	WithPort bool
 	// Specify a list of allowed schemes IF WithScheme is set to true.
+	// Leave empty to allow any scheme.
 	AllowedSchemes []string
 }
 
@@ -64,7 +65,7 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 		if u.Scheme == "tinyauth" {
 			return nil, fmt.Errorf("input url is missing scheme")
 		}
-		if !slices.Contains(v.opts.AllowedSchemes, u.Scheme) {
+		if len(v.opts.AllowedSchemes) > 0 && !slices.Contains(v.opts.AllowedSchemes, u.Scheme) {
 			return nil, fmt.Errorf("scheme %s not allowed", u.Scheme)
 		}
 	}
