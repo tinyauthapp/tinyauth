@@ -39,6 +39,7 @@ RUN go mod download
 
 COPY ./cmd ./cmd
 COPY ./internal ./internal
+COPY ./pkg ./pkg
 COPY --from=frontend-builder /frontend/dist ./internal/assets/dist
 
 RUN CGO_ENABLED=0 go build -tags "${BUILD_TAGS}" -ldflags "${LDFLAGS} \
