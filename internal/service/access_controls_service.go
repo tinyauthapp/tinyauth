@@ -52,7 +52,7 @@ func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App
 		if !errors.Is(err, validators.ErrHostnameMismatch) {
 			service.log.App.Debug().Str("name", app).Err(err).Msg("Domain validation failed")
 		}
-		if strings.HasPrefix(domain, app+".") {
+		if strings.HasPrefix(strings.ToLower(domain), strings.ToLower(app+".")) {
 			service.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
 			nameMatch = &config
 		}
