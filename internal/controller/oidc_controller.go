@@ -348,13 +348,10 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 
 	if err != nil {
 		controller.authorizeError(c, authorizeErrorParams{
-			err:           err,
-			reason:        "Failed to parse redirect URI",
-			reasonPublic:  "Failed to parse redirect URI",
-			callback:      authorizeReq.RedirectURI,
-			callbackError: "server_error",
-			state:         authorizeReq.State,
-			json:          true,
+			err:          err,
+			reason:       "Failed to parse redirect URI",
+			reasonPublic: "Failed to parse redirect URI",
+			json:         true,
 		})
 		return
 	}
