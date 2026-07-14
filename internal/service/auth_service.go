@@ -162,9 +162,8 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	return service, nil
 }
 
-func (auth *AuthService) DummyPasswordCheck() {
-	random := utils.GenerateString(8)
-	bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(random))
+func (auth *AuthService) DummyPasswordCheck(password string) {
+	bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(password))
 }
 
 func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) {

@@ -246,7 +246,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			m.auth.DummyPasswordCheck()
+			m.auth.DummyPasswordCheck(password)
 		}
 		return nil, nil, fmt.Errorf("error searching for user: %w", err)
 	}
