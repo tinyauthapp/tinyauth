@@ -90,6 +90,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
+			controller.auth.DummyPasswordCheck()
 			controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
 			controller.auth.RecordLoginAttempt(req.Username, false)
 			controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")

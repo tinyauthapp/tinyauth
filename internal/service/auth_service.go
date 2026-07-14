@@ -69,6 +69,8 @@ type AuthService struct {
 	tailscale    *TailscaleService
 	policyEngine *PolicyEngine
 
+	dummyHash string
+
 	lockdown struct {
 		active     bool
 		until      time.Time
@@ -101,7 +103,7 @@ type AuthServiceInput struct {
 	PolicyEngine *PolicyEngine
 }
 
-func NewAuthService(i AuthServiceInput) *AuthService {
+func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	service := &AuthService{
 		log:          i.Log,
 		runtime:      i.Runtime,
@@ -122,6 +124,15 @@ func NewAuthService(i AuthServiceInput) *AuthService {
 	if !service.config.Auth.LockdownEnabled {
 		loginCacheSize = service.maxLoginLimits
 	}
+
+	// dummy hash
+	dummyHash, err := bcrypt.GenerateFromPassword([]byte(utils.GenerateString(8)), bcrypt.DefaultCost)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate dummy hash: %w", err)
+	}
+
+	service.dummyHash = string(dummyHash)
 
 	// caches setup
 	oauthCache := NewCacheStore[OAuthPendingSession](256)
@@ -148,7 +159,12 @@ func NewAuthService(i AuthServiceInput) *AuthService {
 		}
 	}, ding.RingMinor)
 
-	return service
+	return service, nil
+}
+
+func (auth *AuthService) DummyPasswordCheck() {
+	random := utils.GenerateString(8)
+	bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(random))
 }
 
 func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) {
