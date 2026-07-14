@@ -264,7 +264,8 @@ func TestContextMiddleware(t *testing.T) {
 		Runtime: &runtime,
 		Ctx:     ctx,
 	})
-	authService := service.NewAuthService(service.AuthServiceInput{
+
+	authService, err := service.NewAuthService(service.AuthServiceInput{
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
@@ -276,6 +277,8 @@ func TestContextMiddleware(t *testing.T) {
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
+
+	require.NoError(t, err)
 
 	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
 		Log:              log,

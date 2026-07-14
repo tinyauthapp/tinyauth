@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -244,7 +245,9 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 	search, err := m.auth.SearchUser(username)
 
 	if err != nil {
-		m.auth.DummyPasswordCheck()
+		if errors.Is(err, service.ErrUserNotFound) {
+			m.auth.DummyPasswordCheck()
+		}
 		return nil, nil, fmt.Errorf("error searching for user: %w", err)
 	}
 

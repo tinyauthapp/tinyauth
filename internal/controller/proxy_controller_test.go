@@ -708,7 +708,7 @@ func TestProxyController(t *testing.T) {
 		Log: log,
 	})
 
-	authService := service.NewAuthService(service.AuthServiceInput{
+	authService, err := service.NewAuthService(service.AuthServiceInput{
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
@@ -720,6 +720,8 @@ func TestProxyController(t *testing.T) {
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
+
+	require.NoError(t, err)
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
