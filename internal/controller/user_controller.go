@@ -89,21 +89,30 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 	search, err := controller.auth.SearchUser(req.Username)
 
 	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
-			controller.auth.RecordLoginAttempt(req.Username, false)
-			controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
-			c.JSON(401, gin.H{
-				"status":  401,
-				"message": "Unauthorized",
-			})
-			return
-		}
-		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error searching for user during login attempt")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
+		controller.constantTime(func() constantTimeRes {
+			if errors.Is(err, service.ErrUserNotFound) {
+				controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
+				controller.auth.RecordLoginAttempt(req.Username, false)
+				controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
+				return constantTimeRes{
+					Code: 401,
+					Res: gin.H{
+						"status":  401,
+						"message": "Unauthorized",
+					},
+				}
+			}
+			controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error searching for user during login attempt")
+			return constantTimeRes{
+				Code: 500,
+				Res: gin.H{
+					"status":  500,
+					"message": "Internal Server Error",
+				},
+			}
+		}, func(res constantTimeRes) {
+			c.JSON(res.Code, res.Res)
+		}, time.Millisecond*45)
 		return
 	}
 
@@ -465,4 +474,19 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 		"status":  200,
 		"message": "Login successful",
 	})
+}
+
+type constantTimeRes struct {
+	Code int
+	Res  any
+}
+
+func (controller *UserController) constantTime(f func() constantTimeRes, rf func(res constantTimeRes), targetTime time.Duration) {
+	tStart := time.Now()
+	res := f()
+	tEnd := time.Now()
+	if tEnd.Sub(tStart) < targetTime {
+		time.Sleep(targetTime - tEnd.Sub(tStart))
+	}
+	rf(res)
 }
