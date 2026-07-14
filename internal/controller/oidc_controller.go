@@ -34,6 +34,7 @@ type OIDCController struct {
 	log     *logger.Logger
 	oidc    *service.OIDCService
 	runtime *model.RuntimeConfig
+	config  *model.Config
 }
 
 type AuthorizeCallback struct {
@@ -87,6 +88,7 @@ type OIDCControllerInput struct {
 
 	Log           *logger.Logger
 	OIDCService   *service.OIDCService
+	Config        *model.Config
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	MainRouter    *gin.RouterGroup `name:"mainRouterGroup"`
@@ -97,6 +99,7 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 		log:     i.Log,
 		oidc:    i.OIDCService,
 		runtime: i.RuntimeConfig,
+		config:  i.Config,
 	}
 
 	i.MainRouter.POST("/authorize", controller.authorize)
@@ -241,6 +244,19 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
+	cookieId := strings.SplitN(client.ClientID, "-", 2)[0]
+	cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
+	scopeCookie, err := c.Cookie(cookieName)
+
+	if err == nil {
+		scopes := fmt.Sprintf("scopes=%s;", req.Scope)
+		if controller.oidc.VerifySignedValue(client.ClientSecret, []byte(scopes), scopeCookie) {
+			if values.OIDCPrompt != service.OIDCPromptLogin {
+				values.OIDCPrompt = service.OIDCPromptNone
+			}
+		}
+	}
+
 	queries, err := query.Values(values)
 
 	if err != nil {
@@ -319,6 +335,19 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		return
 	}
 
+	// Get the client
+	client, ok := controller.oidc.GetClient(authorizeReq.ClientID)
+
+	if !ok {
+		controller.authorizeError(c, authorizeErrorParams{
+			err:          errors.New("client not found"),
+			reason:       "Client not found",
+			reasonPublic: "The client is not configured",
+			json:         true,
+		})
+		return
+	}
+
 	// We no longer need the ticket
 	controller.oidc.DeleteAuthorizeRequestTicket(req.Ticket)
 
@@ -360,6 +389,22 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		})
 		return
 	}
+
+	// Set a cookie for the consent screen (approved scopes)
+	cookieId := strings.SplitN(client.ClientID, "-", 2)[0]
+	cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
+	scopes := fmt.Sprintf("scopes=%s;", authorizeReq.Scope)
+
+	cookie := &http.Cookie{
+		Name:     cookieName,
+		Value:    controller.oidc.CreateSignedValue(client.ClientSecret, []byte(scopes)),
+		Path:     "/",
+		Secure:   controller.config.Auth.SecureCookie,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(c.Writer, cookie)
 
 	c.JSON(200, gin.H{
 		"status":       200,
