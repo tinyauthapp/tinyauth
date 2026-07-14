@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -331,9 +332,9 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 
 	controller.log.App.Debug().Err(err).Msg("Failed to validate redirect URI")
 
-	if strings.HasPrefix(err.Error(), "expected port") ||
-		strings.HasPrefix(err.Error(), "expected scheme") ||
-		err.Error() == "input url is invalid" {
+	if errors.Is(err, validators.ErrInvalidURL) ||
+		errors.Is(err, validators.ErrSchemeMismatch) ||
+		errors.Is(err, validators.ErrPortMismatch) {
 		return false
 	}
 

@@ -16,6 +16,13 @@ import (
 	"golang.org/x/net/idna"
 )
 
+var (
+	ErrInvalidURL       = fmt.Errorf("invalid url")
+	ErrSchemeMismatch   = fmt.Errorf("scheme mismatch")
+	ErrPortMismatch     = fmt.Errorf("port mismatch")
+	ErrHostnameMismatch = fmt.Errorf("hostname mismatch")
+)
+
 // DomainValidatorOptions is a set of options for DomainValidator.
 type DomainValidatorOptions struct {
 	// Ensure domains have the same scheme.
@@ -53,7 +60,7 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 	}
 
 	if u.Host == "" {
-		return nil, fmt.Errorf("input url is invalid")
+		return nil, ErrInvalidURL
 	}
 
 	if v.opts.WithPort && !v.opts.WithScheme && u.Port() == "" {
@@ -73,14 +80,18 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 	return u, nil
 }
 
-func (v *DomainValidator) getEffectivePort(u *url.URL) string {
+func (v *DomainValidator) getEffectivePort(u *url.URL) (string, bool) {
 	if u.Port() != "" {
-		return u.Port()
+		return u.Port(), true
 	}
-	if u.Scheme == "https" {
-		return "443"
+	switch u.Scheme {
+	case "http":
+		return "80", true
+	case "https":
+		return "443", true
+	default:
+		return "", false
 	}
-	return "80"
 }
 
 func (v *DomainValidator) formatHostname(hostname string) (string, error) {
@@ -117,13 +128,21 @@ func (v *DomainValidator) Validate(expected, actual string) error {
 
 	if v.opts.WithScheme {
 		if eu.Scheme != au.Scheme {
-			return fmt.Errorf("expected scheme %s, got %s", eu.Scheme, au.Scheme)
+			return ErrSchemeMismatch
 		}
 	}
 
 	if v.opts.WithPort {
-		if v.getEffectivePort(eu) != v.getEffectivePort(au) {
-			return fmt.Errorf("expected port %s, got %s", v.getEffectivePort(eu), v.getEffectivePort(au))
+		eup, ok := v.getEffectivePort(eu)
+		if !ok {
+			return fmt.Errorf("failed to get effective port for url: %s", eu.String())
+		}
+		aup, ok := v.getEffectivePort(au)
+		if !ok {
+			return fmt.Errorf("failed to get effective port for url: %s", au.String())
+		}
+		if eup != aup {
+			return ErrPortMismatch
 		}
 	}
 
@@ -140,7 +159,7 @@ func (v *DomainValidator) Validate(expected, actual string) error {
 	}
 
 	if euf != auf {
-		return fmt.Errorf("expected hostname %s, got %s", euf, auf)
+		return ErrHostnameMismatch
 	}
 
 	return nil

@@ -20,7 +20,7 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 		{
 			description: "Empty url fails",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "input url is invalid")
+				assert.ErrorIs(t, e, ErrInvalidURL)
 			},
 		},
 		{
@@ -40,7 +40,7 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			options:     DomainValidatorOptions{WithScheme: true},
 			input:       "example.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "input url is invalid")
+				assert.ErrorIs(t, e, ErrInvalidURL)
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "foo:foo",
 			actual:      "bar.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "failed to parse input url")
+				assert.ErrorContains(t, e, "failed to parse input url:")
 			},
 		},
 		{
@@ -143,7 +143,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "example.com",
 			actual:      "foo:foo",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "failed to parse input url")
+				assert.ErrorContains(t, e, "failed to parse input url:")
 			},
 		},
 		{
@@ -152,7 +152,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "https://example.com",
 			actual:      "http://example.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "expected scheme https, got http")
+				assert.ErrorIs(t, e, ErrSchemeMismatch)
 			},
 		},
 		{
@@ -189,12 +189,30 @@ func TestDomainValidator_Validate(t *testing.T) {
 			actual:      "example.com:8080",
 		},
 		{
+			description: "Domains with unknown scheme and port enabled but no port should fail",
+			options:     DomainValidatorOptions{WithPort: true, WithScheme: true},
+			expected:    "ssh://example.com:22",
+			actual:      "ssh://example.com",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "failed to get effective port for url")
+			},
+		},
+		{
+			description: "Domains with unknown scheme and port enabled but no port should fail, reverse",
+			options:     DomainValidatorOptions{WithPort: true, WithScheme: true},
+			expected:    "ssh://example.com",
+			actual:      "ssh://example.com:22",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "failed to get effective port for url")
+			},
+		},
+		{
 			description: "Port validation with port and no scheme should fail with different port",
 			options:     DomainValidatorOptions{WithPort: true},
 			expected:    "example.com:8080",
 			actual:      "example.com:8081",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "expected port 8080, got 8081")
+				assert.ErrorIs(t, e, ErrPortMismatch)
 			},
 		},
 		{
@@ -251,7 +269,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "example.com",
 			actual:      "foo.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "expected hostname example.com, got foo.com")
+				assert.ErrorIs(t, e, ErrHostnameMismatch)
 			},
 		},
 	}
