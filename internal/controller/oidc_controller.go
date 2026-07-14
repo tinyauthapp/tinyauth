@@ -356,12 +356,16 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 			state:         authorizeReq.State,
 			json:          true,
 		})
+		return
 	}
 
 	q := cu.Query()
 
 	q.Set("code", code)
-	q.Set("state", authorizeReq.State)
+
+	if authorizeReq.State != "" {
+		q.Set("state", authorizeReq.State)
+	}
 
 	cu.RawQuery = q.Encode()
 
