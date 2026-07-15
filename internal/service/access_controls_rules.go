@@ -215,6 +215,10 @@ type IPAllowedRule struct {
 }
 
 func (rule *IPAllowedRule) Evaluate(ctx *ACLContext) Effect {
+	if !ctx.TrustedProxiesConfigured {
+		return EffectAllow // We can't block the proxy
+	}
+
 	// merge global and per-app block/allow lists
 	blockedIps := append([]string{}, rule.Config.Auth.IP.Block...)
 	allowedIPs := append([]string{}, rule.Config.Auth.IP.Allow...)
@@ -263,6 +267,10 @@ type IPBypassedRule struct {
 }
 
 func (rule *IPBypassedRule) Evaluate(ctx *ACLContext) Effect {
+	if !ctx.TrustedProxiesConfigured {
+		return EffectDeny
+	}
+
 	// merge global and per-app bypass lists
 	bypassList := append([]string{}, rule.Config.Auth.IP.Bypass...)
 	if ctx.ACLs != nil {

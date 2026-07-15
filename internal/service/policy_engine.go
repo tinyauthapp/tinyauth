@@ -29,10 +29,11 @@ type Rule interface {
 }
 
 type ACLContext struct {
-	ACLs        *model.App
-	UserContext *model.UserContext
-	IP          net.IP
-	Path        string
+	ACLs                     *model.App
+	UserContext              *model.UserContext
+	IP                       net.IP
+	Path                     string
+	TrustedProxiesConfigured bool
 }
 
 type PolicyEngine struct {

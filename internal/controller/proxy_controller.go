@@ -111,9 +111,10 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	clientIP := c.ClientIP()
 
 	aclsCtx := &service.ACLContext{
-		ACLs: acls,
-		IP:   net.ParseIP(clientIP),
-		Path: proxyCtx.Path,
+		ACLs:                     acls,
+		IP:                       net.ParseIP(clientIP),
+		Path:                     proxyCtx.Path,
+		TrustedProxiesConfigured: controller.runtime.TrustedProxiesConfigured,
 	}
 
 	if controller.policyEngine.Evaluate(service.RuleIPBypassed, aclsCtx) {

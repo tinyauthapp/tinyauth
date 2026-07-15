@@ -163,9 +163,10 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 				},
 			},
 		},
-		CookieDomain:      "example.com",
-		AppURL:            "https://tinyauth.example.com",
-		SessionCookieName: "tinyauth-session",
+		CookieDomain:             "example.com",
+		AppURL:                   "https://tinyauth.example.com",
+		SessionCookieName:        "tinyauth-session",
+		TrustedProxiesConfigured: true,
 	}
 
 	return config, runtime
