@@ -7,6 +7,16 @@ const (
 	UserLDAP
 )
 
+func (t UserSearchType) String() string {
+	switch t {
+	case UserLocal:
+		return "local"
+	case UserLDAP:
+		return "ldap"
+	}
+	return "unknown"
+}
+
 type LDAPUser struct {
 	DN     string
 	Groups []string

@@ -201,9 +201,13 @@ func (cs *CacheStore[T]) SetMaxSize(maxSize int) {
 	defer cs.mu.Unlock()
 	cs.maxSize = maxSize
 	for len(cs.cache) > maxSize {
-		cs.evictOne()
+		if !cs.evictOne() {
+			break
+		}
 	}
 }
 func (cs *CacheStore[T]) GetMaxSize() int {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
 	return cs.maxSize
 }

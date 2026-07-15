@@ -97,7 +97,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	if isLocked {
 		controller.log.App.Warn().Str("username", req.Username).Msg("Account is locked due to too many failed login attempts")
-		controller.log.AuditLoginFailure(req.Username, "local", c.ClientIP(), "account locked")
+		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "account locked")
 		c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
 		c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
 		c.JSON(429, gin.H{
@@ -110,11 +110,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 	if err := controller.auth.CheckUserPassword(*search, req.Password); err != nil {
 		controller.log.App.Warn().Str("username", req.Username).Msg("Invalid password during login attempt")
 		controller.auth.RecordLoginAttempt(req.Username, false)
-		if search.Type == model.UserLocal {
-			controller.log.AuditLoginFailure(req.Username, "local", c.ClientIP(), "invalid password")
-		} else {
-			controller.log.AuditLoginFailure(req.Username, "ldap", c.ClientIP(), "invalid password")
-		}
+		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "invalid password")
 		c.JSON(401, gin.H{
 			"status":  401,
 			"message": "Unauthorized",
@@ -215,11 +211,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.App.Info().Str("username", req.Username).Msg("Login successful")
 
-	if search.Type == model.UserLocal {
-		controller.log.AuditLoginSuccess(req.Username, "local", c.ClientIP())
-	} else {
-		controller.log.AuditLoginSuccess(req.Username, "ldap", c.ClientIP())
-	}
+	controller.log.AuditLoginSuccess(req.Username, search.Type.String(), c.ClientIP())
 
 	controller.auth.RecordLoginAttempt(req.Username, true)
 
