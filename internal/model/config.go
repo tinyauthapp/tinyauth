@@ -49,7 +49,6 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			ACLs: ACLsConfig{
 				Policy: "allow",
 			},
-			LockdownEnabled: true,
 		},
 		UI: UIConfig{
 			Title:                 "Tinyauth",
@@ -151,7 +150,6 @@ type AuthConfig struct {
 	SessionMaxLifetime int                       `description:"Maximum session lifetime in seconds." yaml:"sessionMaxLifetime,omitempty"`
 	LoginTimeout       int                       `description:"Login timeout in seconds." yaml:"loginTimeout,omitempty"`
 	LoginMaxRetries    int                       `description:"Maximum login retries." yaml:"loginMaxRetries,omitempty"`
-	LockdownEnabled    bool                      `description:"Enable lockdown mode after maximum login retries. Lockdown mode limit is calculated automatically." yaml:"lockdownEnabled,omitempty"`
 	TrustedProxies     []string                  `description:"Comma-separated list of trusted proxy addresses." yaml:"trustedProxies,omitempty"`
 	ACLs               ACLsConfig                `description:"ACLs configuration." yaml:"acls,omitempty"`
 }

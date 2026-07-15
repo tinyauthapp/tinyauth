@@ -316,6 +316,21 @@ func TestCacheStoreSizeAndClear(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestCacheStoreWithMaxSize(t *testing.T) {
+	cs := NewCacheStore[string](0)
+	assert.Equal(t, 0, cs.Size())
+
+	for i := 0; i < 100; i++ {
+		cs.Set(strconv.Itoa(i), strconv.Itoa(i), 0)
+	}
+
+	assert.Equal(t, 100, cs.Size())
+
+	cs.SetMaxSize(10)
+
+	assert.Equal(t, 10, cs.Size())
+}
+
 func TestCacheStoreWithLock(t *testing.T) {
 	cs := NewCacheStore[int](0)
 	cs.Set("counter", 1, 0)

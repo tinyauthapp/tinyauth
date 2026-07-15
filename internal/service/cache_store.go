@@ -195,3 +195,15 @@ func (cs *CacheStore[T]) Clear() {
 	cs.cache = make(map[string]cacheEntry[T])
 	cs.order = make([]string, 0)
 }
+
+func (cs *CacheStore[T]) SetMaxSize(maxSize int) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.maxSize = maxSize
+	for len(cs.cache) > maxSize {
+		cs.evictOne()
+	}
+}
+func (cs *CacheStore[T]) GetMaxSize() int {
+	return cs.maxSize
+}
