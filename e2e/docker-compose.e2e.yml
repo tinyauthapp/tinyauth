@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.6
+    image: traefik:v3.7.8
     command: |
       --api.insecure=true
       --providers.docker
@@ -11,7 +11,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   whoami:
-    image: traefik/whoami:latest
+    image: traefik/whoami:v1.11.0
     labels:
       traefik.enable: true
       traefik.http.routers.whoami.rule: Host(`whoami.127.0.0.1.sslip.io`)

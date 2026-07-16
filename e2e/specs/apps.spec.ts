@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import {LoginFixture, LogoutFixture} from "../fixtures/auth.fixtures";
+import {expect, test} from '@playwright/test';
+import {LoginFixture} from "../fixtures/auth.fixtures";
 
 test('should be able to login to app with forward-auth', async ({ page }) => {
     const loginFixture = new LoginFixture(page);

@@ -38,6 +38,7 @@ export default defineConfig({
     command: 'docker compose -f docker-compose.e2e.yml up --build --pull=always --force-recreate --remove-orphans',
     url: 'http://tinyauth.127.0.0.1.sslip.io/api/healthz',
     reuseExistingServer: true,
+    timeout: 5 * 60 * 1000,
     gracefulShutdown: {
       signal: 'SIGINT',
       timeout: 1000,
