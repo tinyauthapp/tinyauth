@@ -43,6 +43,11 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 		rule.Log.App.Debug().Msg("User is an OAuth user, checking OAuth whitelist")
 		match, err := utils.CheckFilter(ctx.ACLs.OAuth.Whitelist, ctx.UserContext.OAuth.Email)
 		if err != nil {
+			// Empty whitelist means "not configured" — let OAuth group rules decide.
+			if err == utils.ErrFilterEmpty {
+				rule.Log.App.Debug().Msg("OAuth whitelist is empty, abstaining")
+				return EffectAbstain
+			}
 			rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.OAuth.Email).Msg("Invalid entry in OAuth whitelist")
 			return EffectDeny
 		}
