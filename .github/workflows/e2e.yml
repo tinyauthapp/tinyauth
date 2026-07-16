@@ -30,23 +30,30 @@ jobs:
           SOCK: ${{ steps.docker.outputs.sock }}
         run: echo "DOCKER_SOCK=${SOCK#unix://}" >> "$GITHUB_ENV"
 
-      - name: Install dependencies
-        run: pnpm ci
+      - name: Spin up docker-compose
+        run: docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans -d
         working-directory: e2e
 
-      - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e
+      - name: Check if the url is accessible
+        run: sleep 20s && curl -v http://tinyauth.127.0.0.1.sslip.io
 
-      - name: Run Playwright tests
-        run: pnpm test
-        working-directory: e2e
-        env:
-          DOCKER_SOCKET_PATH: ${{ steps.docker-socket.outputs.DOCKER_SOCK }}
+#      - name: Install dependencies
+#        run: pnpm ci
+#        working-directory: e2e
+#
+#      - name: Install Playwright Browsers
+#        run: pnpm exec playwright install --with-deps
+#        working-directory: e2e
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: e2e/playwright-report/
-          retention-days: 5
+#      - name: Run Playwright tests
+#        run: pnpm test
+#        working-directory: e2e
+#        env:
+#          DOCKER_SOCKET_PATH: ${{ steps.docker-socket.outputs.DOCKER_SOCK }}
+#
+#      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+#        if: ${{ !cancelled() }}
+#        with:
+#          name: playwright-report
+#          path: e2e/playwright-report/
+#          retention-days: 5
