@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "down": "docker compose -f docker-compose.e2e.yml down",
-    "up": "docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans",
+    "up": "docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans -d",
     "test": "playwright test",
     "report": "playwright show-report",
-    "netcheck": "curl http://tinyauth.127.0.0.1.sslip.io/api/healthz && curl localhost"
+    "netcheck": "cat /etc/resolv.conf && curl http://tinyauth.127.0.0.1.sslip.io/api/healthz && curl localhost"
   },
   "keywords": [],
   "author": "",
