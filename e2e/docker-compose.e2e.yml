@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.7.8
+    image: traefik:v3.6.23
     pull_policy: missing
     command: |
       --api.insecure=true
