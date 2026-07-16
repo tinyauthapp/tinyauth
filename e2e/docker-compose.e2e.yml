@@ -27,7 +27,7 @@ services:
       args:
         - VERSION=e2e
         - BUILD_TAGS=nomsgpack
-        - LD_FLAGS=-s -w
+        - LDFLAGS=-s -w
     command: ["--configfile", "/app/config.yaml"]
     volumes:
       - ./config.e2e.yaml:/app/config.yaml:ro

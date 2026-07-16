@@ -28,7 +28,7 @@ jobs:
         working-directory: e2e
 
       - name: Check if the url is accessible
-        run: sleep 20s && curl -v http://tinyauth.127.0.0.1.sslip.io
+        run: sleep 10s && docker ps && curl -v http://tinyauth.127.0.0.1.sslip.io
 
 #      - name: Install dependencies
 #        run: pnpm ci
