@@ -23,30 +23,21 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # ratchet:docker/setup-docker-action@v5
 
-      - name: Spin up docker-compose
-        run: docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans -d
+      - name: Install dependencies
+        run: pnpm ci
         working-directory: e2e
 
-      - name: Check if the url is accessible
-        run: sleep 10s && docker ps && curl -v http://tinyauth.127.0.0.1.sslip.io
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e
 
-#      - name: Install dependencies
-#        run: pnpm ci
-#        working-directory: e2e
-#
-#      - name: Install Playwright Browsers
-#        run: pnpm exec playwright install --with-deps
-#        working-directory: e2e
+      - name: Run Playwright tests
+        run: pnpm test
+        working-directory: e2e
 
-#      - name: Run Playwright tests
-#        run: pnpm test
-#        working-directory: e2e
-#        env:
-#          DOCKER_SOCKET_PATH: ${{ steps.docker-socket.outputs.DOCKER_SOCK }}
-#
-#      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
-#        if: ${{ !cancelled() }}
-#        with:
-#          name: playwright-report
-#          path: e2e/playwright-report/
-#          retention-days: 5
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 5

@@ -1,24 +1,15 @@
 services:
-  traefik:
-    image: traefik:v3.7.8
+  caddy:
+    image: caddy:2.11.4
     pull_policy: missing
-    command: |
-      --api.insecure=true
-      --providers.docker
-      --entrypoints.web.address=:80
-      --log.level=INFO
     ports:
       - 80:80
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./conf:/etc/caddy
 
   whoami:
     image: traefik/whoami:v1.11.0
     pull_policy: missing
-    labels:
-      traefik.enable: true
-      traefik.http.routers.whoami.rule: Host(`whoami.127.0.0.1.sslip.io`)
-      traefik.http.routers.whoami.middlewares: tinyauth
 
   tinyauth:
     build:
@@ -31,7 +22,3 @@ services:
     command: ["--configfile", "/app/config.yaml"]
     volumes:
       - ./config.e2e.yaml:/app/config.yaml:ro
-    labels:
-      traefik.enable: true
-      traefik.http.routers.tinyauth.rule: Host(`tinyauth.127.0.0.1.sslip.io`)
-      traefik.http.middlewares.tinyauth.forwardauth.address: http://tinyauth:3000/api/auth/traefik
