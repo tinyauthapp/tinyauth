@@ -21,6 +21,7 @@ jobs:
           package_json_file: ./e2e/package.json
 
       - name: Set up Docker
+        id: docker
         uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # ratchet:docker/setup-docker-action@v5
 
       - name: Install dependencies
@@ -34,6 +35,8 @@ jobs:
       - name: Run Playwright tests
         run: pnpm test
         working-directory: e2e
+        env:
+          DOCKER_SOCKET_PATH: ${{ steps.docker.outputs.sock }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
         if: ${{ !cancelled() }}

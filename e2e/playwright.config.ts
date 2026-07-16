@@ -43,5 +43,7 @@ export default defineConfig({
       signal: 'SIGINT',
       timeout: 1000,
     },
+    stderr: 'pipe',
+    stdout: 'pipe',
   },
 });
