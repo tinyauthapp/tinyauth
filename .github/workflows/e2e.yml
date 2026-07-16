@@ -21,14 +21,7 @@ jobs:
           package_json_file: ./e2e/package.json
 
       - name: Set up Docker
-        id: docker
         uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # ratchet:docker/setup-docker-action@v5
-
-      - name: Get docker socket
-        id: docker-socket
-        env:
-          SOCK: ${{ steps.docker.outputs.sock }}
-        run: echo "DOCKER_SOCK=${SOCK#unix://}" >> "$GITHUB_ENV"
 
       - name: Spin up docker-compose
         run: docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans -d

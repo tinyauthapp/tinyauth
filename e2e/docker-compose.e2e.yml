@@ -10,7 +10,7 @@ services:
     ports:
       - 80:80
     volumes:
-      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
 
   whoami:
     image: traefik/whoami:v1.11.0
