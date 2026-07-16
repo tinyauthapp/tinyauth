@@ -1,6 +1,7 @@
 services:
   traefik:
     image: traefik:v3.7.8
+    pull_policy: missing
     command: |
       --api.insecure=true
       --providers.docker
@@ -12,6 +13,7 @@ services:
 
   whoami:
     image: traefik/whoami:v1.11.0
+    pull_policy: missing
     labels:
       traefik.enable: true
       traefik.http.routers.whoami.rule: Host(`whoami.127.0.0.1.sslip.io`)
