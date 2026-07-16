@@ -340,11 +340,11 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 	i.Ding.Go(service.cleanupRoutine, ding.RingMinor)
 
 	// Create caches
-	codeCash := cache.NewCacheStore[AuthorizeCodeEntry](256)
+	codeCache := cache.NewCacheStore[AuthorizeCodeEntry](256)
 	usedCode := cache.NewCacheStore[UsedCodeEntry](256)
 	authorize := cache.NewCacheStore[AuthorizeRequest](256)
 
-	service.caches.code = codeCash
+	service.caches.code = codeCache
 	service.caches.usedCode = usedCode
 	service.caches.authorize = authorize
 
