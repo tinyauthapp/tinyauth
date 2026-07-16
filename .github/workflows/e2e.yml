@@ -31,6 +31,9 @@ jobs:
         run: pnpm exec playwright install --with-deps
         working-directory: e2e
 
+      - name: Add sslip domains to hosts file
+        run: echo "127.0.0.1 tinyauth.127.0.0.1.sslip.io whoami.127.0.0.1.sslip.io" | sudo tee -a /etc/hosts
+
       - name: Run Playwright tests
         run: pnpm exec playwright test
         working-directory: e2e

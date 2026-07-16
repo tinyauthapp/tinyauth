@@ -35,7 +35,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm run up && pnpm run netcheck',
+    command: 'pnpm run up',
     url: 'http://tinyauth.127.0.0.1.sslip.io/api/healthz',
     reuseExistingServer: true,
     timeout: 5 * 60 * 1000,
