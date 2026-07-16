@@ -1,4 +1,4 @@
-package service
+package cache
 
 import (
 	"slices"
@@ -33,8 +33,8 @@ func NewCacheStore[T any](maxSize int) *CacheStore[T] {
 	}
 }
 
-// With lock allows performing multiple operations on the cache store atomically.
-// The provided mutate function receives a set of actions (Set, Get, Delete) that
+// WithLock allows performing multiple operations on a single lock.
+// The provided mutate function receives a set of actions (Set, Get, Delete, Update) that
 // can be used to manipulate the cache store within the locked context.
 func (cs *CacheStore[T]) WithLock(mutate func(actions CacheStoreActions[T])) {
 	cs.mu.Lock()

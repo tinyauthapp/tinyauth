@@ -15,6 +15,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 
 	"github.com/google/uuid"
@@ -71,9 +72,9 @@ type AuthService struct {
 	dummyHash string
 
 	caches struct {
-		login *CacheStore[LoginAttempt]
-		oauth *CacheStore[OAuthPendingSession]
-		ldap  *CacheStore[[]string]
+		login *cache.CacheStore[LoginAttempt]
+		oauth *cache.CacheStore[OAuthPendingSession]
+		ldap  *cache.CacheStore[[]string]
 	}
 }
 
@@ -115,9 +116,9 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	service.dummyHash = string(dummyHash)
 
 	// caches setup
-	oauthCache := NewCacheStore[OAuthPendingSession](256)
-	loginCache := NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
-	ldapCache := NewCacheStore[[]string](1024)
+	oauthCache := cache.NewCacheStore[OAuthPendingSession](256)
+	loginCache := cache.NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
+	ldapCache := cache.NewCacheStore[[]string](1024)
 
 	service.caches.oauth = oauthCache
 	service.caches.login = loginCache
@@ -279,7 +280,7 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 		return
 	}
 
-	auth.caches.login.WithLock(func(actions CacheStoreActions[LoginAttempt]) {
+	auth.caches.login.WithLock(func(actions cache.CacheStoreActions[LoginAttempt]) {
 		entry, ok := actions.Get(identifier)
 
 		if !ok {

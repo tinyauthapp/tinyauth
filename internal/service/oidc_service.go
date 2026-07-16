@@ -27,6 +27,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 )
 
@@ -158,9 +159,9 @@ type OIDCService struct {
 	issuer     string
 
 	caches struct {
-		code      *CacheStore[AuthorizeCodeEntry]
-		usedCode  *CacheStore[UsedCodeEntry]
-		authorize *CacheStore[AuthorizeRequest]
+		code      *cache.CacheStore[AuthorizeCodeEntry]
+		usedCode  *cache.CacheStore[UsedCodeEntry]
+		authorize *cache.CacheStore[AuthorizeRequest]
 	}
 }
 
@@ -339,9 +340,9 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 	i.Ding.Go(service.cleanupRoutine, ding.RingMinor)
 
 	// Create caches
-	codeCash := NewCacheStore[AuthorizeCodeEntry](256)
-	usedCode := NewCacheStore[UsedCodeEntry](256)
-	authorize := NewCacheStore[AuthorizeRequest](256)
+	codeCash := cache.NewCacheStore[AuthorizeCodeEntry](256)
+	usedCode := cache.NewCacheStore[UsedCodeEntry](256)
+	authorize := cache.NewCacheStore[AuthorizeRequest](256)
 
 	service.caches.code = codeCash
 	service.caches.usedCode = usedCode
@@ -503,7 +504,7 @@ func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*Aut
 	var entry AuthorizeCodeEntry
 	var ok bool
 
-	service.caches.code.WithLock(func(actions CacheStoreActions[AuthorizeCodeEntry]) {
+	service.caches.code.WithLock(func(actions cache.CacheStoreActions[AuthorizeCodeEntry]) {
 		entry, ok = actions.Get(codeHash)
 
 		if !ok {
