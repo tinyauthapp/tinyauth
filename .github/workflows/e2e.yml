@@ -24,6 +24,12 @@ jobs:
         id: docker
         uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # ratchet:docker/setup-docker-action@v5
 
+      - name: Get docker socket
+        id: docker-socket
+        env:
+          SOCK: ${{ steps.docker.outputs.sock }}
+        run: echo "DOCKER_SOCK=${SOCK#unix://}" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm ci
         working-directory: e2e
@@ -36,7 +42,7 @@ jobs:
         run: pnpm test
         working-directory: e2e
         env:
-          DOCKER_SOCKET_PATH: ${{ steps.docker.outputs.sock }}
+          DOCKER_SOCKET_PATH: ${{ steps.docker-socket.outputs.DOCKER_SOCK }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
         if: ${{ !cancelled() }}
