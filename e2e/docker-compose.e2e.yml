@@ -6,6 +6,7 @@ services:
       --api.insecure=true
       --providers.docker
       --entrypoints.web.address=:80
+      --log.level=INFO
     ports:
       - 80:80
     volumes:

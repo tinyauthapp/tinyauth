@@ -6,7 +6,6 @@
   "scripts": {
     "down": "docker compose -f docker-compose.e2e.yml down",
     "up": "docker compose -f docker-compose.e2e.yml up --build --force-recreate --remove-orphans",
-    "logs": "docker compose -f docker-compose.e2e.yml logs -f",
     "test": "playwright test",
     "report": "playwright show-report"
   },
