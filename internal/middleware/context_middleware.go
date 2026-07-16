@@ -282,7 +282,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		}
 		userContext.Provider = model.ProviderLocal
 	case model.UserLDAP:
-		user, err := m.auth.GetLDAPUser(username)
+		user, err := m.auth.GetLDAPUser(search.Username)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
