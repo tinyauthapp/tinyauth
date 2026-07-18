@@ -93,6 +93,10 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 	rawURL := i
 
 	if !strings.Contains(i, "://") {
+		// From godoc: [scheme:][//[userinfo@]host][/]path[?query][#fragment]
+		// So, we can omit the colon and tell the Go URL lib that we want
+		// to parse the URL without the scheme. If we don't do this,
+		// the URL lib will parse our entire domain as the path.
 		rawURL = "//" + i
 	}
 
