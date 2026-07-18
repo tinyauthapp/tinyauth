@@ -227,6 +227,9 @@ func TestDomainValidator_Validate(t *testing.T) {
 			options:     DomainValidatorOptions{WithPort: true},
 			expected:    "example.com:8080",
 			actual:      "example.com:8085",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorIs(t, e, ErrPortMismatch)
+			},
 		},
 		{
 			description: "Valid domains without ports or schemes should pass",
