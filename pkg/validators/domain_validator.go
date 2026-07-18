@@ -10,14 +10,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"slices"
 	"strings"
 
 	"golang.org/x/net/idna"
 )
 
+// Errors
 var (
-	ErrInvalidURL       = fmt.Errorf("invalid url")
 	ErrSchemeMismatch   = fmt.Errorf("scheme mismatch")
 	ErrPortMismatch     = fmt.Errorf("port mismatch")
 	ErrHostnameMismatch = fmt.Errorf("hostname mismatch")
@@ -29,8 +28,7 @@ type DomainValidatorOptions struct {
 	WithScheme bool
 	// Ensure domains have the same port.
 	WithPort bool
-	// Specify a list of allowed schemes IF WithScheme is set to true.
-	// Leave empty to allow any scheme.
+	// Specify a list of allowed schemes if WithScheme is set to true.
 	AllowedSchemes []string
 }
 
@@ -48,53 +46,70 @@ func NewDomainValidator(opts DomainValidatorOptions) *DomainValidator {
 	}
 }
 
+func (v *DomainValidator) checkScheme(rawURL string) error {
+	if !v.opts.WithScheme {
+		return nil
+	}
+
+	if len(v.opts.AllowedSchemes) == 0 {
+		return fmt.Errorf("allowed schemes must be specified")
+	}
+
+	for _, scheme := range v.opts.AllowedSchemes {
+		if strings.HasPrefix(strings.ToLower(rawURL), strings.ToLower(scheme)+"://") {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid scheme")
+
+}
+
 func (v *DomainValidator) getURL(i string) (*url.URL, error) {
-	u, err := url.Parse(i)
-
-	if !v.opts.WithScheme && (err != nil || u.Host == "") {
-		u, err = url.Parse("tinyauth://" + i)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse input url: %w", err)
-	}
-
-	if u.Host == "" {
-		return nil, ErrInvalidURL
-	}
-
-	if v.opts.WithPort && u.Port() == "" && (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, fmt.Errorf("port validation is enabled but port is missing in input url and schemes are not enabled")
+	if i == "" {
+		return nil, fmt.Errorf("url cannot be empty")
 	}
 
 	if v.opts.WithScheme {
-		// Empty scheme means that we parsed the url with the tinyauth:// placeholder
-		if u.Scheme == "tinyauth" {
-			return nil, fmt.Errorf("input url is missing scheme")
+		err := v.checkScheme(i)
+
+		if err != nil {
+			return nil, fmt.Errorf("invalid scheme: %w", err)
 		}
-		if len(v.opts.AllowedSchemes) > 0 && !slices.Contains(v.opts.AllowedSchemes, u.Scheme) {
-			return nil, fmt.Errorf("scheme %s not allowed", u.Scheme)
+
+		u, err := url.Parse(i)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse input url: %w", err)
 		}
+
+		if u.Host == "" || u.Scheme == "" {
+			return nil, fmt.Errorf("missing host or scheme in url: %s", i)
+		}
+
+		return u, nil
+	}
+
+	rawURL := i
+
+	if !strings.Contains(i, "://") {
+		rawURL = "//" + i
+	}
+
+	u, err := url.Parse(rawURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse host: %w", err)
+	}
+
+	if u.Host == "" {
+		return nil, fmt.Errorf("missing host in url: %s", i)
 	}
 
 	return u, nil
 }
 
-func (v *DomainValidator) getEffectivePort(u *url.URL) (string, bool) {
-	if u.Port() != "" {
-		return u.Port(), true
-	}
-	switch u.Scheme {
-	case "http":
-		return "80", true
-	case "https":
-		return "443", true
-	default:
-		return "", false
-	}
-}
-
-func (v *DomainValidator) formatHostname(hostname string) (string, error) {
+func (v *DomainValidator) getHostname(hostname string) (string, error) {
 	hostname = strings.ToLower(hostname)
 	hostname = strings.TrimSuffix(hostname, ".")
 	if net.ParseIP(hostname) != nil {
@@ -133,26 +148,18 @@ func (v *DomainValidator) Validate(expected, actual string) error {
 	}
 
 	if v.opts.WithPort {
-		eup, ok := v.getEffectivePort(eu)
-		if !ok {
-			return fmt.Errorf("failed to get effective port for url: %s", eu.String())
-		}
-		aup, ok := v.getEffectivePort(au)
-		if !ok {
-			return fmt.Errorf("failed to get effective port for url: %s", au.String())
-		}
-		if eup != aup {
+		if eu.Port() != au.Port() {
 			return ErrPortMismatch
 		}
 	}
 
-	euf, err := v.formatHostname(eu.Hostname())
+	euf, err := v.getHostname(eu.Hostname())
 
 	if err != nil {
 		return err
 	}
 
-	auf, err := v.formatHostname(au.Hostname())
+	auf, err := v.getHostname(au.Hostname())
 
 	if err != nil {
 		return err
@@ -165,7 +172,7 @@ func (v *DomainValidator) Validate(expected, actual string) error {
 	return nil
 }
 
-// SafeHostname uses the internal validation for domains that Validator uses
+// SafeHostname uses the internal validation for domains that the validator uses
 // to parse a hostname. It ensures the input URL is a valid URL, that a host
 // is present and that the hostname is lowercased and without a trailing dot.
 func (v *DomainValidator) SafeHostname(input string) (string, error) {
@@ -175,5 +182,5 @@ func (v *DomainValidator) SafeHostname(input string) (string, error) {
 		return "", err
 	}
 
-	return v.formatHostname(u.Hostname())
+	return v.getHostname(u.Hostname())
 }

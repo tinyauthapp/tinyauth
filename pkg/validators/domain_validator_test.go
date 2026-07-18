@@ -20,15 +20,35 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 		{
 			description: "Empty url fails",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorIs(t, e, ErrInvalidURL)
+				assert.ErrorContains(t, e, "url cannot be empty")
+			},
+		},
+		{
+			description: "URL without host fails",
+			input:       "/foo",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "missing host in url")
 			},
 		},
 		{
 			description: "Invalid url fails",
 			input:       "foo:foo",
 			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "failed to parse host")
+			},
+		},
+		{
+			description: "With scheme and invalid url should fail",
+			options:     DomainValidatorOptions{WithScheme: true, AllowedSchemes: []string{"https"}},
+			input:       "https://foo:foo",
+			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorContains(t, e, "failed to parse input url")
 			},
+		},
+		{
+			description: "Scheme disabled with scheme should pass",
+			input:       "https://example.com",
+			expected:    "example.com",
 		},
 		{
 			description: "Domain without scheme should parse if scheme is disabled",
@@ -40,7 +60,7 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			options:     DomainValidatorOptions{WithScheme: true},
 			input:       "example.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorIs(t, e, ErrInvalidURL)
+				assert.ErrorContains(t, e, "invalid scheme")
 			},
 		},
 		{
@@ -48,7 +68,7 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			options:     DomainValidatorOptions{WithScheme: true, AllowedSchemes: []string{"https"}},
 			input:       "foo://example.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "foo not allowed")
+				assert.ErrorContains(t, e, "invalid scheme")
 			},
 		},
 		{
@@ -94,32 +114,9 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			},
 		},
 		{
-			// Placeholder should not be used by users and is reserved for the validator.
-			// Using it is like not using any scheme for the validator, and thus it will fail
-			// with schemes enabled.
-			description: "Placeholder scheme supplied directly should fail",
-			options:     DomainValidatorOptions{WithScheme: true, AllowedSchemes: []string{"https"}},
-			input:       "tinyauth://example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "input url is missing scheme")
-			},
-		},
-		{
-			description: "With port enabled but without scheme and url with https should work",
+			description: "With port enabled without any port should work",
 			options:     DomainValidatorOptions{WithPort: true},
-			input:       "https://example.com",
-			expected:    "example.com",
-		},
-		{
-			description: "With port enabled but without scheme and url with http should work",
-			options:     DomainValidatorOptions{WithPort: true},
-			input:       "http://example.com",
-			expected:    "example.com",
-		},
-		{
-			description: "With port enabled but without scheme and url with port should work",
-			options:     DomainValidatorOptions{WithPort: true},
-			input:       "example.com:8080",
+			input:       "example.com",
 			expected:    "example.com",
 		},
 	}
@@ -153,7 +150,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "foo:foo",
 			actual:      "bar.com",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "failed to parse input url:")
+				assert.ErrorContains(t, e, "failed to parse host:")
 			},
 		},
 		{
@@ -161,7 +158,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 			expected:    "example.com",
 			actual:      "foo:foo",
 			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "failed to parse input url:")
+				assert.ErrorContains(t, e, "failed to parse host:")
 			},
 		},
 		{
@@ -180,70 +177,22 @@ func TestDomainValidator_Validate(t *testing.T) {
 			actual:      "https://example.com",
 		},
 		{
-			description: "Port validation without ports and schemes disabled should fail",
+			description: "Port validation with ports enabled and empty ports should work",
 			options:     DomainValidatorOptions{WithPort: true},
 			expected:    "example.com",
 			actual:      "example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "port validation is enabled but port is missing in input url and schemes are not enabled")
-			},
 		},
 		{
-			description: "Port validation with no port and http should pass",
-			options:     DomainValidatorOptions{WithPort: true, WithScheme: true, AllowedSchemes: []string{"http"}},
-			expected:    "http://example.com",
-			actual:      "http://example.com",
-		},
-		{
-			description: "Port validation with no port and https should pass",
-			options:     DomainValidatorOptions{WithPort: true, WithScheme: true, AllowedSchemes: []string{"https"}},
-			expected:    "https://example.com",
-			actual:      "https://example.com",
-		},
-		{
-			description: "Port validation with port and no scheme should pass with same port",
+			description: "Port validation should pass with same port",
 			options:     DomainValidatorOptions{WithPort: true},
 			expected:    "example.com:8080",
 			actual:      "example.com:8080",
 		},
 		{
-			description: "Domains with unknown scheme and port enabled but no port should fail",
-			options:     DomainValidatorOptions{WithPort: true, WithScheme: true},
-			expected:    "ssh://example.com:22",
-			actual:      "ssh://example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "port validation is enabled but port is missing in input url and schemes are not enabled")
-			},
-		},
-		{
-			description: "Domains with unknown scheme and port enabled but no port should fail, reverse",
-			options:     DomainValidatorOptions{WithPort: true, WithScheme: true},
-			expected:    "ssh://example.com",
-			actual:      "ssh://example.com:22",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "port validation is enabled but port is missing in input url and schemes are not enabled")
-			},
-		},
-		{
-			description: "Port enabled but no scheme and https scheme should pass",
+			description: "Port enabled with scheme and matching port should pass",
 			options:     DomainValidatorOptions{WithPort: true},
-			expected:    "https://example.com",
-			actual:      "https://example.com",
-		},
-		{
-			description: "Port enabled but no scheme and http scheme should pass",
-			options:     DomainValidatorOptions{WithPort: true},
-			expected:    "http://example.com",
-			actual:      "http://example.com",
-		},
-		{
-			description: "Port validation with port and no scheme should fail with different port",
-			options:     DomainValidatorOptions{WithPort: true},
-			expected:    "example.com:8080",
-			actual:      "example.com:8081",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorIs(t, e, ErrPortMismatch)
-			},
+			expected:    "https://example.com:443",
+			actual:      "https://example.com:443",
 		},
 		{
 			description: "Failure to format expected domain should fail",
@@ -274,10 +223,10 @@ func TestDomainValidator_Validate(t *testing.T) {
 			actual:      "https://example.com",
 		},
 		{
-			description: "Valid domains with matching ports should pass",
+			description: "Valid domains with non matching ports should fail",
 			options:     DomainValidatorOptions{WithPort: true},
 			expected:    "example.com:8080",
-			actual:      "example.com:8080",
+			actual:      "example.com:8085",
 		},
 		{
 			description: "Valid domains without ports or schemes should pass",

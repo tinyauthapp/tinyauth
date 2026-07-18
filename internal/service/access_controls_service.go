@@ -50,9 +50,7 @@ func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App
 				service.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
 				return &config
 			}
-			if !errors.Is(err, validators.ErrHostnameMismatch) &&
-				!errors.Is(err, validators.ErrPortMismatch) &&
-				!errors.Is(err, validators.ErrSchemeMismatch) {
+			if !errors.Is(err, validators.ErrHostnameMismatch) {
 				service.log.App.Debug().Str("name", app).Err(err).Msg("Domain validation failed")
 			}
 		}

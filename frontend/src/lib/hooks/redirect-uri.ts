@@ -75,19 +75,6 @@ export const useRedirectUri = (
   };
 };
 
-// ported from internal/controller/oauth_controller.go
-const getEffectivePort = (url: URL): string => {
-  if (url.port) {
-    return url.port;
-  }
-
-  if (url.protocol == "https:") {
-    return "443";
-  }
-
-  return "80";
-};
-
 // https://www.geeksforgeeks.org/javascript/how-to-check-if-a-string-is-a-valid-ip-address-format-in-javascript
 const isIP = (str: string): boolean => {
   const ipv4 =
@@ -114,7 +101,7 @@ export const isTrustedDomain = (
     return false;
   }
 
-  if (getEffectivePort(url) != getEffectivePort(appUrl)) {
+  if (url.port != appUrl.port) {
     return false;
   }
 

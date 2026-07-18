@@ -331,8 +331,7 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 
 	controller.log.App.Debug().Err(err).Msg("Failed to validate redirect URI")
 
-	if errors.Is(err, validators.ErrInvalidURL) ||
-		errors.Is(err, validators.ErrPortMismatch) {
+	if !errors.Is(err, validators.ErrHostnameMismatch) {
 		return false
 	}
 
