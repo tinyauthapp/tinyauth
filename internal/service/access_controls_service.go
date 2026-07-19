@@ -38,8 +38,6 @@ func NewAccessControlsService(i AccessControlServiceInput) *AccessControlsServic
 }
 
 func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App {
-	var nameMatch *model.App
-
 	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
 
 	// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
@@ -56,11 +54,11 @@ func (service *AccessControlsService) lookupStaticACLs(domain string) *model.App
 		}
 		if strings.HasPrefix(strings.ToLower(domain), strings.ToLower(app+".")) {
 			service.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
-			nameMatch = &config
+			return &config
 		}
 	}
 
-	return nameMatch
+	return nil
 }
 
 func (service *AccessControlsService) GetAccessControls(domain string) (*model.App, error) {

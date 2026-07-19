@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 
 	container "github.com/docker/docker/api/types/container"
@@ -31,7 +33,6 @@ type DockerServiceInput struct {
 }
 
 func NewDockerService(i DockerServiceInput) (*DockerService, error) {
-
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -90,22 +91,24 @@ func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
 			return nil, err
 		}
 
-		var nameMatch *model.App
+		v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
 
 		// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
-		for appName, appLabels := range labels.Apps {
-			if appLabels.Config.Domain == appDomain {
-				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
-				return &appLabels, nil
+		for app, config := range labels.Apps {
+			if config.Config.Domain != "" {
+				err := v.Validate(config.Config.Domain, appDomain)
+				if err == nil {
+					docker.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
+					return &config, nil
+				}
+				if !errors.Is(err, validators.ErrHostnameMismatch) {
+					docker.log.App.Debug().Str("name", app).Err(err).Msg("Domain validation failed")
+				}
 			}
-			if strings.SplitN(appDomain, ".", 2)[0] == appName {
-				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
-				nameMatch = &appLabels
+			if strings.HasPrefix(strings.ToLower(appDomain), strings.ToLower(app+".")) {
+				docker.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
+				return &config, nil
 			}
-		}
-
-		if nameMatch != nil {
-			return nameMatch, nil
 		}
 	}
 
