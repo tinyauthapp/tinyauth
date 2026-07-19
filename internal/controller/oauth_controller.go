@@ -352,7 +352,12 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		if input.Username != "" {
 			info.Username = input.Username
 		} else {
-			info.Username = strings.SplitN(input.Email, "@", 2)[0]
+			parts := strings.SplitN(input.Email, "@", 2)
+			if len(parts) != 2 {
+				controller.log.App.Error().Str("email", input.Email).Msg("Invalid email address")
+			} else {
+				info.Username = parts[0]
+			}
 		}
 
 		if input.Name != "" {
@@ -364,13 +369,17 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		return info
 	}
 
-	if input.Name == "" {
+	if input.Name != "" {
 		controller.log.App.Debug().Msg("Using name from OAuth provider")
 		info.Name = input.Name
 	} else {
 		controller.log.App.Debug().Msg("No name from OAuth provider, generating from email")
 		parts := strings.SplitN(input.Email, "@", 2)
-		info.Name = fmt.Sprintf("%s (%s)", utils.Capitalize(parts[0]), parts[1])
+		if len(parts) != 2 {
+			controller.log.App.Error().Str("email", input.Email).Msg("Invalid email address")
+		} else {
+			info.Name = fmt.Sprintf("%s (%s)", utils.Capitalize(parts[0]), parts[1])
+		}
 	}
 
 	if input.Username != "" {
