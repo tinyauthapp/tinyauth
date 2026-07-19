@@ -2,14 +2,12 @@ package service
 
 import (
 	"context"
-	"errors"
-	"strings"
+	"fmt"
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
-	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 
 	container "github.com/docker/docker/api/types/container"
@@ -69,51 +67,36 @@ func (docker *DockerService) inspectContainer(containerId string) (container.Ins
 	return docker.client.ContainerInspect(docker.context, containerId)
 }
 
-func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
+func (docker *DockerService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !docker.isConnected {
 		docker.log.App.Debug().Msg("Docker service not connected, returning empty labels")
-		return nil, nil
+		return nil
 	}
 
 	containers, err := docker.getContainers()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to get containers: %w", err)
 	}
 
 	for _, ctr := range containers {
 		inspect, err := docker.inspectContainer(ctr.ID)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("failed to inspect container: %w", err)
 		}
 
 		labels, err := decoders.DecodeLabels[model.Apps](inspect.Config.Labels, "apps")
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("failed to decode labels: %w", err)
 		}
 
-		v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
-
-		// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
 		for app, config := range labels.Apps {
-			if config.Config.Domain != "" {
-				err := v.Validate(config.Config.Domain, appDomain)
-				if err == nil {
-					docker.log.App.Debug().Str("name", app).Msg("Found matching container by domain")
-					return &config, nil
-				}
-				if !errors.Is(err, validators.ErrHostnameMismatch) {
-					docker.log.App.Debug().Str("name", app).Err(err).Msg("Domain validation failed")
-				}
-			}
-			if strings.HasPrefix(strings.ToLower(appDomain), strings.ToLower(app+".")) {
-				docker.log.App.Debug().Str("name", app).Msg("Found matching container by app name")
-				return &config, nil
+			if ok := locator(app, &config); ok {
+				return nil
 			}
 		}
 	}
 
-	docker.log.App.Debug().Str("domain", appDomain).Msg("No matching container found for domain")
-	return nil, nil
+	return nil
 }
 
 func (docker *DockerService) watchAndClose(ctx context.Context) {

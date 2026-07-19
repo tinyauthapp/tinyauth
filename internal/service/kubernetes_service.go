@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -98,8 +97,6 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 func (k *KubernetesService) addIngressEntries(key ingressKey, entries []ingressEntry) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-
-	delete(k.ingressEntries, key)
 	k.ingressEntries[key] = entries
 }
 
@@ -109,31 +106,18 @@ func (k *KubernetesService) removeIngress(key ingressKey) {
 	delete(k.ingressEntries, key)
 }
 
-func (k *KubernetesService) getEntry(domain string) *model.App {
+func (k *KubernetesService) getEntry(locator func(name string, app *model.App) bool) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-
-	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
 
 	// O(n^2) is not great but the number of ingress entries is expected to be small
 	for _, entries := range k.ingressEntries {
 		for _, entry := range entries {
-			err := v.Validate(entry.app.Config.Domain, domain)
-			if err == nil {
-				k.log.App.Debug().Str("domain", domain).Str("appName", entry.name).Msg("Found matching container by domain")
-				return &entry.app
-			}
-			if !errors.Is(err, validators.ErrHostnameMismatch) {
-				k.log.App.Debug().Err(err).Str("domain", domain).Msg("Domain validation failed")
-			}
-			if strings.HasPrefix(strings.ToLower(domain), strings.ToLower(entry.name+".")) {
-				k.log.App.Debug().Str("appName", entry.name).Msg("Found matching container by app name")
-				return &entry.app
+			if ok := locator(entry.name, &entry.app); ok {
+				return
 			}
 		}
 	}
-
-	return nil
 }
 
 func (k *KubernetesService) extractPaths(rule map[string]any) ([]string, error) {
@@ -229,15 +213,13 @@ func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
 	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
 
 	for name, config := range labels.Apps {
-		registerApp := false
+		registerApp := len(hosts) == 0
 
 		if config.Config.Domain != "" {
 			hostname, err := v.SafeHostname(config.Config.Domain)
 			if err != nil {
-				k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Str("domain", config.Config.Domain).Msg("Failed to validate domain, skipping")
-				continue
-			}
-			if slices.Contains(hosts, hostname) {
+				k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Str("domain", config.Config.Domain).Msg("Domain is invalid, matching will rely on app name")
+			} else if slices.Contains(hosts, hostname) {
 				registerApp = true
 			}
 		}
@@ -360,11 +342,13 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource, ctx contex
 	}
 }
 
-func (k *KubernetesService) GetLabels(domain string) (*model.App, error) {
+func (k *KubernetesService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !k.connected {
-		k.log.App.Debug().Str("domain", domain).Msg("Kubernetes label provider not started, skipping")
-		return nil, nil
+		k.log.App.Debug().Msg("Kubernetes label provider not started, skipping")
+		return nil
 	}
 
-	return k.getEntry(domain), nil
+	k.getEntry(locator)
+
+	return nil
 }
