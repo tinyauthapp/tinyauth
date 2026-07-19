@@ -220,35 +220,16 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	var name string
-
-	if strings.TrimSpace(user.Name) != "" {
-		controller.log.App.Debug().Msg("Using name from OAuth provider")
-		name = user.Name
-	} else {
-		controller.log.App.Debug().Msg("No name from OAuth provider, generating from email")
-		parts := strings.SplitN(user.Email, "@", 2)
-		if len(parts) == 2 {
-			name = fmt.Sprintf("%s (%s)", utils.Capitalize(parts[0]), parts[1])
-		} else {
-			name = utils.Capitalize(user.Email)
-		}
-	}
-
-	var username string
-
-	if strings.TrimSpace(user.PreferredUsername) != "" {
-		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
-		username = user.PreferredUsername
-	} else {
-		controller.log.App.Debug().Msg("No preferred username from OAuth provider, generating from email")
-		username = strings.Replace(user.Email, "@", "_", 1)
-	}
+	oauthUserInfo := controller.createOAuthUserInfo(oauthUserInfo{
+		Username: user.PreferredUsername,
+		Email:    user.Email,
+		Name:     user.Name,
+	})
 
 	sessionCookie := repository.Session{
-		Username:    username,
-		Name:        name,
-		Email:       user.Email,
+		Username:    oauthUserInfo.Username,
+		Name:        oauthUserInfo.Name,
+		Email:       oauthUserInfo.Email,
 		Provider:    svc.ID(),
 		OAuthGroups: utils.CoalesceToString(user.Groups),
 		OAuthName:   svc.Name(),
@@ -354,4 +335,51 @@ func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 	}
 
 	return false
+}
+
+type oauthUserInfo struct {
+	Email    string
+	Username string
+	Name     string
+}
+
+func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oauthUserInfo {
+	info := oauthUserInfo{
+		Email: input.Email,
+	}
+
+	if controller.config.Experimental.OAuthBridgeEnabled {
+		if input.Username != "" {
+			info.Username = input.Username
+		} else {
+			info.Username = strings.SplitN(input.Email, "@", 2)[0]
+		}
+
+		if input.Name != "" {
+			info.Name = input.Name
+		} else {
+			info.Name = utils.Capitalize(info.Username)
+		}
+
+		return info
+	}
+
+	if input.Name == "" {
+		controller.log.App.Debug().Msg("Using name from OAuth provider")
+		info.Name = input.Name
+	} else {
+		controller.log.App.Debug().Msg("No name from OAuth provider, generating from email")
+		parts := strings.SplitN(input.Email, "@", 2)
+		info.Name = fmt.Sprintf("%s (%s)", utils.Capitalize(parts[0]), parts[1])
+	}
+
+	if input.Username != "" {
+		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
+		info.Username = input.Username
+	} else {
+		controller.log.App.Debug().Msg("No preferred username from OAuth provider, generating from email")
+		info.Username = strings.Replace(info.Email, "@", "_", 1)
+	}
+
+	return info
 }

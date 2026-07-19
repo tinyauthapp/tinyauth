@@ -115,9 +115,9 @@ type Config struct {
 	UI            UIConfig        `description:"UI customization." yaml:"ui,omitempty"`
 	LDAP          LDAPConfig      `description:"LDAP configuration." yaml:"ldap,omitempty"`
 	// enable the cli warning on experimental features
-	//Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
-	Tailscale TailscaleConfig `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
-	Log       LogConfig       `description:"Logging configuration." yaml:"log,omitempty"`
+	Experimental ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
+	Tailscale    TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
+	Log          LogConfig          `description:"Logging configuration." yaml:"log,omitempty"`
 }
 
 type DatabaseConfig struct {
@@ -238,7 +238,9 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level,omitempty"`
 }
 
-//type ExperimentalConfig struct{}
+type ExperimentalConfig struct {
+	OAuthBridgeEnabled bool `description:"Enable the OAuth bridge, uses a new way to format OAuth user information." yaml:"oauthBridgeEnabled,omitempty"`
+}
 
 type TailscaleConfig struct {
 	Enabled       bool   `description:"Enable Tailscale integration." yaml:"enabled,omitempty"`

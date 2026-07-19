@@ -40,6 +40,7 @@ var (
 type ContextMiddleware struct {
 	log       *logger.Logger
 	runtime   *model.RuntimeConfig
+	config    *model.Config
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
@@ -50,6 +51,7 @@ type ContextMiddlewareInput struct {
 
 	Log              *logger.Logger
 	RuntimeConfig    *model.RuntimeConfig
+	StaticConfig     *model.Config
 	AuthService      *service.AuthService
 	BrokerService    *service.OAuthBrokerService
 	TailscaleService *service.TailscaleService
@@ -59,6 +61,7 @@ func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 	return &ContextMiddleware{
 		log:       i.Log,
 		runtime:   i.RuntimeConfig,
+		config:    i.StaticConfig,
 		auth:      i.AuthService,
 		broker:    i.BrokerService,
 		tailscale: i.TailscaleService,
@@ -332,15 +335,18 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 		return nil, nil
 	}
 
-	username := strings.Replace(whois.LoginName, "@", "_", 1)
-
 	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
-			Username: username,
-			Email:    whois.LoginName,
-			Name:     whois.DisplayName,
+			Email: whois.LoginName,
+			Name:  whois.DisplayName,
 		},
 		NodeName: whois.NodeName,
+	}
+
+	if m.config.Experimental.OAuthBridgeEnabled {
+		uctx.BaseContext.Username = strings.SplitN(whois.LoginName, "@", 2)[0]
+	} else {
+		uctx.BaseContext.Username = strings.Replace(whois.LoginName, "@", "_", 1)
 	}
 
 	return &uctx, nil
