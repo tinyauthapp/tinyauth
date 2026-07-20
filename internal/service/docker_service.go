@@ -81,12 +81,14 @@ func (docker *DockerService) Lookup(locator func(name string, app *model.App) bo
 	for _, ctr := range containers {
 		inspect, err := docker.inspectContainer(ctr.ID)
 		if err != nil {
-			return fmt.Errorf("failed to inspect container: %w", err)
+			docker.log.App.Error().Err(err).Msgf("Failed to inspect container %s", ctr.ID)
+			continue
 		}
 
 		labels, err := decoders.DecodeLabels[model.Apps](inspect.Config.Labels, "apps")
 		if err != nil {
-			return fmt.Errorf("failed to decode labels: %w", err)
+			docker.log.App.Warn().Err(err).Msgf("Failed to decode labels for container %s", ctr.ID)
+			continue
 		}
 
 		for app, config := range labels.Apps {
