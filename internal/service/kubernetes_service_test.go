@@ -279,6 +279,330 @@ func TestKubernetesService(t *testing.T) {
 				assert.Nil(t, got)
 			},
 		},
+		{
+			description: "ExtractPaths returns all non empty paths from a rule",
+			run: func(t *testing.T, svc *KubernetesService) {
+				rule := map[string]any{
+					"http": map[string]any{
+						"paths": []any{
+							map[string]any{"path": "/"},
+							map[string]any{"path": "/api"},
+							map[string]any{"path": ""},
+							map[string]any{"pathType": "Prefix"},
+							"not-a-map",
+						},
+					},
+				}
+
+				paths, err := svc.extractPaths(rule)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"/", "/api"}, paths)
+			},
+		},
+		{
+			description: "ExtractPaths returns nothing when http or paths are missing",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, err := svc.extractPaths(map[string]any{})
+				require.NoError(t, err)
+				assert.Empty(t, paths)
+
+				paths, err = svc.extractPaths(map[string]any{
+					"http": map[string]any{},
+				})
+				require.NoError(t, err)
+				assert.Empty(t, paths)
+			},
+		},
+		{
+			description: "ExtractPaths errors when http is not a map",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, err := svc.extractPaths(map[string]any{
+					"http": "invalid",
+				})
+				require.Error(t, err)
+				assert.Nil(t, paths)
+			},
+		},
+		{
+			description: "ExtractPaths errors when paths is not a slice",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, err := svc.extractPaths(map[string]any{
+					"http": map[string]any{
+						"paths": "invalid",
+					},
+				})
+				require.Error(t, err)
+				assert.Nil(t, paths)
+			},
+		},
+		{
+			description: "ExtractHosts returns hosts from all rules",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "foo.example.com",
+						"http": map[string]any{
+							"paths": []any{
+								map[string]any{"path": "/"},
+							},
+						},
+					},
+					map[string]any{
+						"host": "bar.example.com",
+					},
+					map[string]any{
+						"host": "",
+					},
+					"not-a-map",
+				}, "spec", "rules"))
+
+				hosts, err := svc.extractHosts(&item)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"foo.example.com", "bar.example.com"}, hosts)
+			},
+		},
+		{
+			description: "ExtractHosts still returns hosts when a rule has no catch all path",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "foo.example.com",
+						"http": map[string]any{
+							"paths": []any{
+								map[string]any{"path": "/api"},
+							},
+						},
+					},
+				}, "spec", "rules"))
+
+				hosts, err := svc.extractHosts(&item)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"foo.example.com"}, hosts)
+			},
+		},
+		{
+			description: "ExtractHosts still returns hosts when path extraction fails",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "foo.example.com",
+						"http": "invalid",
+					},
+				}, "spec", "rules"))
+
+				hosts, err := svc.extractHosts(&item)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"foo.example.com"}, hosts)
+			},
+		},
+		{
+			description: "ExtractHosts returns nothing when spec.rules is missing",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+
+				hosts, err := svc.extractHosts(&item)
+				require.NoError(t, err)
+				assert.Empty(t, hosts)
+			},
+		},
+		{
+			description: "ExtractHosts errors when spec.rules is not a slice",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				require.NoError(t, unstructured.SetNestedField(item.Object, "invalid", "spec", "rules"))
+
+				hosts, err := svc.extractHosts(&item)
+				require.Error(t, err)
+				assert.Nil(t, hosts)
+			},
+		},
+		{
+			description: "UpdateFromItem registers app when its domain matches an ingress host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.config.domain": "myapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "myapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					if name == "myapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "myapp.example.com", got.Config.Domain)
+			},
+		},
+		{
+			description: "UpdateFromItem registers app when its name matches an ingress host prefix",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "MyApp.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					if name == "myapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+			},
+		},
+		{
+			description: "UpdateFromItem skips apps that match neither host nor name",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.config.domain": "myapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "other.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "UpdateFromItem falls back to app name when the domain is invalid",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.config.domain": "not a domain",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "myapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					if name == "myapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+			},
+		},
+		{
+			description: "UpdateFromItem removes entries when host extraction fails",
+			run: func(t *testing.T, svc *KubernetesService) {
+				key := ingressKey{
+					namespace: "default",
+					name:      "test-ingress",
+				}
+				svc.addIngressEntries(key, []ingressEntry{
+					{
+						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
+						name: "foo",
+					},
+				})
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace(key.namespace)
+				item.SetName(key.name)
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.config.domain": "myapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedField(item.Object, "invalid", "spec", "rules"))
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "UpdateFromItem removes entries when annotations are not decodable",
+			run: func(t *testing.T, svc *KubernetesService) {
+				key := ingressKey{
+					namespace: "default",
+					name:      "test-ingress",
+				}
+				svc.addIngressEntries(key, []ingressEntry{
+					{
+						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
+						name: "foo",
+					},
+				})
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace(key.namespace)
+				item.SetName(key.name)
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.config.oauthWhitelist": "[",
+				})
+
+				svc.updateFromItem(&item)
+
+				var got *model.App
+				svc.getEntry(func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
+			},
+		},
 	}
 
 	for _, test := range tests {
