@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   create-release:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -29,7 +29,7 @@ jobs:
           tag_name: nightly
 
   generate-metadata:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: create-release
     outputs:
       VERSION: ${{ steps.metadata.outputs.VERSION }}
@@ -52,7 +52,7 @@ jobs:
           echo "BUILD_TAGS=$GIN_BUILD_TAGS" >> "$GITHUB_OUTPUT"
 
   binary-build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - create-release
       - generate-metadata
@@ -101,7 +101,7 @@ jobs:
           path: tinyauth-amd64
 
   binary-build-arm:
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     needs:
       - create-release
       - generate-metadata
@@ -150,7 +150,7 @@ jobs:
           path: tinyauth-arm64
 
   image-build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - create-release
       - generate-metadata
@@ -173,19 +173,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: useblacksmith/build-push-action@v2
         id: build
         with:
           platforms: linux/amd64
           labels: ${{ steps.meta.outputs.labels }}
           tags: ghcr.io/${{ github.repository_owner }}/tinyauth
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=buildkit-amd64
-          cache-to: type=gha,mode=max,scope=buildkit-amd64
           github-token: ${{ secrets.GITHUB_TOKEN }}
           build-args: |
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
@@ -208,7 +206,7 @@ jobs:
           retention-days: 1
 
   image-build-distroless:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - create-release
       - generate-metadata
@@ -232,11 +230,11 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: useblacksmith/build-push-action@v2
         id: build
         with:
           platforms: linux/amd64
@@ -244,8 +242,6 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/tinyauth
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           file: Dockerfile.distroless
-          cache-from: type=gha,scope=buildkit-distroless-amd64
-          cache-to: type=gha,mode=max,scope=buildkit-distroless-amd64
           github-token: ${{ secrets.GITHUB_TOKEN }}
           build-args: |
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
@@ -268,7 +264,7 @@ jobs:
           retention-days: 1
 
   image-build-arm:
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     needs:
       - create-release
       - generate-metadata
@@ -291,19 +287,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: useblacksmith/build-push-action@v2
         id: build
         with:
           platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
           tags: ghcr.io/${{ github.repository_owner }}/tinyauth
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=buildkit-arm64
-          cache-to: type=gha,mode=max,scope=buildkit-arm64
           github-token: ${{ secrets.GITHUB_TOKEN }}
           build-args: |
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
@@ -326,7 +320,7 @@ jobs:
           retention-days: 1
 
   image-build-arm-distroless:
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     needs:
       - create-release
       - generate-metadata
@@ -350,11 +344,11 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: useblacksmith/build-push-action@v2
         id: build
         with:
           platforms: linux/arm64
@@ -362,8 +356,6 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/tinyauth
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           file: Dockerfile.distroless
-          cache-from: type=gha,scope=buildkit-distroless-arm64
-          cache-to: type=gha,mode=max,scope=buildkit-distroless-arm64
           github-token: ${{ secrets.GITHUB_TOKEN }}
           build-args: |
             VERSION=${{ needs.generate-metadata.outputs.VERSION }}
@@ -386,7 +378,7 @@ jobs:
           retention-days: 1
 
   image-merge:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - image-build
       - image-build-arm
@@ -405,8 +397,8 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Docker meta
         id: meta
@@ -425,7 +417,7 @@ jobs:
             $(printf 'ghcr.io/${{ github.repository_owner }}/tinyauth@sha256:%s ' *)
 
   image-merge-distroless:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - image-build-distroless
       - image-build-arm-distroless
@@ -444,8 +436,8 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Docker meta
         id: meta
@@ -464,7 +456,7 @@ jobs:
             $(printf 'ghcr.io/${{ github.repository_owner }}/tinyauth@sha256:%s ' *)
 
   update-release:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
       - binary-build
       - binary-build-arm
