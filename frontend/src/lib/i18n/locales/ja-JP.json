@@ -13,7 +13,7 @@
   "loginOauthFailTitle": "An error occurred",
   "loginOauthFailSubtitle": "Failed to get OAuth URL",
   "loginOauthSuccessTitle": "リダイレクトしています",
-  "loginOauthSuccessSubtitle": "Redirecting to your OAuth provider",
+  "loginOauthSuccessSubtitle": "",
   "loginOauthAutoRedirectTitle": "OAuth Auto Redirect",
   "loginOauthAutoRedirectSubtitle": "You will be automatically redirected to your OAuth provider to authenticate.",
   "loginOauthAutoRedirectButton": "今すぐリダイレクト",
