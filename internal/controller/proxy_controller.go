@@ -305,8 +305,6 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 }
 
 func (controller *ProxyController) setHeaders(c *gin.Context, acls *model.App) {
-	c.Header("Authorization", c.Request.Header.Get("Authorization"))
-
 	if acls == nil {
 		return
 	}
