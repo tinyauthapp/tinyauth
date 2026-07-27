@@ -527,52 +527,52 @@ func TestAuthEnabledRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "allows when path does not match block regex",
+			name: "allows when path does not match block path",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					Path: model.AppPath{Block: "^/admin"},
+					Path: model.AppPath{Block: "/admin"},
 				},
 				Path: "/public",
 			},
 			expected: EffectAllow,
 		},
 		{
-			name: "denies when path matches block regex and no allow regex",
+			name: "denies when path matches block path",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					Path: model.AppPath{Block: "^/admin"},
+					Path: model.AppPath{Block: "/admin"},
 				},
 				Path: "/admin/users",
 			},
 			expected: EffectDeny,
 		},
 		{
-			name: "allows when path matches allow regex",
+			name: "allows when path matches allow path",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					Path: model.AppPath{Allow: "^/public"},
+					Path: model.AppPath{Allow: "/public"},
 				},
 				Path: "/public/index",
 			},
 			expected: EffectAllow,
 		},
 		{
-			name: "denies when path does not match allow regex",
+			name: "denies when path does not match allow path",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					Path: model.AppPath{Allow: "^/public"},
+					Path: model.AppPath{Allow: "/public"},
 				},
 				Path: "/private",
 			},
 			expected: EffectDeny,
 		},
 		{
-			name: "allows when blocked path is also explicitly allowed",
+			name: "allows when blocked path is explicitly allowed",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Path: model.AppPath{
-						Block: "^/admin",
-						Allow: "^/admin/public",
+						Block: "/admin",
+						Allow: "/admin/public",
 					},
 				},
 				Path: "/admin/public/page",
@@ -580,20 +580,10 @@ func TestAuthEnabledRule(t *testing.T) {
 			expected: EffectAllow,
 		},
 		{
-			name: "denies when block regex fails to compile",
+			name: "denies when root is blocked",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					Path: model.AppPath{Block: "[invalid"},
-				},
-				Path: "/anything",
-			},
-			expected: EffectDeny,
-		},
-		{
-			name: "denies when allow regex fails to compile",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					Path: model.AppPath{Allow: "[invalid"},
+					Path: model.AppPath{Block: "/"},
 				},
 				Path: "/anything",
 			},

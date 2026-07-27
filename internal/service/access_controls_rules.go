@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -180,33 +179,45 @@ type AuthEnabledRule struct {
 	Log *logger.Logger
 }
 
+func matchPathRule(paths, path string) bool {
+	for _, configuredPath := range strings.Split(paths, ",") {
+		configuredPath = strings.TrimSpace(configuredPath)
+
+		if configuredPath == "/" {
+			return true
+		}
+
+		configuredPath = strings.TrimRight(configuredPath, "/")
+
+		if configuredPath == "" {
+			continue
+		}
+
+		if path == configuredPath || strings.HasPrefix(path, configuredPath+"/") {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (rule *AuthEnabledRule) Evaluate(ctx *ACLContext) Effect {
 	if ctx.ACLs == nil {
 		return EffectDeny
 	}
 
 	if ctx.ACLs.Path.Block != "" {
-		regex, err := regexp.Compile(ctx.ACLs.Path.Block)
+		match := matchPathRule(ctx.ACLs.Path.Block, ctx.Path)
 
-		if err != nil {
-			rule.Log.App.Error().Err(err).Msg("Failed to compile block regex")
-			return EffectDeny
-		}
-
-		if !regex.MatchString(ctx.Path) {
+		if !match {
 			return EffectAllow
 		}
 	}
 
 	if ctx.ACLs.Path.Allow != "" {
-		regex, err := regexp.Compile(ctx.ACLs.Path.Allow)
+		match := matchPathRule(ctx.ACLs.Path.Allow, ctx.Path)
 
-		if err != nil {
-			rule.Log.App.Error().Err(err).Msg("Failed to compile allow regex")
-			return EffectDeny
-		}
-
-		if regex.MatchString(ctx.Path) {
+		if match {
 			return EffectAllow
 		}
 	}

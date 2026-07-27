@@ -61,6 +61,14 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					Allow: "/allowed",
 				},
 			},
+			"app_path_block": {
+				Config: model.AppConfig{
+					Domain: "path-block.example.com",
+				},
+				Path: model.AppPath{
+					Block: "/blocked",
+				},
+			},
 			"app_user_allow": {
 				Config: model.AppConfig{
 					Domain: "user-allow.example.com",

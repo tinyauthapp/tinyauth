@@ -390,6 +390,12 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 		return ProxyContext{}, errors.New("x-forwarded-uri not found")
 	}
 
+	parsedURI, err := url.ParseRequestURI(uri)
+
+	if err != nil {
+		return ProxyContext{}, fmt.Errorf("invalid x-forwarded-uri: %w", err)
+	}
+
 	proto, ok := controller.getHeader(c, "x-forwarded-proto")
 
 	if !ok {
@@ -403,7 +409,7 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 	return ProxyContext{
 		Host:   host,
 		Proto:  proto,
-		Path:   uri,
+		Path:   parsedURI.Path,
 		Method: method,
 		Type:   ForwardAuth,
 	}, nil

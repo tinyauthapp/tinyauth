@@ -288,6 +288,66 @@ func TestProxyController(t *testing.T) {
 			},
 		},
 		{
+			description: "Ensure path allow ACL does not match forwarded URI query string",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-allow.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/admin?path=/allowed")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure path allow ACL does not match path substrings",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-allow.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/admin/allowed")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure path block ACL works on forward auth",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/blocked")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure path block ACL does not match forwarded URI query string",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/admin?path=/blocked")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure path block ACL does not match path substrings",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/admin/blocked")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
 			description: "Ensure path allow ACL works on nginx auth request",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
