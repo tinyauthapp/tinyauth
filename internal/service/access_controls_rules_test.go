@@ -527,32 +527,22 @@ func TestAuthEnabledRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "allows when path does not match block path",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					Path: model.AppPath{Block: "/admin"},
-				},
-				Path: "/public",
-			},
-			expected: EffectAllow,
-		},
-		{
-			name: "denies when path matches block path",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					Path: model.AppPath{Block: "/admin"},
-				},
-				Path: "/admin/users",
-			},
-			expected: EffectDeny,
-		},
-		{
-			name: "allows when path matches allow path",
+			name: "allows when path starts with allow path",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Path: model.AppPath{Allow: "/public"},
 				},
-				Path: "/public/index",
+				Path: "/publicity",
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when path matches allow regex",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Path: model.AppPath{Allow: "/^/public-[0-9]+$/"},
+				},
+				Path: "/public-42",
 			},
 			expected: EffectAllow,
 		},

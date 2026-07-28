@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -179,26 +181,38 @@ type AuthEnabledRule struct {
 	Log *logger.Logger
 }
 
-func matchPathRule(paths, path string) bool {
+func matchPathRule(paths, path string) (bool, error) {
 	for _, configuredPath := range strings.Split(paths, ",") {
 		configuredPath = strings.TrimSpace(configuredPath)
 
 		if configuredPath == "/" {
-			return true
+			return true, nil
 		}
-
-		configuredPath = strings.TrimRight(configuredPath, "/")
 
 		if configuredPath == "" {
 			continue
 		}
 
-		if path == configuredPath || strings.HasPrefix(path, configuredPath+"/") {
-			return true
+		// only apply regex if the path starts and ends with a slash, e.g. /regex/
+		if strings.HasPrefix(configuredPath, "/") && strings.HasSuffix(configuredPath, "/") {
+			regex, err := regexp.Compile(configuredPath[1 : len(configuredPath)-1])
+			if err != nil {
+				return false, fmt.Errorf("invalid path regex %q: %w", configuredPath, err)
+			}
+
+			if regex.MatchString(path) {
+				return true, nil
+			}
+
+			continue
+		}
+
+		if strings.HasPrefix(path, configuredPath) {
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 func (rule *AuthEnabledRule) Evaluate(ctx *ACLContext) Effect {
@@ -207,7 +221,11 @@ func (rule *AuthEnabledRule) Evaluate(ctx *ACLContext) Effect {
 	}
 
 	if ctx.ACLs.Path.Block != "" {
-		match := matchPathRule(ctx.ACLs.Path.Block, ctx.Path)
+		match, err := matchPathRule(ctx.ACLs.Path.Block, ctx.Path)
+		if err != nil {
+			rule.Log.App.Warn().Err(err).Msg("Invalid path block rule")
+			return EffectDeny
+		}
 
 		if !match {
 			return EffectAllow
@@ -215,7 +233,11 @@ func (rule *AuthEnabledRule) Evaluate(ctx *ACLContext) Effect {
 	}
 
 	if ctx.ACLs.Path.Allow != "" {
-		match := matchPathRule(ctx.ACLs.Path.Allow, ctx.Path)
+		match, err := matchPathRule(ctx.ACLs.Path.Allow, ctx.Path)
+		if err != nil {
+			rule.Log.App.Warn().Err(err).Msg("Invalid path allow rule")
+			return EffectDeny
+		}
 
 		if match {
 			return EffectAllow

@@ -9,14 +9,14 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/go-querystring/query"
+	"go.uber.org/dig"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
-	"go.uber.org/dig"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/go-querystring/query"
 )
 
 type AuthModuleType int
@@ -394,6 +394,10 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 
 	if err != nil {
 		return ProxyContext{}, fmt.Errorf("invalid x-forwarded-uri: %w", err)
+	}
+
+	if parsedURI.Path == "" {
+		parsedURI.Path = "/"
 	}
 
 	proto, ok := controller.getHeader(c, "x-forwarded-proto")
