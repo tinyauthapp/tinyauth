@@ -182,7 +182,7 @@ type AuthEnabledRule struct {
 }
 
 func matchPathRule(paths, path string) (bool, error) {
-	paths = strings.TrimSpace(paths)
+	paths = strings.TrimRight(strings.TrimSpace(paths), ",")
 
 	if paths == "/" {
 		return true, nil
@@ -198,7 +198,12 @@ func matchPathRule(paths, path string) (bool, error) {
 	}
 
 	for _, configuredPath := range strings.Split(paths, ",") {
-		if strings.HasPrefix(path, strings.TrimSpace(configuredPath)) {
+		configuredPath = strings.TrimSpace(configuredPath)
+		if configuredPath == "" {
+			continue
+		}
+
+		if strings.HasPrefix(path, configuredPath) {
 			return true, nil
 		}
 	}
