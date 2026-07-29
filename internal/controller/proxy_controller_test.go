@@ -348,6 +348,16 @@ func TestProxyController(t *testing.T) {
 			},
 		},
 		{
+			description: "Ensure path allow ACL ignores query strings for nginx auth request",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/nginx", nil)
+				req.Header.Set("x-original-url", "https://path-allow.example.com/admin?path=/allowed")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
 			description: "Ensure path allow ACL works on nginx auth request",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
@@ -355,6 +365,17 @@ func TestProxyController(t *testing.T) {
 				req.Header.Set("x-original-url", "https://path-allow.example.com/allowed")
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			description: "Ensure path allow ACL ignores query strings for envoy ext authz",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/admin%3Fpath%3D/allowed", nil)
+				req.Host = "path-allow.example.com"
+				req.Header.Set("x-forwarded-proto", "https")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 		{

@@ -537,6 +537,16 @@ func TestAuthEnabledRule(t *testing.T) {
 			expected: EffectAllow,
 		},
 		{
+			name: "allows when path matches a comma-separated allow path",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Path: model.AppPath{Allow: "/bar,/foo/bar,/hello"},
+				},
+				Path: "/foo/bar/baz",
+			},
+			expected: EffectAllow,
+		},
+		{
 			name: "allows when path matches allow regex",
 			ctx: &ACLContext{
 				ACLs: &model.App{
@@ -545,6 +555,16 @@ func TestAuthEnabledRule(t *testing.T) {
 				Path: "/public-42",
 			},
 			expected: EffectAllow,
+		},
+		{
+			name: "denies when comma-separated allow paths do not match",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Path: model.AppPath{Allow: "/bar,/foo/bar,/hello"},
+				},
+				Path: "/private",
+			},
+			expected: EffectDeny,
 		},
 		{
 			name: "denies when path does not match allow path",

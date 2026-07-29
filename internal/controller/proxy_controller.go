@@ -345,6 +345,19 @@ func (controller *ProxyController) getHeader(c *gin.Context, header string) (str
 	return val, strings.TrimSpace(val) != ""
 }
 
+func getRequestPath(uri string) (string, error) {
+	parsedURI, err := url.ParseRequestURI(uri)
+	if err != nil {
+		return "", err
+	}
+
+	if parsedURI.Path == "" {
+		return "/", nil
+	}
+
+	return parsedURI.Path, nil
+}
+
 func (controller *ProxyController) useBrowserResponse(proxyCtx ProxyContext) bool {
 	// If it's nginx we need non-browser response
 	if proxyCtx.ProxyType == Nginx {
@@ -390,14 +403,9 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 		return ProxyContext{}, errors.New("x-forwarded-uri not found")
 	}
 
-	parsedURI, err := url.ParseRequestURI(uri)
-
+	path, err := getRequestPath(uri)
 	if err != nil {
 		return ProxyContext{}, fmt.Errorf("invalid x-forwarded-uri: %w", err)
-	}
-
-	if parsedURI.Path == "" {
-		parsedURI.Path = "/"
 	}
 
 	proto, ok := controller.getHeader(c, "x-forwarded-proto")
@@ -413,7 +421,7 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 	return ProxyContext{
 		Host:   host,
 		Proto:  proto,
-		Path:   parsedURI.Path,
+		Path:   path,
 		Method: method,
 		Type:   ForwardAuth,
 	}, nil
@@ -445,6 +453,9 @@ func (controller *ProxyController) getAuthRequestContext(c *gin.Context) (ProxyC
 	}
 
 	path := url.Path
+	if path == "" {
+		path = "/"
+	}
 	method := c.Request.Method
 
 	return ProxyContext{
@@ -472,7 +483,10 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 	}
 
 	// We get the path from the query string
-	path := c.Query("path")
+	path, err := getRequestPath(c.Query("path"))
+	if err != nil {
+		return ProxyContext{}, fmt.Errorf("invalid path: %w", err)
+	}
 
 	// For envoy we need to support every method
 	method := c.Request.Method

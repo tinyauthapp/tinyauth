@@ -182,32 +182,23 @@ type AuthEnabledRule struct {
 }
 
 func matchPathRule(paths, path string) (bool, error) {
+	paths = strings.TrimSpace(paths)
+
+	if paths == "/" {
+		return true, nil
+	}
+
+	if strings.HasPrefix(paths, "/") && strings.HasSuffix(paths, "/") {
+		regex, err := regexp.Compile(paths[1 : len(paths)-1])
+		if err != nil {
+			return false, fmt.Errorf("invalid path regex %q: %w", paths, err)
+		}
+
+		return regex.MatchString(path), nil
+	}
+
 	for _, configuredPath := range strings.Split(paths, ",") {
-		configuredPath = strings.TrimSpace(configuredPath)
-
-		if configuredPath == "/" {
-			return true, nil
-		}
-
-		if configuredPath == "" {
-			continue
-		}
-
-		// only apply regex if the path starts and ends with a slash, e.g. /regex/
-		if strings.HasPrefix(configuredPath, "/") && strings.HasSuffix(configuredPath, "/") {
-			regex, err := regexp.Compile(configuredPath[1 : len(configuredPath)-1])
-			if err != nil {
-				return false, fmt.Errorf("invalid path regex %q: %w", configuredPath, err)
-			}
-
-			if regex.MatchString(path) {
-				return true, nil
-			}
-
-			continue
-		}
-
-		if strings.HasPrefix(path, configuredPath) {
+		if strings.HasPrefix(path, strings.TrimSpace(configuredPath)) {
 			return true, nil
 		}
 	}
