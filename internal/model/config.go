@@ -332,6 +332,6 @@ type AppBasicAuth struct {
 }
 
 type AppPath struct {
-	Allow string `description:"Comma-separated list of allowed paths." yaml:"allow,omitempty"`
-	Block string `description:"Comma-separated list of blocked paths." yaml:"block,omitempty"`
+	Allow string `description:"Disable authentication for only paths that match the regex string." yaml:"allow,omitempty"`
+	Block string `description:"Enable authentication for only paths that match the regex string." yaml:"block,omitempty"`
 }
