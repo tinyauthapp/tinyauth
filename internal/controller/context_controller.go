@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"errors"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,9 +60,9 @@ type ACRUI struct {
 }
 
 type ACRApp struct {
-	AppURL         string   `json:"appUrl"`
-	CookieDomain   string   `json:"cookieDomain"`
-	TrustedDomains []string `json:"trustedDomains"`
+	AppURL            string `json:"appUrl"`
+	CookieDomain      string `json:"cookieDomain"`
+	SubdomainsEnabled bool   `json:"subdomainsEnabled"`
 }
 
 type AppContextResponse struct {
@@ -71,29 +74,33 @@ type AppContextResponse struct {
 	App     ACRApp   `json:"app"`
 }
 
-type ContextController struct {
-	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+type ContextControllerInput struct {
+	dig.In
+
+	Log         *logger.Logger
+	Config      *model.Config
+	Runtime     *model.RuntimeConfig
+	RouterGroup *gin.RouterGroup `name:"apiRouterGroup"`
 }
 
-func NewContextController(
-	log *logger.Logger,
-	config model.Config,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-) *ContextController {
+type ContextController struct {
+	log     *logger.Logger
+	config  *model.Config
+	runtime *model.RuntimeConfig
+}
+
+func NewContextController(i ContextControllerInput) *ContextController {
 	controller := &ContextController{
-		log:     log,
-		config:  config,
-		runtime: runtimeConfig,
+		log:     i.Log,
+		config:  i.Config,
+		runtime: i.Runtime,
 	}
 
-	if !config.UI.WarningsEnabled {
-		log.App.Warn().Msg("UI warnings are disabled. This may lead to security issues if you are not careful. Make sure to enable warnings in production environments.")
+	if !i.Config.UI.WarningsEnabled {
+		i.Log.App.Warn().Msg("UI warnings are disabled. This may lead to security issues if you are not careful. Make sure to enable warnings in production environments.")
 	}
 
-	contextGroup := router.Group("/context")
+	contextGroup := i.RouterGroup.Group("/context")
 	contextGroup.GET("/user", controller.userContextHandler)
 	contextGroup.GET("/app", controller.appContextHandler)
 
@@ -104,7 +111,9 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		}
 		c.JSON(200, UserContextResponse{
 			Status:  401,
 			Message: "Unauthorized",
@@ -155,9 +164,9 @@ func (controller *ContextController) appContextHandler(c *gin.Context) {
 			WarningsEnabled:       controller.config.UI.WarningsEnabled,
 		},
 		App: ACRApp{
-			AppURL:         controller.runtime.AppURL,
-			CookieDomain:   controller.runtime.CookieDomain,
-			TrustedDomains: controller.runtime.TrustedDomains,
+			AppURL:            controller.runtime.AppURL,
+			CookieDomain:      controller.runtime.CookieDomain,
+			SubdomainsEnabled: controller.config.Auth.SubdomainsEnabled,
 		},
 	})
 }

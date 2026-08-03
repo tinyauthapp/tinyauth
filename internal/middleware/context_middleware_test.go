@@ -1,18 +1,17 @@
-package middleware_test
+package middleware
 
 import (
 	"context"
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -250,17 +249,47 @@ func TestContextMiddleware(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	wg := &sync.WaitGroup{}
+	dg := ding.New(ctx)
 
 	store := memory.New()
 
-	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, store, broker, nil)
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
+	require.NoError(t, err)
 
-	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker, nil)
+	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
+		Log:     log,
+		Runtime: &runtime,
+		Ctx:     ctx,
+	})
+
+	authService, err := service.NewAuthService(service.AuthServiceInput{
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		Ctx:          ctx,
+		Ding:         dg,
+		LDAP:         nil,
+		Queries:      store,
+		OAuthBroker:  broker,
+		Tailscale:    nil,
+		PolicyEngine: policyEngine,
+	})
+
+	require.NoError(t, err)
+
+	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
+		Log:              log,
+		RuntimeConfig:    &runtime,
+		AuthService:      authService,
+		BrokerService:    broker,
+		TailscaleService: nil,
+	})
 
 	for _, test := range tests {
-		authService.ClearRateLimitsTestingOnly()
+		authService.ClearLoginAttempts()
 		t.Run(test.description, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 

@@ -22,6 +22,16 @@ func TestUserAllowedRule(t *testing.T) {
 		expected Effect
 	}{
 		{
+			name: "denies when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectDeny,
+		},
+		{
 			name: "abstains when ACLs are nil",
 			ctx: &ACLContext{
 				ACLs: nil,
@@ -35,12 +45,17 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectAbstain,
 		},
 		{
-			name: "abstains when user context is nil",
+			name: "abstains when filter is empty",
 			ctx: &ACLContext{
 				ACLs: &model.App{
-					OAuth: model.AppOAuth{Whitelist: "alice"},
+					OAuth: model.AppOAuth{Whitelist: ""},
 				},
-				UserContext: nil,
+				UserContext: &model.UserContext{
+					Provider: model.ProviderOAuth,
+					OAuth: &model.OAuthContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
 			},
 			expected: EffectAbstain,
 		},
@@ -78,7 +93,7 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains for OAuth user when whitelist filter is invalid",
+			name: "denies for OAuth user when whitelist filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Whitelist: "/[/"},
@@ -90,7 +105,7 @@ func TestUserAllowedRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 		{
 			name: "denies local user when username matches block list",
@@ -123,10 +138,25 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectAllow,
 		},
 		{
-			name: "abstains when block list filter is invalid",
+			name: "denies when block list filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Users: model.AppUsers{Block: "/[/"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "abstains when allow list is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Allow: ""},
 				},
 				UserContext: &model.UserContext{
 					Provider: model.ProviderLocal,
@@ -168,7 +198,7 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when allow list filter is invalid",
+			name: "denies when allow list filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					Users: model.AppUsers{Allow: "/[/"},
@@ -180,7 +210,7 @@ func TestUserAllowedRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 
@@ -203,7 +233,17 @@ func TestOAuthGroupRule(t *testing.T) {
 		expected Effect
 	}{
 		{
-			name: "abstains when ACLs are nil",
+			name: "denies when user context is nil",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Whitelist: "alice"},
+				},
+				UserContext: nil,
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "allows when ACLs are nil",
 			ctx: &ACLContext{
 				ACLs: nil,
 				UserContext: &model.UserContext{
@@ -213,20 +253,10 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
 		},
 		{
-			name: "abstains when user context is nil",
-			ctx: &ACLContext{
-				ACLs: &model.App{
-					OAuth: model.AppOAuth{Whitelist: "alice"},
-				},
-				UserContext: nil,
-			},
-			expected: EffectAbstain,
-		},
-		{
-			name: "abstains when user is not OAuth",
+			name: "allows when user is not OAuth",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Groups: "admins"},
@@ -238,7 +268,22 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when group filter is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					OAuth: model.AppOAuth{Groups: ""},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderOAuth,
+					OAuth: &model.OAuthContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
 		},
 		{
 			name: "allows when provider is an override provider regardless of groups",
@@ -305,7 +350,7 @@ func TestOAuthGroupRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when groups filter is invalid",
+			name: "denies when groups filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Groups: "/[/"},
@@ -318,7 +363,7 @@ func TestOAuthGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 
@@ -341,22 +386,30 @@ func TestLDAPGroupRule(t *testing.T) {
 		expected Effect
 	}{
 		{
-			name:     "abstains when context is nil",
-			ctx:      nil,
-			expected: EffectAbstain,
-		},
-		{
-			name: "abstains when user context is nil",
+			name: "denies when user context is nil",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					OAuth: model.AppOAuth{Whitelist: "alice"},
 				},
 				UserContext: nil,
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 		{
-			name: "abstains when user is not LDAP",
+			name: "allows when acls are nil",
+			ctx: &ACLContext{
+				ACLs: nil,
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when user is not LDAP",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					LDAP: model.AppLDAP{Groups: "admins"},
@@ -368,7 +421,22 @@ func TestLDAPGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectAllow,
+		},
+		{
+			name: "allows when group filter is empty",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					LDAP: model.AppLDAP{Groups: ""},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLDAP,
+					LDAP: &model.LDAPContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
 		},
 		{
 			name: "allows LDAP user when a group matches",
@@ -416,7 +484,7 @@ func TestLDAPGroupRule(t *testing.T) {
 			expected: EffectDeny,
 		},
 		{
-			name: "abstains when groups filter is invalid",
+			name: "denies when groups filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
 					LDAP: model.AppLDAP{Groups: "/[/"},
@@ -428,7 +496,7 @@ func TestLDAPGroupRule(t *testing.T) {
 					},
 				},
 			},
-			expected: EffectAbstain,
+			expected: EffectDeny,
 		},
 	}
 
@@ -559,10 +627,19 @@ func TestIPAllowedRule(t *testing.T) {
 		expected Effect
 	}{
 		{
+			name: "when trusted proxies are not configured, IP is allowed",
+			ctx: &ACLContext{
+				ACLs: &model.App{},
+				IP:   net.ParseIP("10.0.0.1"),
+			},
+			expected: EffectAllow,
+		},
+		{
 			name: "allows when ACLs are nil and no global lists configured",
 			ctx: &ACLContext{
-				ACLs: nil,
-				IP:   net.ParseIP("10.0.0.1"),
+				ACLs:                     nil,
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -572,7 +649,8 @@ func TestIPAllowedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Block: []string{"10.0.0.1"}},
 				},
-				IP: net.ParseIP("10.0.0.1"),
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -584,8 +662,9 @@ func TestIPAllowedRule(t *testing.T) {
 				},
 			},
 			ctx: &ACLContext{
-				ACLs: &model.App{},
-				IP:   net.ParseIP("10.0.0.5"),
+				ACLs:                     &model.App{},
+				IP:                       net.ParseIP("10.0.0.5"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -595,7 +674,8 @@ func TestIPAllowedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Allow: []string{"192.168.1.0/24"}},
 				},
-				IP: net.ParseIP("192.168.1.10"),
+				IP:                       net.ParseIP("192.168.1.10"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -607,8 +687,9 @@ func TestIPAllowedRule(t *testing.T) {
 				},
 			},
 			ctx: &ACLContext{
-				ACLs: &model.App{},
-				IP:   net.ParseIP("192.168.1.10"),
+				ACLs:                     &model.App{},
+				IP:                       net.ParseIP("192.168.1.10"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -618,15 +699,17 @@ func TestIPAllowedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Allow: []string{"192.168.1.0/24"}},
 				},
-				IP: net.ParseIP("10.0.0.1"),
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
 		{
 			name: "allows when no block or allow lists are configured",
 			ctx: &ACLContext{
-				ACLs: &model.App{},
-				IP:   net.ParseIP("10.0.0.1"),
+				ACLs:                     &model.App{},
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -639,7 +722,8 @@ func TestIPAllowedRule(t *testing.T) {
 						Allow: []string{"10.0.0.1"},
 					},
 				},
-				IP: net.ParseIP("10.0.0.1"),
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -652,7 +736,8 @@ func TestIPAllowedRule(t *testing.T) {
 						Allow: []string{"10.0.0.1"},
 					},
 				},
-				IP: net.ParseIP("10.0.0.1"),
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -683,11 +768,22 @@ func TestIPBypassedRule(t *testing.T) {
 		expected Effect
 	}{
 		{
+			name: "when trusted proxies are not configured, IP is not bypassed",
+			rule: defaultIPBR,
+			ctx: &ACLContext{
+				ACLs:                     &model.App{},
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: false,
+			},
+			expected: EffectDeny,
+		},
+		{
 			name: "deny when ACLs are nil and no global bypass",
 			rule: defaultIPBR,
 			ctx: &ACLContext{
-				ACLs: nil,
-				IP:   net.ParseIP("10.0.0.1"),
+				ACLs:                     nil,
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -695,8 +791,9 @@ func TestIPBypassedRule(t *testing.T) {
 			name: "allows when ACLs are nil but IP matches global bypass",
 			rule: globBypassIPBR,
 			ctx: &ACLContext{
-				ACLs: nil,
-				IP:   net.ParseIP("10.0.0.5"),
+				ACLs:                     nil,
+				IP:                       net.ParseIP("10.0.0.5"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -704,8 +801,9 @@ func TestIPBypassedRule(t *testing.T) {
 			name: "denies when ACLs are nil and IP does not match global bypass",
 			rule: globBypassIPBR,
 			ctx: &ACLContext{
-				ACLs: nil,
-				IP:   net.ParseIP("192.168.1.1"),
+				ACLs:                     nil,
+				IP:                       net.ParseIP("192.168.1.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -716,7 +814,8 @@ func TestIPBypassedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
 				},
-				IP: net.ParseIP("10.0.0.5"),
+				IP:                       net.ParseIP("10.0.0.5"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -727,7 +826,8 @@ func TestIPBypassedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"172.16.0.0/24"}},
 				},
-				IP: net.ParseIP("10.0.0.5"),
+				IP:                       net.ParseIP("10.0.0.5"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -738,7 +838,8 @@ func TestIPBypassedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
 				},
-				IP: net.ParseIP("10.0.0.5"),
+				IP:                       net.ParseIP("10.0.0.5"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},
@@ -749,7 +850,8 @@ func TestIPBypassedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"10.0.0.0/24"}},
 				},
-				IP: net.ParseIP("192.168.1.1"),
+				IP:                       net.ParseIP("192.168.1.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -757,8 +859,9 @@ func TestIPBypassedRule(t *testing.T) {
 			name: "denies when bypass list is empty",
 			rule: defaultIPBR,
 			ctx: &ACLContext{
-				ACLs: &model.App{},
-				IP:   net.ParseIP("10.0.0.1"),
+				ACLs:                     &model.App{},
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectDeny,
 		},
@@ -769,7 +872,8 @@ func TestIPBypassedRule(t *testing.T) {
 				ACLs: &model.App{
 					IP: model.AppIP{Bypass: []string{"not-an-ip", "10.0.0.1"}},
 				},
-				IP: net.ParseIP("10.0.0.1"),
+				IP:                       net.ParseIP("10.0.0.1"),
+				TrustedProxiesConfigured: true,
 			},
 			expected: EffectAllow,
 		},

@@ -78,7 +78,7 @@ export const LoginForm = (props: Props) => {
                       `/forgot-password${props.params ? `${props.params}` : ""}`,
                     );
                   }}
-                  className="text-muted-foreground hover:text-muted-foreground/80 text-sm absolute right-0 bottom-[2.565rem]" // 2.565 is *just* perfect
+                  className="text-muted-foreground hover:text-muted-foreground/80 text-sm absolute right-0 bottom-[2.565rem] max-w-40 truncate" // 2.565 is *just* perfect
                 >
                   {t("forgotPasswordTitle")}
                 </a>

@@ -8,9 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
+	"go.uber.org/dig"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -20,39 +23,34 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+type ingressEntry struct {
+	name string
+	app  model.App
+}
+
 type ingressKey struct {
 	namespace string
 	name      string
 }
 
-type ingressAppKey struct {
-	ingressKey
-	appName string
-}
-
-type ingressApp struct {
-	domain  string
-	appName string
-	app     model.App
-}
-
 type KubernetesService struct {
 	log *logger.Logger
-	ctx context.Context
 
-	client       dynamic.Interface
-	started      bool
-	mu           sync.RWMutex
-	ingressApps  map[ingressKey][]ingressApp
-	domainIndex  map[string]ingressAppKey
-	appNameIndex map[string]ingressAppKey
+	client         dynamic.Interface
+	connected      bool
+	mu             sync.RWMutex
+	ingressEntries map[ingressKey][]ingressEntry
 }
 
-func NewKubernetesService(
-	log *logger.Logger,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) (*KubernetesService, error) {
+type KubernetesServiceInput struct {
+	dig.In
+
+	Log  *logger.Logger
+	Ctx  context.Context
+	Ding *ding.Ding
+}
+
+func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get in-cluster kubernetes config: %w", err)
@@ -69,103 +67,57 @@ func NewKubernetesService(
 		Resource: "ingresses",
 	}
 
-	accessCtx, accessCancel := context.WithTimeout(ctx, 5*time.Second)
+	accessCtx, accessCancel := context.WithTimeout(i.Ctx, 5*time.Second)
 	defer accessCancel()
 
 	_, err = client.Resource(gvr).List(accessCtx, metav1.ListOptions{Limit: 1})
 	if err != nil {
-		log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
+		i.Log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to access Ingress API, Kubernetes label provider will be disabled")
 		return nil, fmt.Errorf("failed to access ingress api: %w", err)
 	}
 
-	log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
+	i.Log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Successfully accessed Ingress API, starting watcher")
 
 	service := &KubernetesService{
-		log:          log,
-		ctx:          ctx,
-		client:       client,
-		ingressApps:  make(map[ingressKey][]ingressApp),
-		domainIndex:  make(map[string]ingressAppKey),
-		appNameIndex: make(map[string]ingressAppKey),
+		log:            i.Log,
+		client:         client,
+		ingressEntries: make(map[ingressKey][]ingressEntry),
 	}
 
-	wg.Go(func() {
-		service.watchGVR(gvr)
-	})
+	i.Ding.Go(func(ctx context.Context) {
+		service.watchGVR(gvr, ctx)
+	}, ding.RingMajor)
 
-	service.started = true
-	log.App.Debug().Msg("Kubernetes label provider started successfully")
+	service.connected = true
+	i.Log.App.Debug().Msg("Kubernetes label provider started successfully")
 
 	return service, nil
 }
 
-func (k *KubernetesService) addIngressApps(namespace, name string, apps []ingressApp) {
+func (k *KubernetesService) addIngressEntries(key ingressKey, entries []ingressEntry) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-
-	key := ingressKey{namespace, name}
-	// Remove existing entries for this ingress
-	if existing, ok := k.ingressApps[key]; ok {
-		for _, app := range existing {
-			delete(k.domainIndex, app.domain)
-			delete(k.appNameIndex, app.appName)
-		}
-	}
-	// Add new entries
-	k.ingressApps[key] = apps
-	for _, app := range apps {
-		appKey := ingressAppKey{key, app.appName}
-		k.domainIndex[app.domain] = appKey
-		k.appNameIndex[app.appName] = appKey
-	}
+	k.ingressEntries[key] = entries
 }
 
-func (k *KubernetesService) removeIngress(namespace, name string) {
+func (k *KubernetesService) removeIngress(key ingressKey) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-
-	key := ingressKey{namespace, name}
-	if apps, ok := k.ingressApps[key]; ok {
-		for _, app := range apps {
-			delete(k.domainIndex, app.domain)
-			delete(k.appNameIndex, app.appName)
-		}
-		delete(k.ingressApps, key)
-	}
+	delete(k.ingressEntries, key)
 }
 
-func (k *KubernetesService) getByDomain(domain string) *model.App {
+func (k *KubernetesService) getEntry(locator func(name string, app *model.App) bool) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
-	if appKey, ok := k.domainIndex[domain]; ok {
-		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for i := range apps {
-				app := &apps[i]
-				if app.domain == domain && app.appName == appKey.appName {
-					return &app.app
-				}
+	// O(n^2) is not great but the number of ingress entries is expected to be small
+	for _, entries := range k.ingressEntries {
+		for _, entry := range entries {
+			if ok := locator(entry.name, &entry.app); ok {
+				return
 			}
 		}
 	}
-	return nil
-}
-
-func (k *KubernetesService) getByAppName(appName string) *model.App {
-	k.mu.RLock()
-	defer k.mu.RUnlock()
-
-	if appKey, ok := k.appNameIndex[appName]; ok {
-		if apps, ok := k.ingressApps[appKey.ingressKey]; ok {
-			for i := range apps {
-				app := &apps[i]
-				if app.appName == appName {
-					return &app.app
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (k *KubernetesService) extractPaths(rule map[string]any) ([]string, error) {
@@ -215,7 +167,8 @@ func (k *KubernetesService) extractHosts(item *unstructured.Unstructured) ([]str
 		}
 		paths, err := k.extractPaths(rule)
 		if err != nil {
-			// This is purely to warn users, it doesn't affect our ability to extract hosts so we won't fail the whole operation
+			// This is purely to warn users
+			// It doesn't affect our ability to extract hosts, so we won't fail the whole operation
 			k.log.App.Warn().Err(err).Str("namespace", item.GetNamespace()).Str("name", item.GetName()).Msg("Failed to extract paths from ingress rule")
 			continue
 		}
@@ -231,48 +184,75 @@ func (k *KubernetesService) extractHosts(item *unstructured.Unstructured) ([]str
 }
 
 func (k *KubernetesService) updateFromItem(item *unstructured.Unstructured) {
-	namespace := item.GetNamespace()
-	name := item.GetName()
+	key := ingressKey{
+		namespace: item.GetNamespace(),
+		name:      item.GetName(),
+	}
+
 	annotations := item.GetAnnotations()
 	if annotations == nil {
-		k.removeIngress(namespace, name)
+		k.removeIngress(key)
 		return
 	}
+
 	hosts, err := k.extractHosts(item)
 	if err != nil {
-		k.removeIngress(namespace, name)
+		k.removeIngress(key)
 		return
 	}
+
+	if len(hosts) == 0 {
+		k.log.App.Warn().Str("namespace", key.namespace).Str("name", key.name).Msg("No hosts found in ingress, skipping")
+		k.removeIngress(key)
+		return
+	}
+
 	labels, err := decoders.DecodeLabels[model.Apps](annotations, "apps")
 	if err != nil {
-		k.log.App.Warn().Err(err).Str("namespace", namespace).Str("name", name).Msg("Failed to decode ingress labels, skipping")
-		k.removeIngress(namespace, name)
+		k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Msg("Failed to decode ingress labels, skipping")
+		k.removeIngress(key)
 		return
 	}
-	var apps []ingressApp
-	for appName, appLabels := range labels.Apps {
-		if appLabels.Config.Domain == "" {
-			continue
+
+	var entries []ingressEntry
+
+	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
+
+	for name, config := range labels.Apps {
+		if config.Config.Domain != "" {
+			hostname, err := v.SafeHostname(config.Config.Domain)
+			if err != nil {
+				k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Str("domain", config.Config.Domain).Msg("Domain is invalid, matching will rely on app name")
+			} else if slices.Contains(hosts, hostname) {
+				entries = append(entries, ingressEntry{
+					name: name,
+					app:  config,
+				})
+				continue
+			}
 		}
-		if len(hosts) > 0 && !slices.Contains(hosts, appLabels.Config.Domain) {
-			k.log.App.Warn().Str("namespace", namespace).Str("name", name).Str("appName", appName).Str("domain", appLabels.Config.Domain).Msg("App domain does not match any hosts defined in ingress rules, skipping")
-			continue
+
+		for _, host := range hosts {
+			if strings.HasPrefix(strings.ToLower(host), strings.ToLower(name+".")) {
+				entries = append(entries, ingressEntry{
+					name: name,
+					app:  config,
+				})
+				break
+			}
 		}
-		apps = append(apps, ingressApp{
-			domain:  appLabels.Config.Domain,
-			appName: appName,
-			app:     appLabels,
-		})
 	}
-	if len(apps) == 0 {
-		k.removeIngress(namespace, name)
-	} else {
-		k.addIngressApps(namespace, name, apps)
+
+	if len(entries) == 0 {
+		k.removeIngress(key)
+		return
 	}
+
+	k.addIngressEntries(key, entries)
 }
 
-func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
-	ctx, cancel := context.WithTimeout(k.ctx, 30*time.Second)
+func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource, ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	list, err := k.client.Resource(gvr).List(ctx, metav1.ListOptions{})
@@ -289,10 +269,10 @@ func (k *KubernetesService) resyncGVR(gvr schema.GroupVersionResource) error {
 
 // runWatcher drains events from an active watcher until it closes or the context is done.
 // Returns true if the caller should restart the watcher, false if it should exit.
-func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.Interface, resyncTicker *time.Ticker) bool {
+func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.Interface, resyncTicker *time.Ticker, ctx context.Context) bool {
 	for {
 		select {
-		case <-k.ctx.Done():
+		case <-ctx.Done():
 			w.Stop()
 			return false
 		case event, ok := <-w.ResultChan():
@@ -311,36 +291,39 @@ func (k *KubernetesService) runWatcher(gvr schema.GroupVersionResource, w watch.
 			case watch.Added, watch.Modified:
 				k.updateFromItem(item)
 			case watch.Deleted:
-				k.removeIngress(item.GetNamespace(), item.GetName())
+				k.removeIngress(ingressKey{
+					namespace: item.GetNamespace(),
+					name:      item.GetName(),
+				})
 			}
 		case <-resyncTicker.C:
-			if err := k.resyncGVR(gvr); err != nil {
+			if err := k.resyncGVR(gvr, ctx); err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed during watcher run")
 			}
 		}
 	}
 }
 
-func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
+func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource, ctx context.Context) {
 	resyncTicker := time.NewTicker(5 * time.Minute)
 	defer resyncTicker.Stop()
 
-	if err := k.resyncGVR(gvr); err != nil {
+	if err := k.resyncGVR(gvr, ctx); err != nil {
 		k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Initial resync failed, will retry")
 		time.Sleep(30 * time.Second)
 	}
 
 	for {
 		select {
-		case <-k.ctx.Done():
+		case <-ctx.Done():
 			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Shutting down kubernetes watcher")
 			return
 		case <-resyncTicker.C:
-			if err := k.resyncGVR(gvr); err != nil {
+			if err := k.resyncGVR(gvr, ctx); err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Periodic resync failed, will retry")
 			}
 		default:
-			ctx, cancel := context.WithCancel(k.ctx)
+			ctx, cancel := context.WithCancel(ctx)
 			watcher, err := k.client.Resource(gvr).Watch(ctx, metav1.ListOptions{})
 			if err != nil {
 				k.log.App.Warn().Err(err).Str("api", gvr.GroupVersion().String()).Msg("Failed to start watcher, will retry")
@@ -349,7 +332,7 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 				continue
 			}
 			k.log.App.Debug().Str("api", gvr.GroupVersion().String()).Msg("Watcher started successfully")
-			if !k.runWatcher(gvr, watcher, resyncTicker) {
+			if !k.runWatcher(gvr, watcher, resyncTicker, ctx) {
 				cancel()
 				return
 			}
@@ -358,25 +341,13 @@ func (k *KubernetesService) watchGVR(gvr schema.GroupVersionResource) {
 	}
 }
 
-func (k *KubernetesService) GetLabels(appDomain string) (*model.App, error) {
-	if !k.started {
-		k.log.App.Debug().Str("domain", appDomain).Msg("Kubernetes label provider not started, skipping")
-		return nil, nil
+func (k *KubernetesService) Lookup(locator func(name string, app *model.App) bool) error {
+	if !k.connected {
+		k.log.App.Debug().Msg("Kubernetes label provider not started, skipping")
+		return nil
 	}
 
-	// First check cache
-	app := k.getByDomain(appDomain)
-	if app != nil {
-		k.log.App.Debug().Str("domain", appDomain).Msg("Found labels in cache by domain")
-		return app, nil
-	}
-	appName := strings.SplitN(appDomain, ".", 2)[0]
-	app = k.getByAppName(appName)
-	if app != nil {
-		k.log.App.Debug().Str("domain", appDomain).Str("appName", appName).Msg("Found labels in cache by app name")
-		return app, nil
-	}
+	k.getEntry(locator)
 
-	k.log.App.Debug().Str("domain", appDomain).Msg("No labels found for domain")
-	return nil, nil
+	return nil
 }

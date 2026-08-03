@@ -32,28 +32,12 @@ func mapErr(err error) error {
 	return err
 }
 
-func (s *Store) CreateOidcCode(ctx context.Context, arg repository.CreateOidcCodeParams) (repository.OidcCode, error) {
-	r, err := s.q.CreateOidcCode(ctx, CreateOidcCodeParams(arg))
+func (s *Store) CreateOIDCSession(ctx context.Context, arg repository.CreateOIDCSessionParams) (repository.OidcSession, error) {
+	r, err := s.q.CreateOIDCSession(ctx, CreateOIDCSessionParams(arg))
 	if err != nil {
-		return repository.OidcCode{}, mapErr(err)
+		return repository.OidcSession{}, mapErr(err)
 	}
-	return repository.OidcCode(r), nil
-}
-
-func (s *Store) CreateOidcToken(ctx context.Context, arg repository.CreateOidcTokenParams) (repository.OidcToken, error) {
-	r, err := s.q.CreateOidcToken(ctx, CreateOidcTokenParams(arg))
-	if err != nil {
-		return repository.OidcToken{}, mapErr(err)
-	}
-	return repository.OidcToken(r), nil
-}
-
-func (s *Store) CreateOidcUserInfo(ctx context.Context, arg repository.CreateOidcUserInfoParams) (repository.OidcUserinfo, error) {
-	r, err := s.q.CreateOidcUserInfo(ctx, CreateOidcUserInfoParams(arg))
-	if err != nil {
-		return repository.OidcUserinfo{}, mapErr(err)
-	}
-	return repository.OidcUserinfo(r), nil
+	return repository.OidcSession(r), nil
 }
 
 func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
@@ -64,124 +48,44 @@ func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionP
 	return repository.Session(r), nil
 }
 
-func (s *Store) DeleteExpiredOidcCodes(ctx context.Context, expiresAt int64) ([]repository.OidcCode, error) {
-	rows, err := s.q.DeleteExpiredOidcCodes(ctx, expiresAt)
-	if err != nil {
-		return nil, mapErr(err)
-	}
-	out := make([]repository.OidcCode, len(rows))
-	for i, row := range rows {
-		out[i] = repository.OidcCode(row)
-	}
-	return out, nil
-}
-
-func (s *Store) DeleteExpiredOidcTokens(ctx context.Context, arg repository.DeleteExpiredOidcTokensParams) ([]repository.OidcToken, error) {
-	rows, err := s.q.DeleteExpiredOidcTokens(ctx, DeleteExpiredOidcTokensParams(arg))
-	if err != nil {
-		return nil, mapErr(err)
-	}
-	out := make([]repository.OidcToken, len(rows))
-	for i, row := range rows {
-		out[i] = repository.OidcToken(row)
-	}
-	return out, nil
+func (s *Store) DeleteExpiredOIDCSessions(ctx context.Context, arg repository.DeleteExpiredOIDCSessionsParams) error {
+	return mapErr(s.q.DeleteExpiredOIDCSessions(ctx, DeleteExpiredOIDCSessionsParams(arg)))
 }
 
 func (s *Store) DeleteExpiredSessions(ctx context.Context, expiry int64) error {
 	return mapErr(s.q.DeleteExpiredSessions(ctx, expiry))
 }
 
-func (s *Store) DeleteOidcCode(ctx context.Context, codeHash string) error {
-	return mapErr(s.q.DeleteOidcCode(ctx, codeHash))
-}
-
-func (s *Store) DeleteOidcCodeBySub(ctx context.Context, sub string) error {
-	return mapErr(s.q.DeleteOidcCodeBySub(ctx, sub))
-}
-
-func (s *Store) DeleteOidcToken(ctx context.Context, accessTokenHash string) error {
-	return mapErr(s.q.DeleteOidcToken(ctx, accessTokenHash))
-}
-
-func (s *Store) DeleteOidcTokenByCodeHash(ctx context.Context, codeHash string) error {
-	return mapErr(s.q.DeleteOidcTokenByCodeHash(ctx, codeHash))
-}
-
-func (s *Store) DeleteOidcTokenBySub(ctx context.Context, sub string) error {
-	return mapErr(s.q.DeleteOidcTokenBySub(ctx, sub))
-}
-
-func (s *Store) DeleteOidcUserInfo(ctx context.Context, sub string) error {
-	return mapErr(s.q.DeleteOidcUserInfo(ctx, sub))
+func (s *Store) DeleteOIDCSessionBySub(ctx context.Context, sub string) error {
+	return mapErr(s.q.DeleteOIDCSessionBySub(ctx, sub))
 }
 
 func (s *Store) DeleteSession(ctx context.Context, uuid string) error {
 	return mapErr(s.q.DeleteSession(ctx, uuid))
 }
 
-func (s *Store) GetOidcCode(ctx context.Context, codeHash string) (repository.OidcCode, error) {
-	r, err := s.q.GetOidcCode(ctx, codeHash)
+func (s *Store) GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (repository.OidcSession, error) {
+	r, err := s.q.GetOIDCSessionByAccessTokenHash(ctx, accessTokenHash)
 	if err != nil {
-		return repository.OidcCode{}, mapErr(err)
+		return repository.OidcSession{}, mapErr(err)
 	}
-	return repository.OidcCode(r), nil
+	return repository.OidcSession(r), nil
 }
 
-func (s *Store) GetOidcCodeBySub(ctx context.Context, sub string) (repository.OidcCode, error) {
-	r, err := s.q.GetOidcCodeBySub(ctx, sub)
+func (s *Store) GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (repository.OidcSession, error) {
+	r, err := s.q.GetOIDCSessionByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
-		return repository.OidcCode{}, mapErr(err)
+		return repository.OidcSession{}, mapErr(err)
 	}
-	return repository.OidcCode(r), nil
+	return repository.OidcSession(r), nil
 }
 
-func (s *Store) GetOidcCodeBySubUnsafe(ctx context.Context, sub string) (repository.OidcCode, error) {
-	r, err := s.q.GetOidcCodeBySubUnsafe(ctx, sub)
+func (s *Store) GetOIDCSessionBySub(ctx context.Context, sub string) (repository.OidcSession, error) {
+	r, err := s.q.GetOIDCSessionBySub(ctx, sub)
 	if err != nil {
-		return repository.OidcCode{}, mapErr(err)
+		return repository.OidcSession{}, mapErr(err)
 	}
-	return repository.OidcCode(r), nil
-}
-
-func (s *Store) GetOidcCodeUnsafe(ctx context.Context, codeHash string) (repository.OidcCode, error) {
-	r, err := s.q.GetOidcCodeUnsafe(ctx, codeHash)
-	if err != nil {
-		return repository.OidcCode{}, mapErr(err)
-	}
-	return repository.OidcCode(r), nil
-}
-
-func (s *Store) GetOidcToken(ctx context.Context, accessTokenHash string) (repository.OidcToken, error) {
-	r, err := s.q.GetOidcToken(ctx, accessTokenHash)
-	if err != nil {
-		return repository.OidcToken{}, mapErr(err)
-	}
-	return repository.OidcToken(r), nil
-}
-
-func (s *Store) GetOidcTokenByRefreshToken(ctx context.Context, refreshTokenHash string) (repository.OidcToken, error) {
-	r, err := s.q.GetOidcTokenByRefreshToken(ctx, refreshTokenHash)
-	if err != nil {
-		return repository.OidcToken{}, mapErr(err)
-	}
-	return repository.OidcToken(r), nil
-}
-
-func (s *Store) GetOidcTokenBySub(ctx context.Context, sub string) (repository.OidcToken, error) {
-	r, err := s.q.GetOidcTokenBySub(ctx, sub)
-	if err != nil {
-		return repository.OidcToken{}, mapErr(err)
-	}
-	return repository.OidcToken(r), nil
-}
-
-func (s *Store) GetOidcUserInfo(ctx context.Context, sub string) (repository.OidcUserinfo, error) {
-	r, err := s.q.GetOidcUserInfo(ctx, sub)
-	if err != nil {
-		return repository.OidcUserinfo{}, mapErr(err)
-	}
-	return repository.OidcUserinfo(r), nil
+	return repository.OidcSession(r), nil
 }
 
 func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session, error) {
@@ -192,12 +96,12 @@ func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session
 	return repository.Session(r), nil
 }
 
-func (s *Store) UpdateOidcTokenByRefreshToken(ctx context.Context, arg repository.UpdateOidcTokenByRefreshTokenParams) (repository.OidcToken, error) {
-	r, err := s.q.UpdateOidcTokenByRefreshToken(ctx, UpdateOidcTokenByRefreshTokenParams(arg))
+func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDCSessionParams) (repository.OidcSession, error) {
+	r, err := s.q.UpdateOIDCSession(ctx, UpdateOIDCSessionParams(arg))
 	if err != nil {
-		return repository.OidcToken{}, mapErr(err)
+		return repository.OidcSession{}, mapErr(err)
 	}
-	return repository.OidcToken(r), nil
+	return repository.OidcSession(r), nil
 }
 
 func (s *Store) UpdateSession(ctx context.Context, arg repository.UpdateSessionParams) (repository.Session, error) {

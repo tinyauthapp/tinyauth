@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 )
 
 // See context middleware for explanation of why we have to do this
@@ -21,9 +22,15 @@ type ZerologMiddleware struct {
 	log *logger.Logger
 }
 
-func NewZerologMiddleware(log *logger.Logger) *ZerologMiddleware {
+type ZerologMiddlewareInput struct {
+	dig.In
+
+	Log *logger.Logger
+}
+
+func NewZerologMiddleware(i ZerologMiddlewareInput) *ZerologMiddleware {
 	return &ZerologMiddleware{
-		log: log,
+		log: i.Log,
 	}
 }
 

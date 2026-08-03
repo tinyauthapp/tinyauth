@@ -1,12 +1,6 @@
-"base_path": "."
-"base_url": "https://api.crowdin.com"
-
-"preserve_hierarchy": true
-
+base_path: .
+base_url: 'https://api.crowdin.com'
+preserve_hierarchy: 1
 files:
-  [
-    {
-      "source": "/frontend/src/lib/i18n/locales/en.json",
-      "translation": "/frontend/src/lib/i18n/locales/%locale%.json",
-    },
-  ]
+  - source: /frontend/src/lib/i18n/locales/en.json
+    translation: /frontend/src/lib/i18n/locales/%locale%.json

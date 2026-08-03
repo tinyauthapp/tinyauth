@@ -3,12 +3,17 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrFilterEmpty = errors.New("filter is empty")
 )
 
 func GetSecret(conf string, file string) string {
@@ -78,7 +83,7 @@ func CheckIPFilter(filter string, ip string) (bool, error) {
 
 func CheckFilter(filter string, input string) (bool, error) {
 	if len(strings.TrimSpace(filter)) == 0 {
-		return false, fmt.Errorf("filter is empty")
+		return false, ErrFilterEmpty
 	}
 
 	if strings.HasPrefix(filter, "/") && strings.HasSuffix(filter, "/") {

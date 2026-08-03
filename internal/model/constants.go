@@ -17,6 +17,8 @@ var OverrideProviders = map[string]string{
 	"github": "GitHub",
 }
 
+var ReservedProviderNames = []string{"local", "ldap", "tailscale"}
+
 const SessionCookieName = "tinyauth-session"
 const CSRFCookieName = "tinyauth-csrf"
 const RedirectCookieName = "tinyauth-redirect"

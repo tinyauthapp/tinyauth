@@ -4,49 +4,16 @@
 
 package sqlite
 
-type OidcCode struct {
-	Sub           string
-	CodeHash      string
-	Scope         string
-	RedirectURI   string
-	ClientID      string
-	ExpiresAt     int64
-	Nonce         string
-	CodeChallenge string
-}
-
-type OidcToken struct {
+type OidcSession struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
-	CodeHash              string
 	Scope                 string
 	ClientID              string
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
 	Nonce                 string
-}
-
-type OidcUserinfo struct {
-	Sub               string
-	Name              string
-	PreferredUsername string
-	Email             string
-	Groups            string
-	UpdatedAt         int64
-	GivenName         string
-	FamilyName        string
-	MiddleName        string
-	Nickname          string
-	Profile           string
-	Picture           string
-	Website           string
-	Gender            string
-	Birthdate         string
-	Zoneinfo          string
-	Locale            string
-	PhoneNumber       string
-	Address           string
+	UserinfoJson          string
 }
 
 type Session struct {

@@ -9,19 +9,15 @@ import (
 
 // Store is a thread-safe in-memory implementation of repository.Store.
 type Store struct {
-	mu         sync.RWMutex
-	sessions   map[string]repository.Session
-	oidcCodes  map[string]repository.OidcCode
-	oidcTokens map[string]repository.OidcToken
-	oidcUsers  map[string]repository.OidcUserinfo
+	mu           sync.RWMutex
+	sessions     map[string]repository.Session
+	oidcSessions map[string]repository.OidcSession
 }
 
 // New returns a new empty in-memory Store.
 func New() repository.Store {
 	return &Store{
-		sessions:   make(map[string]repository.Session),
-		oidcCodes:  make(map[string]repository.OidcCode),
-		oidcTokens: make(map[string]repository.OidcToken),
-		oidcUsers:  make(map[string]repository.OidcUserinfo),
+		sessions:     make(map[string]repository.Session),
+		oidcSessions: make(map[string]repository.OidcSession),
 	}
 }

@@ -7,8 +7,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/paerser/cli"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
 
 func createOidcClientCmd() *cli.Command {
@@ -31,40 +32,84 @@ func createOidcClientCmd() *cli.Command {
 				return errors.New("client name can only contain alphanumeric characters and hyphens")
 			}
 
-			uuid := uuid.New()
-			clientId := uuid.String()
+			u := uuid.New()
+			clientId := u.String()
 			clientSecret := "ta-" + utils.GenerateString(61)
 
 			uclientName := strings.ToUpper(clientName)
 			lclientName := strings.ToLower(clientName)
 
-			builder := strings.Builder{}
+			buf := strings.Builder{}
 
 			// header
-			fmt.Fprintf(&builder, "Created credentials for client %s\n\n", clientName)
+			fmt.Fprintf(&buf, "Created '%s' OIDC client.\n\n", clientName)
 
 			// credentials
-			fmt.Fprintf(&builder, "Client Name: %s\n", clientName)
-			fmt.Fprintf(&builder, "Client ID: %s\n", clientId)
-			fmt.Fprintf(&builder, "Client Secret: %s\n\n", clientSecret)
+			fmt.Fprintf(&buf, "Credentials:\n\n")
+			fmt.Fprintf(&buf, "Client Name: %s\n", clientName)
+			fmt.Fprintf(&buf, "Client ID: %s\n", clientId)
+			fmt.Fprintf(&buf, "Client Secret: %s\n\n", clientSecret)
 
-			// env variables
-			fmt.Fprint(&builder, "Environment variables:\n\n")
-			fmt.Fprintf(&builder, "TINYAUTH_OIDC_CLIENTS_%s_CLIENTID=%s\n", uclientName, clientId)
-			fmt.Fprintf(&builder, "TINYAUTH_OIDC_CLIENTS_%s_CLIENTSECRET=%s\n", uclientName, clientSecret)
-			fmt.Fprintf(&builder, "TINYAUTH_OIDC_CLIENTS_%s_NAME=%s\n\n", uclientName, utils.Capitalize(lclientName))
+			// end variables
+			fmt.Fprintf(&buf, "Environment variables:\n\n")
+			renderToBuf(&buf, []kv{
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTID", uclientName),
+					v: clientId,
+				},
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_CLIENTSECRET", uclientName),
+					v: clientSecret,
+				},
+				{
+					k: fmt.Sprintf("TINYAUTH_OIDC_CLIENTS_%s_NAME", uclientName),
+					v: utils.Capitalize(lclientName),
+				},
+			}, "=")
+			fmt.Fprintf(&buf, "\n")
 
 			// cli flags
-			fmt.Fprint(&builder, "CLI flags:\n\n")
-			fmt.Fprintf(&builder, "--oidc.clients.%s.clientid=%s\n", lclientName, clientId)
-			fmt.Fprintf(&builder, "--oidc.clients.%s.clientsecret=%s\n", lclientName, clientSecret)
-			fmt.Fprintf(&builder, "--oidc.clients.%s.name=%s\n\n", lclientName, utils.Capitalize(lclientName))
+			fmt.Fprintf(&buf, "CLI flags:\n\n")
+			renderToBuf(&buf, []kv{
+				{
+					k: fmt.Sprintf("--oidc.clients.%s.clientid", lclientName),
+					v: clientId,
+				},
+				{
+					k: fmt.Sprintf("--oidc.clients.%s.clientsecret", lclientName),
+					v: clientSecret,
+				},
+				{
+					k: fmt.Sprintf("--oidc.clients.%s.name", lclientName),
+					v: utils.Capitalize(lclientName),
+				},
+			}, "=")
+			fmt.Fprintf(&buf, "\n")
+
+			// yaml config
+			fmt.Fprintf(&buf, "YAML config:\n\n")
+
+			err = renderYamlToBuf(&buf, &model.OIDCConfig{
+				Clients: map[string]model.OIDCClientConfig{
+					lclientName: {
+						ClientID:     clientId,
+						ClientSecret: clientSecret,
+						Name:         utils.Capitalize(lclientName),
+					},
+				},
+			})
+
+			if err != nil {
+				return fmt.Errorf("failed to render yaml config: %w", err)
+			}
+
+			buf.WriteString("\n")
 
 			// footer
-			fmt.Fprintln(&builder, "You can use either option to configure your OIDC client. Make sure to save these credentials as there is no way to regenerate them.")
+			fmt.Fprintln(&buf, "You can use any of the above options to configure your OIDC client. Make sure to save these credentials as there is no way to regenerate them.")
 
 			// print
-			out := builder.String()
+			out := buf.String()
 			fmt.Print(out)
 			return nil
 		},

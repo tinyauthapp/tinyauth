@@ -51,3 +51,6 @@ config.certify.yml
 
 # deepsec
 /.deepsec
+
+# jetbrains
+/.idea/

@@ -25,6 +25,7 @@ const (
 type UserContext struct {
 	Authenticated bool
 	Provider      ProviderType
+	AuthTime      int64
 	Local         *LocalContext
 	OAuth         *OAuthContext
 	LDAP          *LDAPContext
@@ -58,9 +59,7 @@ type LDAPContext struct {
 
 type TailscaleContext struct {
 	BaseContext
-	UserID string
-	// for future use
-	Tags []string
+	NodeName string
 }
 
 func (c *UserContext) IsAuthenticated() bool {
@@ -112,6 +111,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
 	*c = UserContext{
 		Authenticated: !session.TotpPending,
+		AuthTime:      session.CreatedAt,
 	}
 
 	switch session.Provider {
@@ -249,7 +249,7 @@ func (c *UserContext) OAuthName() string {
 
 func (c *UserContext) TailscaleNodeName() string {
 	if c.Tailscale != nil {
-		return c.Tailscale.Username
+		return c.Tailscale.NodeName
 	}
 	return ""
 }

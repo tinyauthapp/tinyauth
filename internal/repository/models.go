@@ -17,49 +17,16 @@ type Session struct {
 	OAuthSub    string
 }
 
-type OidcCode struct {
-	Sub           string
-	CodeHash      string
-	Scope         string
-	RedirectURI   string
-	ClientID      string
-	ExpiresAt     int64
-	Nonce         string
-	CodeChallenge string
-}
-
-type OidcToken struct {
+type OidcSession struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
-	CodeHash              string
 	Scope                 string
 	ClientID              string
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
 	Nonce                 string
-}
-
-type OidcUserinfo struct {
-	Sub               string
-	Name              string
-	PreferredUsername string
-	Email             string
-	Groups            string
-	UpdatedAt         int64
-	GivenName         string
-	FamilyName        string
-	MiddleName        string
-	Nickname          string
-	Profile           string
-	Picture           string
-	Website           string
-	Gender            string
-	Birthdate         string
-	Zoneinfo          string
-	Locale            string
-	PhoneNumber       string
-	Address           string
+	UserinfoJson          string
 }
 
 type CreateSessionParams struct {
@@ -89,18 +56,7 @@ type UpdateSessionParams struct {
 	UUID        string
 }
 
-type CreateOidcCodeParams struct {
-	Sub           string
-	CodeHash      string
-	Scope         string
-	RedirectURI   string
-	ClientID      string
-	ExpiresAt     int64
-	Nonce         string
-	CodeChallenge string
-}
-
-type CreateOidcTokenParams struct {
+type CreateOIDCSessionParams struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
@@ -108,41 +64,23 @@ type CreateOidcTokenParams struct {
 	ClientID              string
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
-	CodeHash              string
 	Nonce                 string
+	UserinfoJson          string
 }
 
-type UpdateOidcTokenByRefreshTokenParams struct {
+type UpdateOIDCSessionParams struct {
 	AccessTokenHash       string
 	RefreshTokenHash      string
+	Scope                 string
+	ClientID              string
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
-	RefreshTokenHash_2    string
+	Nonce                 string
+	UserinfoJson          string
+	Sub                   string
 }
 
-type DeleteExpiredOidcTokensParams struct {
+type DeleteExpiredOIDCSessionsParams struct {
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
-}
-
-type CreateOidcUserInfoParams struct {
-	Sub               string
-	Name              string
-	PreferredUsername string
-	Email             string
-	Groups            string
-	UpdatedAt         int64
-	GivenName         string
-	FamilyName        string
-	MiddleName        string
-	Nickname          string
-	Profile           string
-	Picture           string
-	Website           string
-	Gender            string
-	Birthdate         string
-	Zoneinfo          string
-	Locale            string
-	PhoneNumber       string
-	Address           string
 }

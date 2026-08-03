@@ -1,5 +1,5 @@
 # Site builder
-FROM node:26.2-alpine3.23 AS frontend-builder
+FROM node:26.5-alpine3.23 AS frontend-builder
 
 WORKDIR /frontend
 
@@ -27,6 +27,8 @@ FROM golang:1.26-alpine3.23 AS builder
 ARG VERSION
 ARG COMMIT_HASH
 ARG BUILD_TIMESTAMP
+ARG LDFLAGS
+ARG BUILD_TAGS
 
 WORKDIR /tinyauth
 
@@ -37,29 +39,33 @@ RUN go mod download
 
 COPY ./cmd ./cmd
 COPY ./internal ./internal
+COPY ./pkg ./pkg
 COPY --from=frontend-builder /frontend/dist ./internal/assets/dist
 
-RUN CGO_ENABLED=0 go build -ldflags "-s -w \
+RUN CGO_ENABLED=0 go build -tags "${BUILD_TAGS}" -ldflags "${LDFLAGS} \
     -X github.com/tinyauthapp/tinyauth/internal/model.Version=${VERSION} \
     -X github.com/tinyauthapp/tinyauth/internal/model.CommitHash=${COMMIT_HASH} \
-    -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" ./cmd/tinyauth
+    -X github.com/tinyauthapp/tinyauth/internal/model.BuildTimestamp=${BUILD_TIMESTAMP}" \
+    -o tinyauth ./cmd/tinyauth
 
 # Runner
-FROM alpine:3.23 AS runner
+FROM alpine:3.24 AS runner
 
 WORKDIR /tinyauth
 
 COPY --from=builder /tinyauth/tinyauth ./
 
-RUN mkdir -p /data
-
 EXPOSE 3000
+
+# Make the data directory with a non-root user
+RUN addgroup tinyauth && adduser -DH tinyauth -G tinyauth
+RUN mkdir -p /data/resources /data/oidc /data/tailscale
+RUN chown -R tinyauth:tinyauth /data
 
 VOLUME ["/data"]
 
-ENV TINYAUTH_DATABASE_PATH=/data/tinyauth.db
-
-ENV TINYAUTH_RESOURCES_PATH=/data/resources
+# Tell tinyauth that it's running in a container and where to find the data directory
+ENV RUNTIME_ENV=docker
 
 ENV PATH=$PATH:/tinyauth
 

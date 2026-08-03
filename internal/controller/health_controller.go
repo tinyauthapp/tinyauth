@@ -1,15 +1,24 @@
 package controller
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"go.uber.org/dig"
+)
 
 type HealthController struct {
 }
 
-func NewHealthController(router *gin.RouterGroup) *HealthController {
+type HealthControllerInput struct {
+	dig.In
+
+	RouterGroup *gin.RouterGroup `name:"apiRouterGroup"`
+}
+
+func NewHealthController(i HealthControllerInput) *HealthController {
 	controller := &HealthController{}
 
-	router.GET("/healthz", controller.healthHandler)
-	router.HEAD("/healthz", controller.healthHandler)
+	i.RouterGroup.GET("/healthz", controller.healthHandler)
+	i.RouterGroup.HEAD("/healthz", controller.healthHandler)
 
 	return controller
 }

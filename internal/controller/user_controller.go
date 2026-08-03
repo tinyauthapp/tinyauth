@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
@@ -27,23 +28,27 @@ type TotpRequest struct {
 
 type UserController struct {
 	log     *logger.Logger
-	runtime model.RuntimeConfig
+	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
 
-func NewUserController(
-	log *logger.Logger,
-	runtimeConfig model.RuntimeConfig,
-	router *gin.RouterGroup,
-	auth *service.AuthService,
-) *UserController {
+type UserControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	AuthService   *service.AuthService
+}
+
+func NewUserController(i UserControllerInput) *UserController {
 	controller := &UserController{
-		log:     log,
-		runtime: runtimeConfig,
-		auth:    auth,
+		log:     i.Log,
+		runtime: i.RuntimeConfig,
+		auth:    i.AuthService,
 	}
 
-	userGroup := router.Group("/user")
+	userGroup := i.RouterGroup.Group("/user")
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
 	userGroup.POST("/totp", controller.totpHandler)
@@ -67,26 +72,12 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.App.Debug().Str("username", req.Username).Msg("Login attempt")
 
-	isLocked, remaining := controller.auth.IsAccountLocked(req.Username)
-
-	if isLocked {
-		controller.log.App.Warn().Str("username", req.Username).Msg("Account is locked due to too many failed login attempts")
-		controller.log.AuditLoginFailure(req.Username, "local", c.ClientIP(), "account locked")
-		c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
-		c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
-		c.JSON(429, gin.H{
-			"status":  429,
-			"message": fmt.Sprintf("Too many failed login attempts. Try again in %d seconds", remaining),
-		})
-		return
-	}
-
 	search, err := controller.auth.SearchUser(req.Username)
 
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
+			controller.auth.DummyPasswordCheck(req.Password)
 			controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
-			controller.auth.RecordLoginAttempt(req.Username, false)
 			controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
 			c.JSON(401, gin.H{
 				"status":  401,
@@ -102,14 +93,24 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		return
 	}
 
+	isLocked, remaining := controller.auth.IsAccountLocked(req.Username)
+
+	if isLocked {
+		controller.log.App.Warn().Str("username", req.Username).Msg("Account is locked due to too many failed login attempts")
+		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "account locked")
+		c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
+		c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
+		c.JSON(429, gin.H{
+			"status":  429,
+			"message": fmt.Sprintf("Too many failed login attempts. Try again in %d seconds", remaining),
+		})
+		return
+	}
+
 	if err := controller.auth.CheckUserPassword(*search, req.Password); err != nil {
 		controller.log.App.Warn().Str("username", req.Username).Msg("Invalid password during login attempt")
 		controller.auth.RecordLoginAttempt(req.Username, false)
-		if search.Type == model.UserLocal {
-			controller.log.AuditLoginFailure(req.Username, "local", c.ClientIP(), "invalid password")
-		} else {
-			controller.log.AuditLoginFailure(req.Username, "ldap", c.ClientIP(), "invalid password")
-		}
+		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "invalid password")
 		c.JSON(401, gin.H{
 			"status":  401,
 			"message": "Unauthorized",
@@ -210,11 +211,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.App.Info().Str("username", req.Username).Msg("Login successful")
 
-	if search.Type == model.UserLocal {
-		controller.log.AuditLoginSuccess(req.Username, "local", c.ClientIP())
-	} else {
-		controller.log.AuditLoginSuccess(req.Username, "ldap", c.ClientIP())
-	}
+	controller.log.AuditLoginSuccess(req.Username, search.Type.String(), c.ClientIP())
 
 	controller.auth.RecordLoginAttempt(req.Username, true)
 
@@ -290,6 +287,14 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
+		if errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Msg("TOTP verification attempt without user context")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 		controller.log.App.Error().Err(err).Msg("Failed to create user context from request for TOTP verification")
 		c.JSON(500, gin.H{
 			"status":  500,
@@ -400,6 +405,14 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 	context, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
+		if errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Msg("Tailscale login attempt without user context")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 		controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
 		c.JSON(401, gin.H{
 			"status":  401,

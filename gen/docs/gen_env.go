@@ -20,7 +20,7 @@ type EnvEntry struct {
 }
 
 func generateExampleEnv() {
-	cfg := model.NewDefaultConfiguration()
+	cfg := model.NewDefaultConfiguration(model.RuntimeEnvUnknown)
 	entries := make([]EnvEntry, 0)
 
 	root := reflect.TypeOf(cfg).Elem()
@@ -46,10 +46,13 @@ func generateExampleEnv() {
 func buildEnvEntry(child reflect.StructField, childValue reflect.Value, parentPath string, entries *[]EnvEntry) {
 	desc := child.Tag.Get("description")
 	tag := child.Tag.Get("yaml")
+	gen := child.Tag.Get("gen")
 
-	if tag == "-" {
+	if tag == "-" && gen != "include" {
 		return
 	}
+
+	tag = strings.TrimSuffix(tag, ",omitempty")
 
 	value := childValue.Interface()
 

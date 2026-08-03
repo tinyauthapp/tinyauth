@@ -14,18 +14,21 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"slices"
 
-	"github.com/gin-gonic/gin"
 	"github.com/go-jose/go-jose/v4"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
+	"go.uber.org/dig"
 )
 
 var (
@@ -42,12 +45,26 @@ var (
 	ErrInvalidClient = errors.New("invalid_client")
 )
 
+type OIDCPrompt string
+
+const (
+	OIDCPromptLogin OIDCPrompt = "login"
+	OIDCPromptNone  OIDCPrompt = "none"
+)
+
+var SupportedPrompts = []string{string(OIDCPromptLogin), string(OIDCPromptNone)}
+
+// This is not spec-compliant, the ID token SHOULD NOT contain user info claims but,
+// it has became a "standard" and apps are looking for the claims in the ID tokens
+// instead of calling the userinfo endpoint, so we include them in the ID token as well
+// for better compatibility with existing apps
 type ClaimSet struct {
 	Iss               string   `json:"iss"`
 	Aud               string   `json:"aud"`
 	Sub               string   `json:"sub"`
 	Iat               int64    `json:"iat"`
 	Exp               int64    `json:"exp"`
+	AuthTime          int64    `json:"auth_time,omitempty"`
 	Name              string   `json:"name,omitempty"`
 	GivenName         string   `json:"given_name,omitempty"`
 	FamilyName        string   `json:"family_name,omitempty"`
@@ -67,6 +84,8 @@ type ClaimSet struct {
 	Nonce             string   `json:"nonce,omitempty"`
 }
 
+// We use this struct as both a response struct and a struct to store userinfo
+// in the database
 type UserinfoResponse struct {
 	Sub                 string              `json:"sub"`
 	Name                string              `json:"name,omitempty"`
@@ -101,43 +120,69 @@ type TokenResponse struct {
 }
 
 type AuthorizeRequest struct {
-	Scope               string `json:"scope" binding:"required"`
-	ResponseType        string `json:"response_type" binding:"required"`
-	ClientID            string `json:"client_id" binding:"required"`
-	RedirectURI         string `json:"redirect_uri" binding:"required"`
-	State               string `json:"state"`
-	Nonce               string `json:"nonce"`
-	CodeChallenge       string `json:"code_challenge"`
-	CodeChallengeMethod string `json:"code_challenge_method"`
+	Scope               string `form:"scope" json:"scope" url:"scope"`
+	ResponseType        string `form:"response_type" json:"response_type" url:"response_type"`
+	ClientID            string `form:"client_id" json:"client_id" url:"client_id"`
+	RedirectURI         string `form:"redirect_uri" json:"redirect_uri" url:"redirect_uri"`
+	State               string `form:"state" json:"state" url:"state"`
+	Nonce               string `form:"nonce" json:"nonce" url:"nonce"`
+	CodeChallenge       string `form:"code_challenge" json:"code_challenge" url:"code_challenge"`
+	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method" url:"code_challenge_method"`
+	Prompt              string `form:"prompt" json:"prompt" url:"prompt"`
+	MaxAge              string `form:"max_age" json:"max_age" url:"max_age"`
+}
+
+type AuthorizeCodeEntry struct {
+	CodeHash      string
+	Scope         string
+	RedirectURI   string
+	ClientID      string
+	Nonce         string
+	CodeChallenge string
+	Userinfo      UserinfoResponse
+	AuthTime      int64
+}
+
+type UsedCodeEntry struct {
+	Sub string
 }
 
 type OIDCService struct {
 	log     *logger.Logger
-	config  model.Config
-	runtime model.RuntimeConfig
+	config  *model.Config
+	runtime *model.RuntimeConfig
 	queries repository.Store
-	context context.Context
 
 	clients    map[string]model.OIDCClientConfig
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
 	issuer     string
+
+	caches struct {
+		code      *cache.CacheStore[AuthorizeCodeEntry]
+		usedCode  *cache.CacheStore[UsedCodeEntry]
+		authorize *cache.CacheStore[AuthorizeRequest]
+	}
 }
 
-func NewOIDCService(
-	log *logger.Logger,
-	config model.Config,
-	runtime model.RuntimeConfig,
-	queries repository.Store,
-	ctx context.Context,
-	wg *sync.WaitGroup) (*OIDCService, error) {
+type OIDCServiceInput struct {
+	dig.In
+
+	Log     *logger.Logger
+	Config  *model.Config
+	Runtime *model.RuntimeConfig
+	Queries repository.Store
+	Ding    *ding.Ding
+}
+
+func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 	// If not configured, skip init
-	if len(runtime.OIDCClients) == 0 {
+	if len(i.Config.OIDC.Clients) == 0 {
 		return nil, nil
 	}
 
 	// Ensure issuer is https
-	uissuer, err := url.Parse(runtime.AppURL)
+	uissuer, err := url.Parse(i.Runtime.AppURL)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse app url: %w", err)
@@ -150,14 +195,14 @@ func NewOIDCService(
 	issuer := fmt.Sprintf("%s://%s", uissuer.Scheme, uissuer.Host)
 
 	// Create/load private and public keys
-	if strings.TrimSpace(config.OIDC.PrivateKeyPath) == "" ||
-		strings.TrimSpace(config.OIDC.PublicKeyPath) == "" {
+	if strings.TrimSpace(i.Config.OIDC.PrivateKeyPath) == "" ||
+		strings.TrimSpace(i.Config.OIDC.PublicKeyPath) == "" {
 		return nil, errors.New("private key path and public key path are required")
 	}
 
 	var privateKey *rsa.PrivateKey
 
-	fprivateKey, err := os.ReadFile(config.OIDC.PrivateKeyPath)
+	fprivateKey, err := os.ReadFile(i.Config.OIDC.PrivateKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -176,8 +221,12 @@ func NewOIDCService(
 			Type:  "RSA PRIVATE KEY",
 			Bytes: der,
 		})
-		log.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
-		err = os.WriteFile(config.OIDC.PrivateKeyPath, encoded, 0600)
+		i.Log.App.Trace().Str("type", "RSA PRIVATE KEY").Msg("Generated private RSA key")
+		err := os.MkdirAll(filepath.Dir(i.Config.OIDC.PrivateKeyPath), 0700)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create directory for private key: %w", err)
+		}
+		err = os.WriteFile(i.Config.OIDC.PrivateKeyPath, encoded, 0600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write private key to file: %w", err)
 		}
@@ -186,7 +235,7 @@ func NewOIDCService(
 		if block == nil {
 			return nil, errors.New("failed to decode private key")
 		}
-		log.App.Trace().Str("type", block.Type).Msg("Loaded private key")
+		i.Log.App.Trace().Str("type", block.Type).Msg("Loaded private key")
 		privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
@@ -195,7 +244,7 @@ func NewOIDCService(
 
 	var publicKey crypto.PublicKey
 
-	fpublicKey, err := os.ReadFile(config.OIDC.PublicKeyPath)
+	fpublicKey, err := os.ReadFile(i.Config.OIDC.PublicKeyPath)
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("failed to read public key: %w", err)
@@ -211,8 +260,12 @@ func NewOIDCService(
 			Type:  "RSA PUBLIC KEY",
 			Bytes: der,
 		})
-		log.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
-		err = os.WriteFile(config.OIDC.PublicKeyPath, encoded, 0644)
+		i.Log.App.Trace().Str("type", "RSA PUBLIC KEY").Msg("Generated public RSA key")
+		err := os.MkdirAll(filepath.Dir(i.Config.OIDC.PublicKeyPath), 0700)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create directory for public key: %w", err)
+		}
+		err = os.WriteFile(i.Config.OIDC.PublicKeyPath, encoded, 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +274,7 @@ func NewOIDCService(
 		if block == nil {
 			return nil, errors.New("failed to decode public key")
 		}
-		log.App.Trace().Str("type", block.Type).Msg("Loaded public key")
+		i.Log.App.Trace().Str("type", block.Type).Msg("Loaded public key")
 		switch block.Type {
 		case "RSA PUBLIC KEY":
 			publicKey, err = x509.ParsePKCS1PublicKey(block.Bytes)
@@ -251,7 +304,7 @@ func NewOIDCService(
 	// We will reorganize the client into a map with the client ID as the key
 	clients := make(map[string]model.OIDCClientConfig)
 
-	for id, client := range config.OIDC.Clients {
+	for id, client := range i.Config.OIDC.Clients {
 		client.ID = id
 		if client.Name == "" {
 			client.Name = utils.Capitalize(client.ID)
@@ -267,16 +320,15 @@ func NewOIDCService(
 		}
 		client.ClientSecretFile = ""
 		clients[id] = client
-		log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
+		i.Log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
 	}
 
 	// Initialize the service
 	service := &OIDCService{
-		log:     log,
-		config:  config,
-		runtime: runtime,
-		queries: queries,
-		context: ctx,
+		log:     i.Log,
+		config:  i.Config,
+		runtime: i.Runtime,
+		queries: i.Queries,
 
 		clients:    clients,
 		privateKey: privateKey,
@@ -285,7 +337,33 @@ func NewOIDCService(
 	}
 
 	// Start cleanup routine
-	wg.Go(service.cleanupRoutine)
+	i.Ding.Go(service.cleanupRoutine, ding.RingMinor)
+
+	// Create caches
+	codeCache := cache.NewCacheStore[AuthorizeCodeEntry](256)
+	usedCode := cache.NewCacheStore[UsedCodeEntry](256)
+	authorize := cache.NewCacheStore[AuthorizeRequest](256)
+
+	service.caches.code = codeCache
+	service.caches.usedCode = usedCode
+	service.caches.authorize = authorize
+
+	// Start cache cleanup routine
+	i.Ding.Go(func(ctx context.Context) {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				service.caches.code.Sweep()
+				service.caches.usedCode.Sweep()
+				service.caches.authorize.Sweep()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}, ding.RingMinor)
 
 	return service, nil
 }
@@ -348,19 +426,18 @@ func (service *OIDCService) filterScopes(scopes []string) []string {
 	})
 }
 
-func (service *OIDCService) StoreCode(c *gin.Context, sub string, code string, req AuthorizeRequest) error {
-	// Fixed 10 minutes
-	expiresAt := time.Now().Add(time.Minute * time.Duration(10)).Unix()
+func (service *OIDCService) CreateCode(req AuthorizeRequest, userContext model.UserContext) string {
+	code := utils.GenerateString(32)
+	sub := service.CreateSub(userContext, req.ClientID)
 
-	entry := repository.CreateOidcCodeParams{
-		Sub:      sub,
-		CodeHash: service.Hash(code),
-		// Here it's safe to split and trust the output since, we validated the scopes before
-		Scope:       strings.Join(service.filterScopes(strings.Split(req.Scope, " ")), ","),
+	entry := AuthorizeCodeEntry{
+		CodeHash:    service.Hash(code),
+		Scope:       strings.Join(service.filterScopes(strings.Split(req.Scope, " ")), " "),
 		RedirectURI: req.RedirectURI,
 		ClientID:    req.ClientID,
-		ExpiresAt:   expiresAt,
 		Nonce:       req.Nonce,
+		Userinfo:    service.userinfoFromContext(userContext, sub),
+		AuthTime:    userContext.AuthTime,
 	}
 
 	if req.CodeChallenge != "" {
@@ -372,14 +449,14 @@ func (service *OIDCService) StoreCode(c *gin.Context, sub string, code string, r
 		}
 	}
 
-	// Insert the code into the database
-	_, err := service.queries.CreateOidcCode(c, entry)
+	// Store the code in the cache
+	service.caches.code.Set(entry.CodeHash, entry, 1*time.Minute)
 
-	return err
+	return code
 }
 
-func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContext model.UserContext, req AuthorizeRequest) error {
-	userInfoParams := repository.CreateOidcUserInfoParams{
+func (service *OIDCService) userinfoFromContext(userContext model.UserContext, sub string) UserinfoResponse {
+	userInfo := UserinfoResponse{
 		Sub:               sub,
 		Name:              userContext.GetName(),
 		Email:             userContext.GetEmail(),
@@ -388,37 +465,31 @@ func (service *OIDCService) StoreUserinfo(c *gin.Context, sub string, userContex
 	}
 
 	if userContext.IsLocal() {
-		addressJSON, err := json.Marshal(userContext.Local.Attributes.Address)
-		if err != nil {
-			return err
-		}
-		userInfoParams.GivenName = userContext.Local.Attributes.GivenName
-		userInfoParams.FamilyName = userContext.Local.Attributes.FamilyName
-		userInfoParams.MiddleName = userContext.Local.Attributes.MiddleName
-		userInfoParams.Nickname = userContext.Local.Attributes.Nickname
-		userInfoParams.Profile = userContext.Local.Attributes.Profile
-		userInfoParams.Picture = userContext.Local.Attributes.Picture
-		userInfoParams.Website = userContext.Local.Attributes.Website
-		userInfoParams.Gender = userContext.Local.Attributes.Gender
-		userInfoParams.Birthdate = userContext.Local.Attributes.Birthdate
-		userInfoParams.Zoneinfo = userContext.Local.Attributes.Zoneinfo
-		userInfoParams.Locale = userContext.Local.Attributes.Locale
-		userInfoParams.PhoneNumber = userContext.Local.Attributes.PhoneNumber
-		userInfoParams.Address = string(addressJSON)
+		userInfo.GivenName = userContext.Local.Attributes.GivenName
+		userInfo.FamilyName = userContext.Local.Attributes.FamilyName
+		userInfo.MiddleName = userContext.Local.Attributes.MiddleName
+		userInfo.Nickname = userContext.Local.Attributes.Nickname
+		userInfo.Profile = userContext.Local.Attributes.Profile
+		userInfo.Picture = userContext.Local.Attributes.Picture
+		userInfo.Website = userContext.Local.Attributes.Website
+		userInfo.Gender = userContext.Local.Attributes.Gender
+		userInfo.Birthdate = userContext.Local.Attributes.Birthdate
+		userInfo.Zoneinfo = userContext.Local.Attributes.Zoneinfo
+		userInfo.Locale = userContext.Local.Attributes.Locale
+		userInfo.PhoneNumber = userContext.Local.Attributes.PhoneNumber
+		userInfo.Address = &userContext.Local.Attributes.Address
 	}
 
 	// Tinyauth will pass through the groups it got from an LDAP or an OIDC server
 	if userContext.IsLDAP() {
-		userInfoParams.Groups = strings.Join(userContext.LDAP.Groups, ",")
+		userInfo.Groups = userContext.LDAP.Groups
 	}
 
 	if userContext.IsOAuth() {
-		userInfoParams.Groups = strings.Join(userContext.OAuth.Groups, ",")
+		userInfo.Groups = userContext.OAuth.Groups
 	}
 
-	_, err := service.queries.CreateOidcUserInfo(c, userInfoParams)
-
-	return err
+	return userInfo
 }
 
 func (service *OIDCService) ValidateGrantType(grantType string) error {
@@ -429,36 +500,34 @@ func (service *OIDCService) ValidateGrantType(grantType string) error {
 	return nil
 }
 
-func (service *OIDCService) GetCodeEntry(c *gin.Context, codeHash string, clientId string) (repository.OidcCode, error) {
-	oidcCode, err := service.queries.GetOidcCode(c, codeHash)
+func (service *OIDCService) GetCodeEntry(codeHash string, clientId string) (*AuthorizeCodeEntry, bool) {
+	var entry AuthorizeCodeEntry
+	var ok bool
 
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return repository.OidcCode{}, ErrCodeNotFound
+	service.caches.code.WithLock(func(actions cache.CacheStoreActions[AuthorizeCodeEntry]) {
+		entry, ok = actions.Get(codeHash)
+
+		if !ok {
+			return
 		}
-		return repository.OidcCode{}, err
+
+		if entry.ClientID != clientId {
+			ok = false
+			return
+		}
+
+		// Since the code can only be used once, we delete it from the cache after retrieving it
+		actions.Delete(codeHash)
+	})
+
+	if !ok {
+		return nil, false
 	}
 
-	if time.Now().Unix() > oidcCode.ExpiresAt {
-		err = service.queries.DeleteOidcCode(c, codeHash)
-		if err != nil {
-			return repository.OidcCode{}, err
-		}
-		err = service.DeleteUserinfo(c, oidcCode.Sub)
-		if err != nil {
-			return repository.OidcCode{}, err
-		}
-		return repository.OidcCode{}, ErrCodeExpired
-	}
-
-	if oidcCode.ClientID != clientId {
-		return repository.OidcCode{}, ErrInvalidClient
-	}
-
-	return oidcCode, nil
+	return &entry, true
 }
 
-func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user repository.OidcUserinfo, scope string, nonce string) (string, error) {
+func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user UserinfoResponse, scope string, nonce string, authTime *int64) (string, error) {
 	createdAt := time.Now().Unix()
 	expiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 
@@ -503,6 +572,10 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 		Nonce:             nonce,
 	}
 
+	if authTime != nil {
+		claims.AuthTime = *authTime
+	}
+
 	payload, err := json.Marshal(claims)
 
 	if err != nil {
@@ -524,17 +597,11 @@ func (service *OIDCService) generateIDToken(client model.OIDCClientConfig, user 
 	return token, nil
 }
 
-func (service *OIDCService) GenerateAccessToken(c *gin.Context, client model.OIDCClientConfig, codeEntry repository.OidcCode) (TokenResponse, error) {
-	user, err := service.GetUserinfo(c, codeEntry.Sub)
+func (service *OIDCService) GenerateAccessToken(ctx context.Context, client model.OIDCClientConfig, codeEntry AuthorizeCodeEntry, authTime int64) (*TokenResponse, error) {
+	idToken, err := service.generateIDToken(client, codeEntry.Userinfo, codeEntry.Scope, codeEntry.Nonce, &authTime)
 
 	if err != nil {
-		return TokenResponse{}, err
-	}
-
-	idToken, err := service.generateIDToken(client, user, codeEntry.Scope, codeEntry.Nonce)
-
-	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	accessToken := utils.GenerateString(32)
@@ -554,56 +621,69 @@ func (service *OIDCService) GenerateAccessToken(c *gin.Context, client model.OID
 		Scope:        strings.ReplaceAll(codeEntry.Scope, ",", " "),
 	}
 
-	_, err = service.queries.CreateOidcToken(c, repository.CreateOidcTokenParams{
-		Sub:                   codeEntry.Sub,
+	var userInfoJson []byte
+
+	userInfoJson, err = json.Marshal(codeEntry.Userinfo)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = service.queries.CreateOIDCSession(ctx, repository.CreateOIDCSessionParams{
+		Sub:                   codeEntry.Userinfo.Sub,
 		AccessTokenHash:       service.Hash(accessToken),
 		RefreshTokenHash:      service.Hash(refreshToken),
-		ClientID:              client.ClientID,
 		Scope:                 codeEntry.Scope,
+		ClientID:              client.ClientID,
 		TokenExpiresAt:        tokenExpiresAt,
 		RefreshTokenExpiresAt: refreshTokenExpiresAt,
 		Nonce:                 codeEntry.Nonce,
-		CodeHash:              codeEntry.CodeHash,
+		UserinfoJson:          string(userInfoJson),
 	})
 
 	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
-	return tokenResponse, nil
+	return &tokenResponse, nil
 }
 
-func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken string, reqClientId string) (TokenResponse, error) {
-	entry, err := service.queries.GetOidcTokenByRefreshToken(c, service.Hash(refreshToken))
+func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken string, clientId string) (*TokenResponse, error) {
+	entry, err := service.queries.GetOIDCSessionByRefreshTokenHash(ctx, service.Hash(refreshToken))
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return TokenResponse{}, ErrTokenNotFound
+			return nil, ErrTokenNotFound
 		}
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	if entry.RefreshTokenExpiresAt < time.Now().Unix() {
-		return TokenResponse{}, ErrTokenExpired
+		return nil, ErrTokenExpired
 	}
 
 	// Ensure the client ID in the request matches the client ID in the token
-	if entry.ClientID != reqClientId {
-		return TokenResponse{}, ErrInvalidClient
+	if entry.ClientID != clientId {
+		return nil, ErrInvalidClient
 	}
 
-	user, err := service.GetUserinfo(c, entry.Sub)
+	// we need to unmarshal the userinfo from the database to include it in the new ID token,
+	// since the ID token includes user claims for better compatibility with existing apps
+	var userInfo UserinfoResponse
+
+	err = json.Unmarshal([]byte(entry.UserinfoJson), &userInfo)
 
 	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
+	// TODO: store auth time in the database so we can include it in the new ID token, for now we omit it
 	idToken, err := service.generateIDToken(model.OIDCClientConfig{
 		ClientID: entry.ClientID,
-	}, user, entry.Scope, entry.Nonce)
+	}, userInfo, entry.Scope, entry.Nonce, nil)
 
 	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
 	accessToken := utils.GenerateString(32)
@@ -621,71 +701,54 @@ func (service *OIDCService) RefreshAccessToken(c *gin.Context, refreshToken stri
 		Scope:        strings.ReplaceAll(entry.Scope, ",", " "),
 	}
 
-	_, err = service.queries.UpdateOidcTokenByRefreshToken(c, repository.UpdateOidcTokenByRefreshTokenParams{
+	_, err = service.queries.UpdateOIDCSession(ctx, repository.UpdateOIDCSessionParams{
+		Sub:                   entry.Sub,
 		AccessTokenHash:       service.Hash(accessToken),
 		RefreshTokenHash:      service.Hash(newRefreshToken),
+		Scope:                 entry.Scope,
+		ClientID:              entry.ClientID,
 		TokenExpiresAt:        tokenExpiresAt,
 		RefreshTokenExpiresAt: refreshTokenExpiresAt,
-		RefreshTokenHash_2:    service.Hash(refreshToken), // that's the selector, it's not stored in the db
+		Nonce:                 entry.Nonce,
+		UserinfoJson:          entry.UserinfoJson,
 	})
 
 	if err != nil {
-		return TokenResponse{}, err
+		return nil, err
 	}
 
-	return tokenResponse, nil
+	return &tokenResponse, nil
 }
 
-func (service *OIDCService) DeleteCodeEntry(c *gin.Context, codeHash string) error {
-	return service.queries.DeleteOidcCode(c, codeHash)
-}
-
-func (service *OIDCService) DeleteUserinfo(c *gin.Context, sub string) error {
-	return service.queries.DeleteOidcUserInfo(c, sub)
-}
-
-func (service *OIDCService) DeleteToken(c *gin.Context, tokenHash string) error {
-	return service.queries.DeleteOidcToken(c, tokenHash)
-}
-
-func (service *OIDCService) DeleteTokenByCodeHash(c *gin.Context, codeHash string) error {
-	return service.queries.DeleteOidcTokenByCodeHash(c, codeHash)
-}
-
-func (service *OIDCService) GetAccessToken(c *gin.Context, tokenHash string) (repository.OidcToken, error) {
-	entry, err := service.queries.GetOidcToken(c, tokenHash)
+func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash string) (*repository.OidcSession, error) {
+	entry, err := service.queries.GetOIDCSessionByAccessTokenHash(ctx, tokenHash)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return repository.OidcToken{}, ErrTokenNotFound
+			return nil, ErrTokenNotFound
 		}
-		return repository.OidcToken{}, err
+		return nil, err
 	}
 
 	if entry.TokenExpiresAt < time.Now().Unix() {
-		// If refresh token is expired, delete the token and userinfo since there is no way for the client to access anything anymore
+		// If refresh token is expired, delete the session
+		// since there is no way for the client to access anything anymore
 		if entry.RefreshTokenExpiresAt < time.Now().Unix() {
-			err := service.DeleteToken(c, tokenHash)
+			// Deletes by sub
+			err := service.queries.DeleteOIDCSessionBySub(ctx, entry.Sub)
 			if err != nil {
-				return repository.OidcToken{}, err
+				return nil, err
 			}
-			err = service.DeleteUserinfo(c, entry.Sub)
-			if err != nil {
-				return repository.OidcToken{}, err
-			}
+			return nil, ErrTokenExpired
 		}
-		return repository.OidcToken{}, ErrTokenExpired
+		return nil, ErrTokenExpired
 	}
 
-	return entry, nil
+	return &entry, nil
 }
 
-func (service *OIDCService) GetUserinfo(c *gin.Context, sub string) (repository.OidcUserinfo, error) {
-	return service.queries.GetOidcUserInfo(c, sub)
-}
-
-func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope string) UserinfoResponse {
-	scopes := strings.Split(scope, ",") // split by comma since it's a db entry
+func (service *OIDCService) CompileUserinfo(user UserinfoResponse, scope string) UserinfoResponse {
+	scopes := strings.Split(scope, " ")
 	userInfo := UserinfoResponse{
 		Sub:       user.Sub,
 		UpdatedAt: user.UpdatedAt,
@@ -713,11 +776,7 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 	}
 
 	if slices.Contains(scopes, "groups") {
-		if user.Groups != "" {
-			userInfo.Groups = strings.Split(user.Groups, ",")
-		} else {
-			userInfo.Groups = []string{}
-		}
+		userInfo.Groups = user.Groups
 	}
 
 	if slices.Contains(scopes, "phone") {
@@ -727,10 +786,7 @@ func (service *OIDCService) CompileUserinfo(user repository.OidcUserinfo, scope 
 	}
 
 	if slices.Contains(scopes, "address") {
-		var addr model.AddressClaim
-		if err := json.Unmarshal([]byte(user.Address), &addr); err == nil {
-			userInfo.Address = &addr
-		}
+		userInfo.Address = user.Address
 	}
 
 	return userInfo
@@ -743,25 +799,16 @@ func (service *OIDCService) Hash(token string) string {
 }
 
 func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) error {
-	err := service.queries.DeleteOidcCodeBySub(ctx, sub)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return err
-	}
-	err = service.queries.DeleteOidcTokenBySub(ctx, sub)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return err
-	}
-	err = service.queries.DeleteOidcUserInfo(ctx, sub)
+	err := service.queries.DeleteOIDCSessionBySub(ctx, sub)
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
 	return nil
 }
 
-// Cleanup routine - Resource heavy due to the linked tables
-func (service *OIDCService) cleanupRoutine() {
+func (service *OIDCService) cleanupRoutine(ctx context.Context) {
 	service.log.App.Debug().Msg("Starting OIDC cleanup routine")
-	ticker := time.NewTicker(time.Duration(30) * time.Minute)
+	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -771,50 +818,18 @@ func (service *OIDCService) cleanupRoutine() {
 
 			currentTime := time.Now().Unix()
 
-			// For the OIDC tokens, if they are expired we delete the userinfo and codes
-			expiredTokens, err := service.queries.DeleteExpiredOidcTokens(service.context, repository.DeleteExpiredOidcTokensParams{
+			// Limitation of sqlc, meaning we need to specify a timestamp for both token and refresh token expiry
+			err := service.queries.DeleteExpiredOIDCSessions(ctx, repository.DeleteExpiredOIDCSessionsParams{
 				TokenExpiresAt:        currentTime,
 				RefreshTokenExpiresAt: currentTime,
 			})
 
 			if err != nil {
-				service.log.App.Warn().Err(err).Msg("Failed to delete expired tokens")
-			}
-
-			for _, expiredToken := range expiredTokens {
-				err := service.DeleteOldSession(service.context, expiredToken.Sub)
-				if err != nil {
-					service.log.App.Warn().Err(err).Msg("Failed to delete session for expired token")
-				}
-			}
-
-			// For expired codes, we need to get the sub, check if tokens are expired and if they are remove everything
-			expiredCodes, err := service.queries.DeleteExpiredOidcCodes(service.context, currentTime)
-
-			if err != nil {
-			service.log.App.Warn().Err(err).Msg("Failed to delete expired codes")
-			}
-
-			for _, expiredCode := range expiredCodes {
-				token, err := service.queries.GetOidcTokenBySub(service.context, expiredCode.Sub)
-
-				if err != nil {
-					if !errors.Is(err, repository.ErrNotFound) {
-						service.log.App.Warn().Err(err).Msg("Failed to get token by sub for expired code")
-					}
-					continue
-				}
-
-				if token.TokenExpiresAt < currentTime && token.RefreshTokenExpiresAt < currentTime {
-					err := service.DeleteOldSession(service.context, expiredCode.Sub)
-					if err != nil {
-						service.log.App.Warn().Err(err).Msg("Failed to delete session for expired code")
-					}
-				}
+				service.log.App.Warn().Err(err).Msg("Failed to delete expired OIDC sessions")
 			}
 
 			service.log.App.Debug().Msg("Finished OIDC cleanup routine")
-		case <-service.context.Done():
+		case <-ctx.Done():
 			service.log.App.Debug().Msg("Stopping OIDC cleanup routine")
 			return
 		}
@@ -853,4 +868,105 @@ func (service *OIDCService) hashAndEncodePKCE(codeVerifier string) string {
 	hasher := sha256.New()
 	hasher.Write([]byte(codeVerifier))
 	return base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
+}
+
+// WARNING: Since Tinyauth is stateless, we cannot have a sub that never changes.
+// We will just create a uuid out of the username and client name which remains stable,
+// but if username or client name changes then sub changes too.
+func (service *OIDCService) CreateSub(userContext model.UserContext, clientId string) string {
+	return utils.GenerateUUID(fmt.Sprintf("%s:%s", userContext.GetUsername(), clientId))
+}
+
+func (service *OIDCService) IsCodeUsed(codeHash string) (string, bool) {
+	entry, ok := service.caches.usedCode.Get(codeHash)
+
+	if !ok {
+		return "", false
+	}
+
+	return entry.Sub, true
+}
+
+func (service *OIDCService) MarkCodeAsUsed(codeHash string, sub string) {
+	entry := UsedCodeEntry{
+		Sub: sub,
+	}
+	service.caches.usedCode.Set(codeHash, entry, 2*time.Minute)
+}
+
+func (service *OIDCService) DeleteSessionBySub(ctx context.Context, sub string) error {
+	return service.queries.DeleteOIDCSessionBySub(ctx, sub)
+}
+
+func (service *OIDCService) CreateAuthorizeRequestTicket(req AuthorizeRequest) string {
+	ticket := utils.GenerateString(32)
+
+	service.caches.authorize.Set(ticket, req, 10*time.Minute)
+
+	return ticket
+}
+
+func (service *OIDCService) GetAuthorizeRequestByTicket(ticket string) (*AuthorizeRequest, bool) {
+	entry, ok := service.caches.authorize.Get(ticket)
+
+	if !ok {
+		return nil, false
+	}
+
+	return &entry, true
+}
+
+func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
+	service.caches.authorize.Delete(ticket)
+}
+
+// TODO: support signed request objects in the future
+func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRequest, error) {
+	var claims jwt.MapClaims
+
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &claims)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authorize request jwt: %w", err)
+	}
+
+	alg, ok := token.Header["alg"].(string)
+
+	if !ok || alg != "none" || string(token.Signature) != "" {
+		return nil, fmt.Errorf("only unsigned jwts are supported for authorize requests")
+	}
+
+	get := func(k string) string {
+		v, _ := claims[k].(string)
+		return v
+	}
+
+	return &AuthorizeRequest{
+		Scope:               get("scope"),
+		ResponseType:        get("response_type"),
+		ClientID:            get("client_id"),
+		RedirectURI:         get("redirect_uri"),
+		State:               get("state"),
+		Nonce:               get("nonce"),
+		CodeChallenge:       get("code_challenge"),
+		CodeChallengeMethod: get("code_challenge_method"),
+		Prompt:              get("prompt"),
+	}, nil
+}
+
+func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
+	if prompt == "" {
+		return []OIDCPrompt{}
+	}
+
+	parsedPromps := make([]OIDCPrompt, 0)
+	prompts := strings.SplitSeq(prompt, " ")
+
+	for p := range prompts {
+		if !slices.Contains(SupportedPrompts, p) {
+			continue
+		}
+		parsedPromps = append(parsedPromps, OIDCPrompt(p))
+	}
+
+	return parsedPromps
 }

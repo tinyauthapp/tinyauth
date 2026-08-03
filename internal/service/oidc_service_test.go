@@ -1,37 +1,25 @@
-package service_test
+package service
 
 import (
 	"context"
-	"encoding/json"
-	"sync"
 	"testing"
 
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/service"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func newTestUser() repository.OidcUserinfo {
-	addr := model.AddressClaim{
-		Formatted:     "123 Main St",
-		StreetAddress: "123 Main St",
-		Locality:      "Springfield",
-		Region:        "IL",
-		PostalCode:    "62701",
-		Country:       "US",
-	}
-	addrJSON, _ := json.Marshal(addr)
-
-	return repository.OidcUserinfo{
+func newTestUser() UserinfoResponse {
+	return UserinfoResponse{
 		Sub:               "test-sub",
 		Name:              "Test User",
 		PreferredUsername: "testuser",
 		Email:             "test@example.com",
-		Groups:            "admins,users",
+		Groups:            []string{"admins", "users"},
 		UpdatedAt:         1234567890,
 		GivenName:         "Test",
 		FamilyName:        "User",
@@ -45,7 +33,14 @@ func newTestUser() repository.OidcUserinfo {
 		Zoneinfo:          "America/Chicago",
 		Locale:            "en-US",
 		PhoneNumber:       "+15555550100",
-		Address:           string(addrJSON),
+		Address: &model.AddressClaim{
+			Formatted:     "123 Main St",
+			StreetAddress: "123 Main St",
+			Locality:      "Springfield",
+			Region:        "IL",
+			PostalCode:    "62701",
+			Country:       "US",
+		},
 	}
 }
 
@@ -70,23 +65,31 @@ func TestCompileUserinfo(t *testing.T) {
 	log.Init()
 
 	ctx := context.TODO()
-	wg := &sync.WaitGroup{}
+	dg := ding.New(ctx)
 
-	svc, err := service.NewOIDCService(log, cfg, runtime, nil, ctx, wg)
+	store := memory.New()
+
+	svc, err := NewOIDCService(OIDCServiceInput{
+		Log:     log,
+		Config:  &cfg,
+		Runtime: &runtime,
+		Queries: store,
+		Ding:    dg,
+	})
 	require.NoError(t, err)
 
 	type testCase struct {
 		description string
-		mutate      func(u *repository.OidcUserinfo)
+		mutate      func(u *UserinfoResponse)
 		scope       string
-		run         func(t *testing.T, info service.UserinfoResponse)
+		run         func(t *testing.T, info UserinfoResponse)
 	}
 
 	tests := []testCase{
 		{
 			description: "openid scope only returns sub and updated_at",
 			scope:       "openid",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, "test-sub", info.Sub)
 				assert.Equal(t, int64(1234567890), info.UpdatedAt)
 				assert.Empty(t, info.Name)
@@ -98,8 +101,8 @@ func TestCompileUserinfo(t *testing.T) {
 		},
 		{
 			description: "profile scope returns all profile fields",
-			scope:       "openid,profile",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid profile",
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, "Test User", info.Name)
 				assert.Equal(t, "testuser", info.PreferredUsername)
 				assert.Equal(t, "Test", info.GivenName)
@@ -118,8 +121,8 @@ func TestCompileUserinfo(t *testing.T) {
 		},
 		{
 			description: "email scope sets email and email_verified true when email present",
-			scope:       "openid,email",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid email",
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, "test@example.com", info.Email)
 				assert.True(t, info.EmailVerified)
 				assert.Empty(t, info.Name)
@@ -127,17 +130,17 @@ func TestCompileUserinfo(t *testing.T) {
 		},
 		{
 			description: "email scope sets email_verified false when email absent",
-			scope:       "openid,email",
-			mutate:      func(u *repository.OidcUserinfo) { u.Email = "" },
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid email",
+			mutate:      func(u *UserinfoResponse) { u.Email = "" },
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Empty(t, info.Email)
 				assert.False(t, info.EmailVerified)
 			},
 		},
 		{
 			description: "phone scope sets phone_number_verified true when phone present",
-			scope:       "openid,phone",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid phone",
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, "+15555550100", info.PhoneNumber)
 				require.NotNil(t, info.PhoneNumberVerified)
 				assert.True(t, *info.PhoneNumberVerified)
@@ -145,17 +148,17 @@ func TestCompileUserinfo(t *testing.T) {
 		},
 		{
 			description: "phone scope sets phone_number_verified false when phone absent",
-			scope:       "openid,phone",
-			mutate:      func(u *repository.OidcUserinfo) { u.PhoneNumber = "" },
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid phone",
+			mutate:      func(u *UserinfoResponse) { u.PhoneNumber = "" },
+			run: func(t *testing.T, info UserinfoResponse) {
 				require.NotNil(t, info.PhoneNumberVerified)
 				assert.False(t, *info.PhoneNumberVerified)
 			},
 		},
 		{
 			description: "address scope returns parsed address",
-			scope:       "openid,address",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid address",
+			run: func(t *testing.T, info UserinfoResponse) {
 				require.NotNil(t, info.Address)
 				assert.Equal(t, "123 Main St", info.Address.Formatted)
 				assert.Equal(t, "123 Main St", info.Address.StreetAddress)
@@ -166,32 +169,16 @@ func TestCompileUserinfo(t *testing.T) {
 			},
 		},
 		{
-			description: "address scope with invalid JSON omits address",
-			scope:       "openid,address",
-			mutate:      func(u *repository.OidcUserinfo) { u.Address = "not-valid-json" },
-			run: func(t *testing.T, info service.UserinfoResponse) {
-				assert.Nil(t, info.Address)
-			},
-		},
-		{
 			description: "groups scope returns split groups",
-			scope:       "openid,groups",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid groups",
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, []string{"admins", "users"}, info.Groups)
 			},
 		},
 		{
-			description: "groups scope returns empty slice when no groups",
-			scope:       "openid,groups",
-			mutate:      func(u *repository.OidcUserinfo) { u.Groups = "" },
-			run: func(t *testing.T, info service.UserinfoResponse) {
-				assert.Equal(t, []string{}, info.Groups)
-			},
-		},
-		{
 			description: "all scopes return all fields",
-			scope:       "openid,profile,email,phone,address,groups",
-			run: func(t *testing.T, info service.UserinfoResponse) {
+			scope:       "openid profile email phone address groups",
+			run: func(t *testing.T, info UserinfoResponse) {
 				assert.Equal(t, "Test User", info.Name)
 				assert.Equal(t, "test@example.com", info.Email)
 				assert.Equal(t, "+15555550100", info.PhoneNumber)

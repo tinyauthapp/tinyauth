@@ -12,16 +12,9 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
-)
-
-type Listener int
-
-const (
-	ListenerHTTP Listener = iota
-	ListenerUnix
-	ListenerTailscale
 )
 
 func (app *BootstrapApp) setupRouter() error {
@@ -37,111 +30,126 @@ func (app *BootstrapApp) setupRouter() error {
 		if err != nil {
 			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
+
+		app.runtime.TrustedProxiesConfigured = true
+	} else {
+		err := engine.SetTrustedProxies(nil)
+
+		if err != nil {
+			return fmt.Errorf("failed to set trusted proxies: %w", err)
+		}
+
+		app.log.App.Warn().Msg("Trusted proxies are not configured, IP access controls will NOT work")
 	}
 
-	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService, app.services.tailscaleService)
-	engine.Use(contextMiddleware.Middleware())
+	middlewareProvideFor := []any{
+		middleware.NewContextMiddleware,
+		middleware.NewUIMiddleware,
+		middleware.NewZerologMiddleware,
+	}
 
-	uiMiddleware, err := middleware.NewUIMiddleware()
+	for _, provider := range middlewareProvideFor {
+		err := app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide middleware: %w", err)
+		}
+	}
+
+	type middlewareInput struct {
+		dig.In
+
+		ContextMiddleware *middleware.ContextMiddleware
+		UIMiddleware      *middleware.UIMiddleware
+		ZerologMiddleware *middleware.ZerologMiddleware
+	}
+
+	err := app.dig.Invoke(func(mi middlewareInput) {
+		engine.Use(mi.ContextMiddleware.Middleware())
+		engine.Use(mi.UIMiddleware.Middleware())
+		engine.Use(mi.ZerologMiddleware.Middleware())
+	})
 
 	if err != nil {
-		return fmt.Errorf("failed to initialize UI middleware: %w", err)
+		return fmt.Errorf("failed to invoke middleware: %w", err)
 	}
 
-	engine.Use(uiMiddleware.Middleware())
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return &engine.RouterGroup
+	}, dig.Name("mainRouterGroup"))
 
-	zerologMiddleware := middleware.NewZerologMiddleware(app.log)
+	if err != nil {
+		return fmt.Errorf("failed to provide main router group: %w", err)
+	}
 
-	engine.Use(zerologMiddleware.Middleware())
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return engine.Group("/api")
+	}, dig.Name("apiRouterGroup"))
 
-	apiRouter := engine.Group("/api")
+	if err != nil {
+		return fmt.Errorf("failed to provide api router group: %w", err)
+	}
 
-	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, apiRouter)
-	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService, app.services.policyEngine)
-	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
-	controller.NewResourcesController(app.config, &engine.RouterGroup)
-	controller.NewHealthController(apiRouter)
-	controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
+	controllerProvideFor := []any{
+		controller.NewContextController,
+		controller.NewOAuthController,
+		controller.NewOIDCController,
+		controller.NewProxyController,
+		controller.NewUserController,
+		controller.NewResourcesController,
+		controller.NewHealthController,
+		controller.NewWellKnownController,
+	}
+
+	for _, provider := range controllerProvideFor {
+		err := app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide controller: %w", err)
+		}
+	}
+
+	type controllerInput struct {
+		dig.In
+
+		ContextController   *controller.ContextController
+		OAuthController     *controller.OAuthController
+		OIDCController      *controller.OIDCController
+		ProxyController     *controller.ProxyController
+		UserController      *controller.UserController
+		ResourcesController *controller.ResourcesController
+		HealthController    *controller.HealthController
+		WellKnownController *controller.WellKnownController
+	}
+
+	// force dig to build all controllers and register their routes
+	err = app.dig.Invoke(func(ci controllerInput) error {
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke controllers: %w", err)
+	}
 
 	app.router = engine
 	return nil
 }
 
-func (app *BootstrapApp) runListeners() (chan error, error) {
-	// lec -> listener error channel
-	lec := make(chan error, len(app.listeners))
-
-	for _, listenerType := range app.listeners {
-		listenerFunc, err := app.listenerFromType(listenerType)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to get listener function: %w", err)
-		}
-
-		app.wg.Go(func() {
-			lec <- listenerFunc()
-		})
-	}
-
-	return lec, nil
-}
-
-// The way we calculate listeners is as follows:
-// If concurrent listeners are disabled, we pick the first available listener, so:
-// 1. If tailscale is enabled, we use tailscale
-// 2. If socket path is configured, we use unix socket
-// 3. Finally if none is configured we use http
-// If concurrent listeners are enabled, we add all available listeners in the following order
-func (app *BootstrapApp) calculateListenerPolicy() []Listener {
-	l := []Listener{}
-
-	if !app.config.Server.ConcurrentListenersEnabled {
-		if app.services.tailscaleService != nil {
-			l = append(l, ListenerTailscale)
-			return l
-		}
-
-		if app.config.Server.SocketPath != "" {
-			l = append(l, ListenerUnix)
-			return l
-		}
-
-		l = append(l, ListenerHTTP)
-		return l
-	}
-
+// Top down
+// 1. Unix socket (if server.socketPath)
+// 2. HTTP - default
+func (app *BootstrapApp) getListenerFunc() (func(ctx context.Context) error, error) {
 	if app.config.Server.SocketPath != "" {
-		l = append(l, ListenerUnix)
-	}
-
-	if app.services.tailscaleService != nil {
-		l = append(l, ListenerTailscale)
-	}
-
-	l = append(l, ListenerHTTP)
-
-	return l
-}
-
-func (app *BootstrapApp) listenerFromType(listenerType Listener) (func() error, error) {
-	switch listenerType {
-	case ListenerHTTP:
-		return app.serveHTTP, nil
-	case ListenerUnix:
 		return app.serveUnix, nil
-	case ListenerTailscale:
-		return app.serveTailscale, nil
-	default:
-		return nil, fmt.Errorf("invalid listener type: %d", listenerType)
 	}
+
+	return app.serveHTTP, nil
 }
 
-func (app *BootstrapApp) serveHTTP() error {
+func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
 	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
 
-	app.log.App.Info().Msgf("Starting server on %s", address)
+	app.log.App.Info().Msgf("Starting server on http://%s", address)
 
 	listener, err := net.Listen("tcp", address)
 
@@ -154,10 +162,10 @@ func (app *BootstrapApp) serveHTTP() error {
 		Handler: app.router.Handler(),
 	}
 
-	return app.serve(listener, server, "http")
+	return app.serve(listener, server, ctx, "http")
 }
 
-func (app *BootstrapApp) serveUnix() error {
+func (app *BootstrapApp) serveUnix(ctx context.Context) error {
 	_, err := os.Stat(app.config.Server.SocketPath)
 
 	if err == nil {
@@ -181,43 +189,23 @@ func (app *BootstrapApp) serveUnix() error {
 		Handler: app.router.Handler(),
 	}
 
-	return app.serve(listener, server, "unix socket")
+	return app.serve(listener, server, ctx, "unix socket")
 }
 
-func (app *BootstrapApp) serveTailscale() error {
-	app.log.App.Info().Msgf("Starting Tailscale server on %s", fmt.Sprintf("https://%s", app.services.tailscaleService.GetHostname()))
-
-	listener, err := app.services.tailscaleService.CreateListener()
-
-	if err != nil {
-		return fmt.Errorf("failed to create tailscale listener: %w", err)
-	}
-
-	server := &http.Server{
-		Handler: app.router.Handler(),
-	}
-
-	return app.serve(listener, server, "tailscale")
-}
-
-func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, name string) error {
+func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, ctx context.Context, name string) error {
 	shutdown := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
+		// we use a new context for the shutdown since the main one is cancelled
+		sctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
 		defer cancel()
-		err := server.Shutdown(ctx)
-		if err != nil &&
-			// With tailscale, the goroutine for shutting down the tailscale connection
-			// runs first and causes the connection the tailscale listener is running on to close
-			// first so, the shutdown fails
-			// TODO: add priority to the goroutine shutdowns
-			!errors.Is(err, net.ErrClosed) {
+		err := server.Shutdown(sctx)
+		if err != nil {
 			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
 		}
 		listener.Close()
 	}
 
 	go func() {
-		<-app.ctx.Done()
+		<-ctx.Done()
 		app.log.App.Debug().Msgf("Shutting down %s listener", name)
 		shutdown()
 	}()
@@ -225,7 +213,6 @@ func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, name 
 	err := server.Serve(listener)
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		shutdown()
 		return fmt.Errorf("failed to start %s listener: %w", name, err)
 	}
 

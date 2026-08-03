@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -37,25 +39,32 @@ var (
 
 type ContextMiddleware struct {
 	log       *logger.Logger
-	runtime   model.RuntimeConfig
+	runtime   *model.RuntimeConfig
+	config    *model.Config
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
 }
 
-func NewContextMiddleware(
-	log *logger.Logger,
-	runtime model.RuntimeConfig,
-	auth *service.AuthService,
-	broker *service.OAuthBrokerService,
-	tailscale *service.TailscaleService,
-) *ContextMiddleware {
+type ContextMiddlewareInput struct {
+	dig.In
+
+	Log              *logger.Logger
+	RuntimeConfig    *model.RuntimeConfig
+	StaticConfig     *model.Config
+	AuthService      *service.AuthService
+	BrokerService    *service.OAuthBrokerService
+	TailscaleService *service.TailscaleService
+}
+
+func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 	return &ContextMiddleware{
-		log:       log,
-		runtime:   runtime,
-		auth:      auth,
-		broker:    broker,
-		tailscale: tailscale,
+		log:       i.Log,
+		runtime:   i.RuntimeConfig,
+		config:    i.StaticConfig,
+		auth:      i.AuthService,
+		broker:    i.BrokerService,
+		tailscale: i.TailscaleService,
 	}
 }
 
@@ -69,7 +78,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
 		if err == nil {
-			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.RemoteIP())
+			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.ClientIP())
 
 			if err == nil {
 				if cookie != nil {
@@ -107,10 +116,10 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		// Lastly check if we have a tailscale session to add
 		if m.tailscale != nil {
-			tailscaleContext, err := m.tailscaleWhois(c.Request.Context(), c.RemoteIP())
+			tailscaleContext, err := m.tailscaleWhois(c.ClientIP())
 
 			if err != nil {
-				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.RemoteIP(), err)
+				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.ClientIP(), err)
 			}
 
 			if tailscaleContext != nil {
@@ -162,7 +171,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
 	case model.ProviderTailscale:
-		tailscaleContext, err := m.tailscaleWhois(ctx, ip)
+		tailscaleContext, err := m.tailscaleWhois(ip)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error performing tailscale whois: %w", err)
@@ -170,6 +179,10 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 		if tailscaleContext == nil {
 			return nil, nil, fmt.Errorf("tailscale whois returned no result for IP: %s", ip)
+		}
+
+		if tailscaleContext.Email != userContext.Tailscale.Email {
+			return nil, nil, fmt.Errorf("device owner mismatch, login again")
 		}
 
 		userContext.Tailscale = tailscaleContext
@@ -235,6 +248,9 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 	search, err := m.auth.SearchUser(username)
 
 	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			m.auth.DummyPasswordCheck(password)
+		}
 		return nil, nil, fmt.Errorf("error searching for user: %w", err)
 	}
 
@@ -269,7 +285,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		}
 		userContext.Provider = model.ProviderLocal
 	case model.UserLDAP:
-		user, err := m.auth.GetLDAPUser(username)
+		user, err := m.auth.GetLDAPUser(search.Username)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
@@ -303,12 +319,12 @@ func (m *ContextMiddleware) isIgnorePath(path string) bool {
 	return false
 }
 
-func (m *ContextMiddleware) tailscaleWhois(ctx context.Context, ip string) (*model.TailscaleContext, error) {
+func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, error) {
 	if m.tailscale == nil {
 		return nil, nil
 	}
 
-	whois, err := m.tailscale.Whois(ctx, ip)
+	whois, err := m.tailscale.Whois(ip)
 
 	if err != nil {
 		m.log.App.Error().Err(err).Msgf("Error performing Tailscale whois for IP %s: %v", ip, err)
@@ -321,16 +337,16 @@ func (m *ContextMiddleware) tailscaleWhois(ctx context.Context, ip string) (*mod
 
 	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
-			Username: whois.NodeName,
-			Email:    whois.LoginName,
-			Name:     whois.DisplayName,
+			Email: whois.LoginName,
+			Name:  whois.DisplayName,
 		},
-		UserID: whois.UserID,
-		Tags:   whois.Tags,
+		NodeName: whois.NodeName,
 	}
 
-	if !strings.ContainsAny(uctx.Email, "@") {
-		uctx.Email = utils.CompileUserEmail(uctx.Email+"-tailscale", m.runtime.CookieDomain)
+	if m.config.Experimental.OAuthBridgeEnabled {
+		uctx.BaseContext.Username = strings.SplitN(whois.LoginName, "@", 2)[0]
+	} else {
+		uctx.BaseContext.Username = strings.Replace(whois.LoginName, "@", "_", 1)
 	}
 
 	return &uctx, nil
