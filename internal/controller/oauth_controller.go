@@ -7,14 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/dig"
-
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"github.com/tinyauthapp/tinyauth/pkg/validators"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
