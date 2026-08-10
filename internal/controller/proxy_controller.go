@@ -47,6 +47,7 @@ type ProxyContext struct {
 	Host      string
 	Proto     string
 	Path      string
+	PathRaw   string
 	Method    string
 	Type      AuthModuleType
 	IsBrowser bool
@@ -281,7 +282,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	}
 
 	queries, err := query.Values(RedirectQuery{
-		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.Path),
+		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.PathRaw),
 		LoginFor:    FrontendLoginForApp,
 	})
 
@@ -402,11 +403,11 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   uri,
-		Method: method,
-		Type:   ForwardAuth,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: uri,
+		Method:  method,
+		Type:    ForwardAuth,
 	}, nil
 }
 
@@ -435,15 +436,14 @@ func (controller *ProxyController) getAuthRequestContext(c *gin.Context) (ProxyC
 		return ProxyContext{}, errors.New("proto not found")
 	}
 
-	path := url.Path
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   path,
-		Method: method,
-		Type:   AuthRequest,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: url.RequestURI(),
+		Method:  method,
+		Type:    AuthRequest,
 	}, nil
 }
 
@@ -469,11 +469,11 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   path,
-		Method: method,
-		Type:   ExtAuthz,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: path,
+		Method:  method,
+		Type:    ExtAuthz,
 	}, nil
 }
 
@@ -552,8 +552,8 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 		return ProxyContext{}, err
 	}
 
-	// remove any query params from the request path
-	upath, err := url.Parse(ctx.Path)
+	// Parse the raw path to populate the cleaned path used for ACLs
+	upath, err := url.Parse(ctx.PathRaw)
 
 	if err != nil {
 		return ProxyContext{}, fmt.Errorf("failed to parse request path: %v", err)

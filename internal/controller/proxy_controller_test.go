@@ -96,6 +96,38 @@ func TestProxyController(t *testing.T) {
 			},
 		},
 		{
+			description: "Forward auth login redirect should preserve query parameters",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "test.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/?foo=bar")
+				req.Header.Set("user-agent", browserUserAgent)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/?foo=bar"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
+			},
+		},
+		{
+			description: "Auth request (nginx) login redirect should preserve query parameters",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/nginx", nil)
+				req.Header.Set("x-original-url", "https://test.example.com/?foo=bar")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+				location := recorder.Header().Get("x-tinyauth-location")
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/?foo=bar"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
+			},
+		},
+		{
 			description: "Auth request (nginx) should be detected and used",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
@@ -122,6 +154,22 @@ func TestProxyController(t *testing.T) {
 				assert.Equal(t, http.StatusFound, recorder.Code)
 				location := recorder.Header().Get("Location")
 				assert.Contains(t, location, url.QueryEscape("https://test.example.com/hello"))
+				assert.Contains(t, location, "login_for=app")
+				assert.Contains(t, location, "https://tinyauth.example.com/login")
+			},
+		},
+		{
+			description: "Ext authz (envoy) login redirect should preserve query parameters",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=%2Fhello%3Ffoo%3Dbar", nil)
+				req.Host = "test.example.com"
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("user-agent", browserUserAgent)
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/hello?foo=bar"))
 				assert.Contains(t, location, "login_for=app")
 				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
