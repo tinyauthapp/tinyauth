@@ -102,13 +102,13 @@ func TestProxyController(t *testing.T) {
 				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
 				req.Header.Set("x-forwarded-host", "test.example.com")
 				req.Header.Set("x-forwarded-proto", "https")
-				req.Header.Set("x-forwarded-uri", "/?foo=bar")
+				req.Header.Set("x-forwarded-uri", "/search?foo=bar")
 				req.Header.Set("user-agent", browserUserAgent)
 				router.ServeHTTP(recorder, req)
 
 				assert.Equal(t, http.StatusFound, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Contains(t, location, url.QueryEscape("https://test.example.com/?foo=bar"))
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/search?foo=bar"))
 				assert.Contains(t, location, "login_for=app")
 				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
@@ -118,11 +118,11 @@ func TestProxyController(t *testing.T) {
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				req := httptest.NewRequest("GET", "/api/auth/nginx", nil)
-				req.Header.Set("x-original-url", "https://test.example.com/?foo=bar")
+				req.Header.Set("x-original-url", "https://test.example.com/search?foo=bar")
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 				location := recorder.Header().Get("x-tinyauth-location")
-				assert.Contains(t, location, url.QueryEscape("https://test.example.com/?foo=bar"))
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com/search?foo=bar"))
 				assert.Contains(t, location, "login_for=app")
 				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
