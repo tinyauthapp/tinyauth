@@ -107,3 +107,11 @@ docker-distroless:
 		--build-arg=BUILD_TIMESTAMP=$(BUILD_TIMESTAMP) \
 		--build-arg=BUILD_TAGS=$(BUILD_TAGS) \
 		-f Dockerfile.distroless .
+
+# Lint the frontend
+lint-webui:
+	cd frontend && pnpm lint
+
+# Format the code
+fmt:
+	go fmt ./...

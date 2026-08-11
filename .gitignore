@@ -50,7 +50,10 @@ __debug_*
 config.certify.yml
 
 # deepsec
-/.deepsec
+/.deepsec/
 
 # jetbrains
 /.idea/
+
+# claude stuff
+/.claude/
