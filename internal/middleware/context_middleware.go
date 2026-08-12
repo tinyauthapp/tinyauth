@@ -204,7 +204,11 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 		}
 
 		userContext.LDAP.Groups = user.Groups
-		userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		if search.Name != "" {
+			userContext.LDAP.Name = search.Name
+		} else {
+			userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		}
 
 		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
 		if search.Email != "" {
@@ -291,10 +295,14 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
+		name := search.Name
+		if name == "" {
+			name = utils.Capitalize(username)
+		}
 		userContext.LDAP = &model.LDAPContext{
 			BaseContext: model.BaseContext{
 				Username: username,
-				Name:     utils.Capitalize(username),
+				Name:     name,
 			},
 			Groups: user.Groups,
 		}

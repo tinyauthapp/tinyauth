@@ -194,6 +194,9 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		if search.Email != "" {
 			sessionCookie.Email = search.Email
 		}
+		if search.Name != "" {
+			sessionCookie.Name = search.Name
+		}
 	}
 
 	cookie, err := controller.auth.CreateSession(c, sessionCookie)

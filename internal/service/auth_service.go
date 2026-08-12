@@ -173,7 +173,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 	}
 
 	if auth.ldap != nil {
-		userDN, email, err := auth.ldap.GetUserInfo(username)
+		userDN, email, cn, err := auth.ldap.GetUserInfo(username)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ldap user: %w", err)
@@ -182,6 +182,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 		return &model.UserSearch{
 			Username: userDN,
 			Email:    email,
+			Name:     cn,
 			Type:     model.UserLDAP,
 		}, nil
 	}

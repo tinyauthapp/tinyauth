@@ -146,7 +146,7 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 	return ldap.conn, nil
 }
 
-func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, err error) {
+func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, cn string, err error) {
 	escapedUsername := ldapgo.EscapeFilter(username)
 	filter := fmt.Sprintf(ldap.config.LDAP.SearchFilter, escapedUsername)
 
@@ -154,7 +154,7 @@ func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, 
 		ldap.config.LDAP.BaseDN,
 		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{"dn", "mail"},
+		[]string{"dn", "mail", "cn"},
 		nil,
 	)
 
@@ -163,15 +163,15 @@ func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, 
 
 	searchResult, err := ldap.conn.Search(searchRequest)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	if len(searchResult.Entries) != 1 {
-		return "", "", fmt.Errorf("multiple or no entries found for user %s", username)
+		return "", "", "", fmt.Errorf("multiple or no entries found for user %s", username)
 	}
 
 	entry := searchResult.Entries[0]
-	return entry.DN, entry.GetAttributeValue("mail"), nil
+	return entry.DN, entry.GetAttributeValue("mail"), entry.GetAttributeValue("cn"), nil
 }
 
 func (ldap *LdapService) GetUserCount() (int, error) {
