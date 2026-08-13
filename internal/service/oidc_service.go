@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"crypto"
-	"crypto/hmac"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -13,6 +14,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,7 +25,6 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -31,6 +32,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -308,9 +310,6 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 
 	for id, client := range i.Config.OIDC.Clients {
 		client.ID = id
-		if err := uuid.Validate(client.ClientID); err != nil {
-			return nil, fmt.Errorf("invalid client id: %w", err)
-		}
 		if client.Name == "" {
 			client.Name = utils.Capitalize(client.ID)
 		}
@@ -324,9 +323,6 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 			client.ClientSecret = secret
 		}
 		client.ClientSecretFile = ""
-		if len(client.ClientSecret) < 32 {
-			return nil, fmt.Errorf("client secret for client %s is too short, must be >= 32 chars", client.ClientID)
-		}
 		clients[id] = client
 		i.Log.App.Debug().Str("clientId", client.ClientID).Msg("Loaded OIDC client configuration")
 	}
@@ -928,7 +924,7 @@ func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
 	service.caches.authorize.Delete(ticket)
 }
 
-// TODO: support signed request objects in the future
+// DecodeAuthorizeJWT TODO: support signed request objects in the future
 func (service *OIDCService) DecodeAuthorizeJWT(tokenString string) (*AuthorizeRequest, error) {
 	var claims jwt.MapClaims
 
@@ -979,20 +975,82 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	return parsedPromps
 }
 
-func (service *OIDCService) CreateSignedValue(key string, data []byte) string {
-	// create the signature
-	h := hmac.New(sha256.New, []byte(key))
-	h.Write(data)
-	sig := base64.URLEncoding.EncodeToString(h.Sum(nil))
-
-	// hash the data
-	hasher := sha256.New()
-	hasher.Write(data)
-	hash := base64.URLEncoding.EncodeToString(hasher.Sum(nil))
-
-	return fmt.Sprintf("%s.%s", hash, sig)
+func (service *OIDCService) deriveKey(key string, info string) ([]byte, error) {
+	kdf := hkdf.New(sha256.New, []byte(key), []byte(model.HKDFSalt), []byte(info))
+	derived := make([]byte, 32)
+	if _, err := io.ReadFull(kdf, derived); err != nil {
+		return nil, fmt.Errorf("failed to derive key: %w", err)
+	}
+	return derived, nil
 }
 
-func (service *OIDCService) VerifySignedValue(key string, data []byte, signedValue string) bool {
-	return service.CreateSignedValue(key, data) == signedValue
+func (service *OIDCService) CreateSecureValue(key string, kv map[string]string) (string, error) {
+	aesKey, err := service.deriveKey(key, "oidc-scope-v1")
+	if err != nil {
+		return "", err
+	}
+
+	c, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to create aes cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return "", fmt.Errorf("failed to create gcm: %w", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	plain, err := json.Marshal(kv)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	sealed := gcm.Seal(nonce, nonce, plain, nil)
+	return base64.RawURLEncoding.EncodeToString(sealed), nil
+}
+
+func (service *OIDCService) DecryptSecureValue(key string, encrypted string) (map[string]string, error) {
+	data, err := base64.RawURLEncoding.DecodeString(encrypted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode value: %w", err)
+	}
+
+	aesKey, err := service.deriveKey(key, "oidc-scope-v1")
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := aes.NewCipher(aesKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create aes cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gcm: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+
+	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt secure value: %w", err)
+	}
+
+	kv := make(map[string]string) // make(), not var — nil map writes panic
+	if err := json.Unmarshal(plain, &kv); err != nil {
+		return nil, fmt.Errorf("failed to parse secure value: %w", err)
+	}
+
+	return kv, nil
 }

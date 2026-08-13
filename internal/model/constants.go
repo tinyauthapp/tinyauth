@@ -24,3 +24,5 @@ const OAuthSessionCookieName = "tinyauth-oauth"
 const OIDCScopeCookieName = "tinyauth-scope"
 
 const GracefulShutdownTimeout = 5 // seconds
+
+const HKDFSalt = "tinyauth-hkdf-salt-v1"

@@ -245,18 +245,40 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
-	cookieId := strings.SplitN(client.ClientID, "-", 2)[0]
-	cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
-	scopeCookie, err := c.Cookie(cookieName)
+	checkSkipAuthorize := func() {
+		cookieId := client.ClientID[8:]
+		cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
+		scopeCookie, err := c.Cookie(cookieName)
 
-	if err == nil {
-		scopes := fmt.Sprintf("scopes=%s;", req.Scope)
-		if controller.oidc.VerifySignedValue(client.ClientSecret, []byte(scopes), scopeCookie) {
-			if values.OIDCPrompt != service.OIDCPromptLogin {
-				values.OIDCPrompt = service.OIDCPromptNone
-			}
+		if err != nil || userContext == nil || !userContext.Authenticated {
+			return
+		}
+
+		kv, err := controller.oidc.DecryptSecureValue(client.ClientSecret, scopeCookie)
+		if err != nil {
+			controller.log.App.Warn().Err(err).Msg("Failed to decrypt scope cookie")
+			return
+		}
+
+		scope, ok := kv["scope"]
+		if !ok {
+			controller.log.App.Warn().Str("cookieName", cookieName).Msg("Failed to get scopes from scope cookie")
+			return
+		}
+
+		username, ok := kv["username"]
+		if !ok {
+			controller.log.App.Warn().Str("cookieName", cookieName).Msg("Failed to get username from scope cookie")
+			return
+		}
+
+		if username == userContext.GetUsername() &&
+			values.OIDCPrompt != service.OIDCPromptLogin &&
+			scope == req.Scope {
+			values.OIDCPrompt = service.OIDCPromptNone
 		}
 	}
+	checkSkipAuthorize()
 
 	queries, err := query.Values(values)
 
@@ -386,20 +408,28 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	}
 
 	// Set a cookie for the consent screen (approved scopes)
-	cookieId := strings.SplitN(client.ClientID, "-", 2)[0]
+	cookieId := client.ClientID[8:]
 	cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
-	scopes := fmt.Sprintf("scopes=%s;", authorizeReq.Scope)
 
-	cookie := &http.Cookie{
-		Name:     cookieName,
-		Value:    controller.oidc.CreateSignedValue(client.ClientSecret, []byte(scopes)),
-		Path:     "/",
-		Secure:   controller.config.Auth.SecureCookie,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+	secureSignedValue, err := controller.oidc.CreateSecureValue(client.ClientSecret, map[string]string{
+		"username": userContext.GetUsername(),
+		"scope":    authorizeReq.Scope,
+	})
+
+	if err == nil {
+		cookie := &http.Cookie{
+			Name:     cookieName,
+			Value:    secureSignedValue,
+			Path:     "/",
+			Secure:   controller.config.Auth.SecureCookie,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		}
+
+		http.SetCookie(c.Writer, cookie)
+	} else {
+		controller.log.App.Warn().Err(err).Msg("Failed to create scope cookie")
 	}
-
-	http.SetCookie(c.Writer, cookie)
 
 	q := cu.Query()
 
