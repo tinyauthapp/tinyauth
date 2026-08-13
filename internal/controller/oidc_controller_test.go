@@ -171,6 +171,102 @@ func TestOIDCController(t *testing.T) {
 			},
 		},
 		{
+			description: "Authorize skips the consent screen when all requested scopes were already granted",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid profile", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				q := url.Values{}
+				q.Set("scope", "openid profile")
+				q.Set("response_type", "code")
+				q.Set("client_id", "some-client-id")
+				q.Set("redirect_uri", "https://test.example.com/callback")
+
+				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
+				assert.Contains(t, location, "oidc_prompt=none")
+			},
+		},
+		{
+			description: "Authorize shows the consent screen when a new scope is requested",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				q := url.Values{}
+				q.Set("scope", "openid profile")
+				q.Set("response_type", "code")
+				q.Set("client_id", "some-client-id")
+				q.Set("redirect_uri", "https://test.example.com/callback")
+
+				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
+				assert.NotContains(t, location, "oidc_prompt=none")
+			},
+		},
+		{
+			description: "Authorize skips the consent screen for a subset of already granted scopes",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid profile email", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				q := url.Values{}
+				q.Set("scope", "openid profile")
+				q.Set("response_type", "code")
+				q.Set("client_id", "some-client-id")
+				q.Set("redirect_uri", "https://test.example.com/callback")
+
+				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
+				assert.Contains(t, location, "oidc_prompt=none")
+			},
+		},
+		{
+			description: "Authorize shows the consent screen when no consent was granted yet",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				require.NoError(t, store.DeleteOIDCConsentByClientID(ctx, "some-client-id"))
+
+				q := url.Values{}
+				q.Set("scope", "openid profile")
+				q.Set("response_type", "code")
+				q.Set("client_id", "some-client-id")
+				q.Set("redirect_uri", "https://test.example.com/callback")
+
+				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
+				assert.NotContains(t, location, "oidc_prompt=none")
+			},
+		},
+		{
 			description: "Authorize redirects to error screen when the request object is invalid",
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				req := httptest.NewRequest("GET", "/authorize?request=not-a-valid-jwt", nil)

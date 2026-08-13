@@ -35,7 +35,6 @@ type OIDCController struct {
 	log     *logger.Logger
 	oidc    *service.OIDCService
 	runtime *model.RuntimeConfig
-	config  *model.Config
 }
 
 type AuthorizeCallback struct {
@@ -89,7 +88,6 @@ type OIDCControllerInput struct {
 
 	Log           *logger.Logger
 	OIDCService   *service.OIDCService
-	Config        *model.Config
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	MainRouter    *gin.RouterGroup `name:"mainRouterGroup"`
@@ -100,7 +98,6 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 		log:     i.Log,
 		oidc:    i.OIDCService,
 		runtime: i.RuntimeConfig,
-		config:  i.Config,
 	}
 
 	i.MainRouter.POST("/authorize", controller.authorize)
@@ -245,40 +242,15 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
-	checkSkipAuthorize := func() {
-		cookieId := client.ClientID[8:]
-		cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
-		scopeCookie, err := c.Cookie(cookieName)
+	if userContext != nil && userContext.Authenticated && values.OIDCPrompt != service.OIDCPromptLogin {
+		consent, err := controller.oidc.GetOIDCConsent(c, userContext.GetUsername(), req.ClientID)
 
-		if err != nil || userContext == nil || !userContext.Authenticated {
-			return
-		}
-
-		kv, err := controller.oidc.DecryptSecureValue(client.ClientSecret, scopeCookie)
 		if err != nil {
-			controller.log.App.Warn().Err(err).Msg("Failed to decrypt scope cookie")
-			return
-		}
-
-		scope, ok := kv["scope"]
-		if !ok {
-			controller.log.App.Warn().Str("cookieName", cookieName).Msg("Failed to get scopes from scope cookie")
-			return
-		}
-
-		username, ok := kv["username"]
-		if !ok {
-			controller.log.App.Warn().Str("cookieName", cookieName).Msg("Failed to get username from scope cookie")
-			return
-		}
-
-		if username == userContext.GetUsername() &&
-			values.OIDCPrompt != service.OIDCPromptLogin &&
-			scope == req.Scope {
+			controller.log.App.Warn().Err(err).Msg("Failed to get OIDC consent")
+		} else if consent != nil && scopesGranted(consent.Scope, req.Scope) {
 			values.OIDCPrompt = service.OIDCPromptNone
 		}
 	}
-	checkSkipAuthorize()
 
 	queries, err := query.Values(values)
 
@@ -407,28 +379,9 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		return
 	}
 
-	// Set a cookie for the consent screen (approved scopes)
-	cookieId := client.ClientID[8:]
-	cookieName := fmt.Sprintf("%s-%s", controller.runtime.ScopeCookieName, cookieId)
-
-	secureSignedValue, err := controller.oidc.CreateSecureValue(client.ClientSecret, map[string]string{
-		"username": userContext.GetUsername(),
-		"scope":    authorizeReq.Scope,
-	})
-
-	if err == nil {
-		cookie := &http.Cookie{
-			Name:     cookieName,
-			Value:    secureSignedValue,
-			Path:     "/",
-			Secure:   controller.config.Auth.SecureCookie,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		}
-
-		http.SetCookie(c.Writer, cookie)
-	} else {
-		controller.log.App.Warn().Err(err).Msg("Failed to create scope cookie")
+	// Store the consent granted by the user for this client
+	if _, err := controller.oidc.UpsertOIDCConsent(c, userContext.GetUsername(), authorizeReq.Scope, client.ClientID); err != nil {
+		controller.log.App.Warn().Err(err).Msg("Failed to store OIDC consent")
 	}
 
 	q := cu.Query()
@@ -830,4 +783,21 @@ func (controller *OIDCController) resolveNormalParams(c *gin.Context) (*service.
 	}
 
 	return &req, nil
+}
+
+// scopesGranted reports whether every scope in requested is present in the
+// space-separated granted scope string.
+func scopesGranted(granted, requested string) bool {
+	grantedScopes := strings.Split(granted, " ")
+
+	for _, scope := range strings.Split(requested, " ") {
+		if scope == "" {
+			continue
+		}
+		if !slices.Contains(grantedScopes, scope) {
+			return false
+		}
+	}
+
+	return true
 }

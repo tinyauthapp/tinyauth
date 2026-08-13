@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"crypto"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -14,7 +12,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -32,7 +29,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
-	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -338,6 +334,11 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 		privateKey: privateKey,
 		publicKey:  rPublicKey,
 		issuer:     issuer,
+	}
+
+	// Remove consents for clients that are no longer configured
+	if err := service.reconcileOIDCConsents(context.Background()); err != nil {
+		i.Log.App.Warn().Err(err).Msg("Failed to reconcile OIDC consents")
 	}
 
 	// Start cleanup routine
@@ -975,82 +976,104 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	return parsedPromps
 }
 
-func (service *OIDCService) deriveKey(key string, info string) ([]byte, error) {
-	kdf := hkdf.New(sha256.New, []byte(key), []byte(model.HKDFSalt), []byte(info))
-	derived := make([]byte, 32)
-	if _, err := io.ReadFull(kdf, derived); err != nil {
-		return nil, fmt.Errorf("failed to derive key: %w", err)
+func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
+	entry, err := service.queries.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
+		Username: username,
+		ClientID: clientId,
+	})
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get oidc consent: %w", err)
 	}
-	return derived, nil
+
+	return &entry, nil
 }
 
-func (service *OIDCService) CreateSecureValue(key string, kv map[string]string) (string, error) {
-	aesKey, err := service.deriveKey(key, "oidc-scope-v1")
+func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, scope, clientId string) (repository.OidcConsent, error) {
+	existing, err := service.GetOIDCConsent(ctx, username, clientId)
+
 	if err != nil {
-		return "", err
+		return repository.OidcConsent{}, err
 	}
 
-	c, err := aes.NewCipher(aesKey)
+	merged := scope
+
+	if existing != nil {
+		merged = mergeScopes(existing.Scope, scope)
+	}
+
+	entry := repository.UpsertOIDCConsentParams{
+		Username:  username,
+		Scope:     merged,
+		ClientID:  clientId,
+		CreatedAt: time.Now().Unix(),
+	}
+
+	consent, err := service.queries.UpsertOIDCConsent(ctx, entry)
+
 	if err != nil {
-		return "", fmt.Errorf("failed to create aes cipher: %w", err)
+		service.log.App.Error().Err(err).Msg("Failed to upsert OIDC consent")
+		return repository.OidcConsent{}, err
 	}
 
-	gcm, err := cipher.NewGCM(c)
-	if err != nil {
-		return "", fmt.Errorf("failed to create gcm: %w", err)
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", fmt.Errorf("failed to generate nonce: %w", err)
-	}
-
-	plain, err := json.Marshal(kv)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal data: %w", err)
-	}
-
-	sealed := gcm.Seal(nonce, nonce, plain, nil)
-	return base64.RawURLEncoding.EncodeToString(sealed), nil
+	return consent, nil
 }
 
-func (service *OIDCService) DecryptSecureValue(key string, encrypted string) (map[string]string, error) {
-	data, err := base64.RawURLEncoding.DecodeString(encrypted)
+func (service *OIDCService) reconcileOIDCConsents(ctx context.Context) error {
+	consents, err := service.queries.ListOIDCConsents(ctx)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode value: %w", err)
+		return fmt.Errorf("failed to list oidc consents: %w", err)
 	}
 
-	aesKey, err := service.deriveKey(key, "oidc-scope-v1")
-	if err != nil {
-		return nil, err
+	cleaned := make(map[string]struct{})
+
+	for _, consent := range consents {
+		if _, ok := cleaned[consent.ClientID]; ok {
+			continue
+		}
+
+		cleaned[consent.ClientID] = struct{}{}
+
+		if _, ok := service.clients[consent.ClientID]; ok {
+			continue
+		}
+
+		service.log.App.Info().Str("clientId", consent.ClientID).Msg("Removed OIDC client no longer in configuration, deleting its consents")
+
+		if err := service.queries.DeleteOIDCConsentByClientID(ctx, consent.ClientID); err != nil {
+			service.log.App.Warn().Err(err).Str("clientId", consent.ClientID).Msg("Failed to delete OIDC consents for removed client")
+		}
 	}
 
-	c, err := aes.NewCipher(aesKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create aes cipher: %w", err)
+	return nil
+}
+
+func mergeScopes(existing, requested string) string {
+	set := make(map[string]struct{})
+
+	for _, scope := range strings.Split(existing, " ") {
+		if scope != "" {
+			set[scope] = struct{}{}
+		}
 	}
 
-	gcm, err := cipher.NewGCM(c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create gcm: %w", err)
+	for _, scope := range strings.Split(requested, " ") {
+		if scope != "" {
+			set[scope] = struct{}{}
+		}
 	}
 
-	nonceSize := gcm.NonceSize()
-	if len(data) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+	scopes := make([]string, 0, len(set))
+
+	for scope := range set {
+		scopes = append(scopes, scope)
 	}
 
-	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	slices.Sort(scopes)
 
-	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt secure value: %w", err)
-	}
-
-	kv := make(map[string]string) // make(), not var — nil map writes panic
-	if err := json.Unmarshal(plain, &kv); err != nil {
-		return nil, fmt.Errorf("failed to parse secure value: %w", err)
-	}
-
-	return kv, nil
+	return strings.Join(scopes, " ")
 }

@@ -94,3 +94,46 @@ func (s *Store) DeleteExpiredOIDCSessions(_ context.Context, arg repository.Dele
 	}
 	return nil
 }
+
+func consentKey(username, clientID string) string {
+	return username + "\x00" + clientID
+}
+
+func (s *Store) UpsertOIDCConsent(_ context.Context, arg repository.UpsertOIDCConsentParams) (repository.OidcConsent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	oc := repository.OidcConsent(arg)
+	s.oidcConsents[consentKey(arg.Username, arg.ClientID)] = oc
+	return oc, nil
+}
+
+func (s *Store) GetOIDCConsentByUsernameAndClientID(_ context.Context, arg repository.GetOIDCConsentByUsernameAndClientIDParams) (repository.OidcConsent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	oc, ok := s.oidcConsents[consentKey(arg.Username, arg.ClientID)]
+	if !ok {
+		return repository.OidcConsent{}, repository.ErrNotFound
+	}
+	return oc, nil
+}
+
+func (s *Store) DeleteOIDCConsentByClientID(_ context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, oc := range s.oidcConsents {
+		if oc.ClientID == clientID {
+			delete(s.oidcConsents, key)
+		}
+	}
+	return nil
+}
+
+func (s *Store) ListOIDCConsents(_ context.Context) ([]repository.OidcConsent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]repository.OidcConsent, 0, len(s.oidcConsents))
+	for _, oc := range s.oidcConsents {
+		out = append(out, oc)
+	}
+	return out, nil
+}

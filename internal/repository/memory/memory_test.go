@@ -277,6 +277,80 @@ func TestMemoryStore(t *testing.T) {
 				assert.NoError(t, err)
 			},
 		},
+		{
+			description: "Upsert creates a consent for each user+client pair",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-a", Scope: "openid profile", CreatedAt: 1,
+				})
+				require.NoError(t, err)
+				_, err = s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-b", Scope: "openid email", CreatedAt: 2,
+				})
+				require.NoError(t, err)
+
+				consents, err := s.ListOIDCConsents(ctx)
+				require.NoError(t, err)
+				assert.Len(t, consents, 2)
+
+				gotA, err := s.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{Username: "alice", ClientID: "client-a"})
+				require.NoError(t, err)
+				assert.Equal(t, "openid profile", gotA.Scope)
+
+				gotB, err := s.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{Username: "alice", ClientID: "client-b"})
+				require.NoError(t, err)
+				assert.Equal(t, "openid email", gotB.Scope)
+			},
+		},
+		{
+			description: "Upsert overwrites the same consent row",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-a", Scope: "openid", CreatedAt: 1,
+				})
+				require.NoError(t, err)
+
+				_, err = s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-a", Scope: "openid email", CreatedAt: 2,
+				})
+				require.NoError(t, err)
+
+				consents, err := s.ListOIDCConsents(ctx)
+				require.NoError(t, err)
+				assert.Len(t, consents, 1)
+
+				got, err := s.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{Username: "alice", ClientID: "client-a"})
+				require.NoError(t, err)
+				assert.Equal(t, "openid email", got.Scope)
+			},
+		},
+		{
+			description: "Get consent by username and client not found",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{Username: "alice", ClientID: "client-a"})
+				assert.ErrorIs(t, err, repository.ErrNotFound)
+			},
+		},
+		{
+			description: "Delete consent by client id",
+			run: func(t *testing.T, s repository.Store) {
+				_, err := s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-a", Scope: "openid", CreatedAt: 1,
+				})
+				require.NoError(t, err)
+				_, err = s.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "alice", ClientID: "client-b", Scope: "openid", CreatedAt: 2,
+				})
+				require.NoError(t, err)
+
+				require.NoError(t, s.DeleteOIDCConsentByClientID(ctx, "client-a"))
+
+				consents, err := s.ListOIDCConsents(ctx)
+				require.NoError(t, err)
+				assert.Len(t, consents, 1)
+				assert.Equal(t, "client-b", consents[0].ClientID)
+			},
+		},
 	}
 
 	for _, test := range tests {

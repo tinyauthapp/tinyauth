@@ -5,7 +5,6 @@ type RuntimeConfig struct {
 	UUID                     string
 	CookieDomain             string
 	SessionCookieName        string
-	ScopeCookieName          string
 	OAuthSessionCookieName   string
 	LocalUsers               []LocalUser
 	OAuthProviders           map[string]OAuthServiceConfig

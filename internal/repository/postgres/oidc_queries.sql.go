@@ -80,6 +80,16 @@ func (q *Queries) DeleteExpiredOIDCSessions(ctx context.Context, arg DeleteExpir
 	return err
 }
 
+const deleteOIDCConsentByClientID = `-- name: DeleteOIDCConsentByClientID :exec
+DELETE FROM "oidc_consents"
+WHERE "client_id" = $1
+`
+
+func (q *Queries) DeleteOIDCConsentByClientID(ctx context.Context, clientID string) error {
+	_, err := q.db.ExecContext(ctx, deleteOIDCConsentByClientID, clientID)
+	return err
+}
+
 const deleteOIDCSessionBySub = `-- name: DeleteOIDCSessionBySub :exec
 DELETE FROM "oidc_sessions"
 WHERE "sub" = $1
@@ -88,6 +98,28 @@ WHERE "sub" = $1
 func (q *Queries) DeleteOIDCSessionBySub(ctx context.Context, sub string) error {
 	_, err := q.db.ExecContext(ctx, deleteOIDCSessionBySub, sub)
 	return err
+}
+
+const getOIDCConsentByUsernameAndClientID = `-- name: GetOIDCConsentByUsernameAndClientID :one
+SELECT username, client_id, scope, created_at FROM "oidc_consents"
+WHERE "username" = $1 AND "client_id" = $2
+`
+
+type GetOIDCConsentByUsernameAndClientIDParams struct {
+	Username string
+	ClientID string
+}
+
+func (q *Queries) GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg GetOIDCConsentByUsernameAndClientIDParams) (OidcConsent, error) {
+	row := q.db.QueryRowContext(ctx, getOIDCConsentByUsernameAndClientID, arg.Username, arg.ClientID)
+	var i OidcConsent
+	err := row.Scan(
+		&i.Username,
+		&i.ClientID,
+		&i.Scope,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getOIDCSessionByAccessTokenHash = `-- name: GetOIDCSessionByAccessTokenHash :one
@@ -156,6 +188,38 @@ func (q *Queries) GetOIDCSessionBySub(ctx context.Context, sub string) (OidcSess
 	return i, err
 }
 
+const listOIDCConsents = `-- name: ListOIDCConsents :many
+SELECT username, client_id, scope, created_at FROM "oidc_consents"
+`
+
+func (q *Queries) ListOIDCConsents(ctx context.Context) ([]OidcConsent, error) {
+	rows, err := q.db.QueryContext(ctx, listOIDCConsents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OidcConsent
+	for rows.Next() {
+		var i OidcConsent
+		if err := rows.Scan(
+			&i.Username,
+			&i.ClientID,
+			&i.Scope,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateOIDCSession = `-- name: UpdateOIDCSession :one
 UPDATE "oidc_sessions" SET
     "access_token_hash" = $1,
@@ -205,6 +269,46 @@ func (q *Queries) UpdateOIDCSession(ctx context.Context, arg UpdateOIDCSessionPa
 		&i.RefreshTokenExpiresAt,
 		&i.Nonce,
 		&i.UserinfoJson,
+	)
+	return i, err
+}
+
+const upsertOIDCConsent = `-- name: UpsertOIDCConsent :one
+INSERT INTO "oidc_consents" (
+    "username",
+    "client_id",
+    "scope",
+    "created_at"
+) VALUES (
+    $1, $2, $3, $4
+)
+ON CONFLICT ("username", "client_id")
+DO UPDATE SET
+    "scope" = excluded.scope,
+    "created_at" = excluded.created_at
+RETURNING username, client_id, scope, created_at
+`
+
+type UpsertOIDCConsentParams struct {
+	Username  string
+	ClientID  string
+	Scope     string
+	CreatedAt int64
+}
+
+func (q *Queries) UpsertOIDCConsent(ctx context.Context, arg UpsertOIDCConsentParams) (OidcConsent, error) {
+	row := q.db.QueryRowContext(ctx, upsertOIDCConsent,
+		arg.Username,
+		arg.ClientID,
+		arg.Scope,
+		arg.CreatedAt,
+	)
+	var i OidcConsent
+	err := row.Scan(
+		&i.Username,
+		&i.ClientID,
+		&i.Scope,
+		&i.CreatedAt,
 	)
 	return i, err
 }

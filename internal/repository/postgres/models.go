@@ -4,6 +4,13 @@
 
 package postgres
 
+type OidcConsent struct {
+	Username  string
+	ClientID  string
+	Scope     string
+	CreatedAt int64
+}
+
 type OidcSession struct {
 	Sub                   string
 	AccessTokenHash       string

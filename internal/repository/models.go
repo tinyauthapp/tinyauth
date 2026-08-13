@@ -84,3 +84,22 @@ type DeleteExpiredOIDCSessionsParams struct {
 	TokenExpiresAt        int64
 	RefreshTokenExpiresAt int64
 }
+
+type OidcConsent struct {
+	Username  string
+	ClientID  string
+	Scope     string
+	CreatedAt int64
+}
+
+type UpsertOIDCConsentParams struct {
+	Username  string
+	ClientID  string
+	Scope     string
+	CreatedAt int64
+}
+
+type GetOIDCConsentByUsernameAndClientIDParams struct {
+	Username string
+	ClientID string
+}

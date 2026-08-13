@@ -21,8 +21,5 @@ var ReservedProviderNames = []string{"local", "ldap", "tailscale"}
 
 const SessionCookieName = "tinyauth-session"
 const OAuthSessionCookieName = "tinyauth-oauth"
-const OIDCScopeCookieName = "tinyauth-scope"
 
 const GracefulShutdownTimeout = 5 // seconds
-
-const HKDFSalt = "tinyauth-hkdf-salt-v1"

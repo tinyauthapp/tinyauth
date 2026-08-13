@@ -46,3 +46,29 @@ UPDATE "oidc_sessions" SET
     "userinfo_json" = ?
 WHERE "sub" = ?
 RETURNING *;
+
+-- name: UpsertOIDCConsent :one
+INSERT INTO "oidc_consents" (
+    "username",
+    "client_id",
+    "scope",
+    "created_at"
+) VALUES (
+    ?, ?, ?, ?
+)
+ON CONFLICT ("username", "client_id")
+DO UPDATE SET
+    "scope" = excluded.scope,
+    "created_at" = excluded.created_at
+RETURNING *;
+
+-- name: GetOIDCConsentByUsernameAndClientID :one
+SELECT * FROM "oidc_consents"
+WHERE "username" = ? AND "client_id" = ?;
+
+-- name: DeleteOIDCConsentByClientID :exec
+DELETE FROM "oidc_consents"
+WHERE "client_id" = ?;
+
+-- name: ListOIDCConsents :many
+SELECT * FROM "oidc_consents";

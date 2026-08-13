@@ -27,4 +27,10 @@ type Store interface {
 	GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (OidcSession, error)
 	GetOIDCSessionBySub(ctx context.Context, sub string) (OidcSession, error)
 	UpdateOIDCSession(ctx context.Context, arg UpdateOIDCSessionParams) (OidcSession, error)
+
+	// OIDC Consents
+	UpsertOIDCConsent(ctx context.Context, arg UpsertOIDCConsentParams) (OidcConsent, error)
+	GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg GetOIDCConsentByUsernameAndClientIDParams) (OidcConsent, error)
+	DeleteOIDCConsentByClientID(ctx context.Context, clientID string) error
+	ListOIDCConsents(ctx context.Context) ([]OidcConsent, error)
 }
