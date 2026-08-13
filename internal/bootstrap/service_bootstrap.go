@@ -85,7 +85,8 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 			err := app.dig.Provide(service.NewKubernetesService)
 
 			if err != nil {
-				return nil, fmt.Errorf("failed to provide kubernetes service: %w", err)
+				app.log.App.Warn().Err(err).Msg("Failed to provide kubernetes service")
+				return nil, nil
 			}
 
 			err = app.dig.Invoke(func(k *service.KubernetesService) error {
@@ -94,7 +95,8 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 			})
 
 			if err != nil {
-				return nil, fmt.Errorf("failed to invoke kubernetes service: %w", err)
+				app.log.App.Warn().Err(err).Msg("Failed to invoke kubernetes service")
+				return nil, nil
 			}
 
 			// Kubernetes will fail to initialize with an error if it cannot connect to the cluster
@@ -114,7 +116,8 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		err := app.dig.Provide(service.NewDockerService)
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to provide docker service: %w", err)
+			app.log.App.Warn().Err(err).Msg("Failed to provide docker service")
+			return nil, nil
 		}
 
 		err = app.dig.Invoke(func(d *service.DockerService) error {
@@ -123,7 +126,8 @@ func (app *BootstrapApp) getLabelProvider() (service.LabelProvider, error) {
 		})
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to invoke docker service: %w", err)
+			app.log.App.Warn().Err(err).Msg("Failed to invoke docker service")
+			return nil, nil
 		}
 
 		if app.services.dockerService == nil {

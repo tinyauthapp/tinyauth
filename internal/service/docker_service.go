@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"strings"
+	"fmt"
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -31,7 +31,6 @@ type DockerServiceInput struct {
 }
 
 func NewDockerService(i DockerServiceInput) (*DockerService, error) {
-
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -68,49 +67,38 @@ func (docker *DockerService) inspectContainer(containerId string) (container.Ins
 	return docker.client.ContainerInspect(docker.context, containerId)
 }
 
-func (docker *DockerService) GetLabels(appDomain string) (*model.App, error) {
+func (docker *DockerService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !docker.isConnected {
 		docker.log.App.Debug().Msg("Docker service not connected, returning empty labels")
-		return nil, nil
+		return nil
 	}
 
 	containers, err := docker.getContainers()
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to get containers: %w", err)
 	}
 
 	for _, ctr := range containers {
 		inspect, err := docker.inspectContainer(ctr.ID)
 		if err != nil {
-			return nil, err
+			docker.log.App.Error().Err(err).Msgf("Failed to inspect container %s", ctr.ID)
+			continue
 		}
 
 		labels, err := decoders.DecodeLabels[model.Apps](inspect.Config.Labels, "apps")
 		if err != nil {
-			return nil, err
+			docker.log.App.Warn().Err(err).Msgf("Failed to decode labels for container %s", ctr.ID)
+			continue
 		}
 
-		var nameMatch *model.App
-
-		// First try to find a matching app by domain, then fallback to matching by app name (subdomain)
-		for appName, appLabels := range labels.Apps {
-			if appLabels.Config.Domain == appDomain {
-				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by domain")
-				return &appLabels, nil
+		for app, config := range labels.Apps {
+			if ok := locator(app, &config); ok {
+				return nil
 			}
-			if strings.SplitN(appDomain, ".", 2)[0] == appName {
-				docker.log.App.Debug().Str("id", inspect.ID).Str("name", inspect.Name).Msg("Found matching container by app name")
-				nameMatch = &appLabels
-			}
-		}
-
-		if nameMatch != nil {
-			return nameMatch, nil
 		}
 	}
 
-	docker.log.App.Debug().Str("domain", appDomain).Msg("No matching container found for domain")
-	return nil, nil
+	return nil
 }
 
 func (docker *DockerService) watchAndClose(ctx context.Context) {

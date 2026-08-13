@@ -542,7 +542,8 @@ func TestUserController(t *testing.T) {
 		Runtime: &runtime,
 		Ctx:     ctx,
 	})
-	authService := service.NewAuthService(service.AuthServiceInput{
+
+	authService, err := service.NewAuthService(service.AuthServiceInput{
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
@@ -554,6 +555,8 @@ func TestUserController(t *testing.T) {
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
+
+	require.NoError(t, err)
 
 	beforeEach := func() {
 		// Clear failed login attempts before each test

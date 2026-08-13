@@ -49,7 +49,6 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			ACLs: ACLsConfig{
 				Policy: "allow",
 			},
-			LockdownEnabled: true,
 		},
 		UI: UIConfig{
 			Title:                 "Tinyauth",
@@ -102,22 +101,23 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 }
 
 type Config struct {
-	AppURL        string             `description:"The base URL where the app is hosted." yaml:"appUrl,omitempty"`
-	Database      DatabaseConfig     `description:"Database configuration." yaml:"database,omitempty"`
-	Analytics     AnalyticsConfig    `description:"Analytics configuration." yaml:"analytics,omitempty"`
-	Resources     ResourcesConfig    `description:"Resources configuration." yaml:"resources,omitempty"`
-	Server        ServerConfig       `description:"Server configuration." yaml:"server,omitempty"`
-	Auth          AuthConfig         `description:"Authentication configuration." yaml:"auth,omitempty"`
-	Apps          map[string]App     `description:"Application ACLs configuration." yaml:"apps,omitempty"`
-	OAuth         OAuthConfig        `description:"OAuth configuration." yaml:"oauth,omitempty"`
-	OIDC          OIDCConfig         `description:"OIDC configuration." yaml:"oidc,omitempty"`
-	UI            UIConfig           `description:"UI customization." yaml:"ui,omitempty"`
-	LDAP          LDAPConfig         `description:"LDAP configuration." yaml:"ldap,omitempty"`
-	Experimental  ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
-	Tailscale     TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
-	LabelProvider string             `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
-	Log           LogConfig          `description:"Logging configuration." yaml:"log,omitempty"`
-	ConfigFile    string             `description:"Path to config file." yaml:"-"`
+	AppURL        string          `description:"The base URL where the app is hosted." yaml:"appUrl,omitempty"`
+	ConfigFile    string          `description:"Path to config file." yaml:"-" gen:"include"`
+	LabelProvider string          `description:"Label provider to use for ACLs (auto, docker, kubernetes or none to disable). auto detects the environment." yaml:"labelProvider,omitempty"`
+	Database      DatabaseConfig  `description:"Database configuration." yaml:"database,omitempty"`
+	Analytics     AnalyticsConfig `description:"Analytics configuration." yaml:"analytics,omitempty"`
+	Resources     ResourcesConfig `description:"Resources configuration." yaml:"resources,omitempty"`
+	Server        ServerConfig    `description:"Server configuration." yaml:"server,omitempty"`
+	Auth          AuthConfig      `description:"Authentication configuration." yaml:"auth,omitempty"`
+	Apps          map[string]App  `description:"Application ACLs configuration." yaml:"apps,omitempty"`
+	OAuth         OAuthConfig     `description:"OAuth configuration." yaml:"oauth,omitempty"`
+	OIDC          OIDCConfig      `description:"OIDC configuration." yaml:"oidc,omitempty"`
+	UI            UIConfig        `description:"UI customization." yaml:"ui,omitempty"`
+	LDAP          LDAPConfig      `description:"LDAP configuration." yaml:"ldap,omitempty"`
+	// enable the cli warning on experimental features
+	Experimental ExperimentalConfig `description:"Experimental features, use with caution." yaml:"experimental,omitempty"`
+	Tailscale    TailscaleConfig    `description:"Tailscale configuration." yaml:"tailscale,omitempty"`
+	Log          LogConfig          `description:"Logging configuration." yaml:"log,omitempty"`
 }
 
 type DatabaseConfig struct {
@@ -151,7 +151,6 @@ type AuthConfig struct {
 	SessionMaxLifetime int                       `description:"Maximum session lifetime in seconds." yaml:"sessionMaxLifetime,omitempty"`
 	LoginTimeout       int                       `description:"Login timeout in seconds." yaml:"loginTimeout,omitempty"`
 	LoginMaxRetries    int                       `description:"Maximum login retries." yaml:"loginMaxRetries,omitempty"`
-	LockdownEnabled    bool                      `description:"Enable lockdown mode after maximum login retries. Lockdown mode limit is calculated automatically." yaml:"lockdownEnabled,omitempty"`
 	TrustedProxies     []string                  `description:"Comma-separated list of trusted proxy addresses." yaml:"trustedProxies,omitempty"`
 	ACLs               ACLsConfig                `description:"ACLs configuration." yaml:"acls,omitempty"`
 }
@@ -239,7 +238,9 @@ type LogStreamConfig struct {
 	Level   string `description:"Log level for this stream. Use global if empty." yaml:"level,omitempty"`
 }
 
-type ExperimentalConfig struct{}
+type ExperimentalConfig struct {
+	OAuthBridgeEnabled bool `description:"Enable the OAuth bridge, uses a new way to format OAuth user information." yaml:"oauthBridgeEnabled,omitempty"`
+}
 
 type TailscaleConfig struct {
 	Enabled       bool   `description:"Enable Tailscale integration." yaml:"enabled,omitempty"`
@@ -331,6 +332,6 @@ type AppBasicAuth struct {
 }
 
 type AppPath struct {
-	Allow string `description:"Comma-separated list of allowed paths." yaml:"allow,omitempty"`
-	Block string `description:"Comma-separated list of blocked paths." yaml:"block,omitempty"`
+	Allow string `description:"Disable authentication for only paths that match the regex string." yaml:"allow,omitempty"`
+	Block string `description:"Enable authentication for only paths that match the regex string." yaml:"block,omitempty"`
 }

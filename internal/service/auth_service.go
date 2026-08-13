@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/steveiliop56/ding"
@@ -16,6 +15,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 
 	"github.com/google/uuid"
@@ -69,21 +69,13 @@ type AuthService struct {
 	tailscale    *TailscaleService
 	policyEngine *PolicyEngine
 
-	lockdown struct {
-		active     bool
-		until      time.Time
-		ctx        context.Context
-		cancelFunc context.CancelFunc
-		mu         sync.RWMutex
-	}
+	dummyHash string
 
 	caches struct {
-		login *CacheStore[LoginAttempt]
-		oauth *CacheStore[OAuthPendingSession]
-		ldap  *CacheStore[[]string]
+		login *cache.CacheStore[LoginAttempt]
+		oauth *cache.CacheStore[OAuthPendingSession]
+		ldap  *cache.CacheStore[[]string]
 	}
-
-	maxLoginLimits int
 }
 
 type AuthServiceInput struct {
@@ -101,7 +93,7 @@ type AuthServiceInput struct {
 	PolicyEngine *PolicyEngine
 }
 
-func NewAuthService(i AuthServiceInput) *AuthService {
+func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	service := &AuthService{
 		log:          i.Log,
 		runtime:      i.Runtime,
@@ -114,19 +106,19 @@ func NewAuthService(i AuthServiceInput) *AuthService {
 		policyEngine: i.PolicyEngine,
 	}
 
-	// get the max login limits based on the number of users and the configured max retries
-	service.maxLoginLimits = service.calculateLockdownLimit()
+	// dummy hash
+	dummyHash, err := bcrypt.GenerateFromPassword([]byte(utils.GenerateString(8)), bcrypt.DefaultCost)
 
-	loginCacheSize := 0
-
-	if !service.config.Auth.LockdownEnabled {
-		loginCacheSize = service.maxLoginLimits
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate dummy hash: %w", err)
 	}
 
+	service.dummyHash = string(dummyHash)
+
 	// caches setup
-	oauthCache := NewCacheStore[OAuthPendingSession](256)
-	loginCache := NewCacheStore[LoginAttempt](loginCacheSize)
-	ldapCache := NewCacheStore[[]string](1024)
+	oauthCache := cache.NewCacheStore[OAuthPendingSession](256)
+	loginCache := cache.NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
+	ldapCache := cache.NewCacheStore[[]string](1024)
 
 	service.caches.oauth = oauthCache
 	service.caches.login = loginCache
@@ -148,7 +140,28 @@ func NewAuthService(i AuthServiceInput) *AuthService {
 		}
 	}, ding.RingMinor)
 
-	return service
+	i.Ding.Go(func(ctx context.Context) {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				service.log.App.Debug().Msg("Updating login cache limits")
+				service.caches.login.SetMaxSize(service.calculateLockdownLimit())
+				service.log.App.Debug().Msg("Login cache limits updated")
+			case <-ctx.Done():
+				return
+			}
+		}
+
+	}, ding.RingMinor)
+
+	return service, nil
+}
+
+func (auth *AuthService) DummyPasswordCheck(password string) {
+	bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(password))
 }
 
 func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) {
@@ -160,7 +173,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 	}
 
 	if auth.ldap != nil {
-		userDN, email, err := auth.ldap.GetUserInfo(username)
+		userDN, email, cn, err := auth.ldap.GetUserInfo(username)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ldap user: %w", err)
@@ -169,6 +182,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 		return &model.UserSearch{
 			Username: userDN,
 			Email:    email,
+			Name:     cn,
 			Type:     model.UserLDAP,
 		}, nil
 	}
@@ -245,10 +259,6 @@ func (auth *AuthService) GetLDAPUser(userDN string) (*model.LDAPUser, error) {
 }
 
 func (auth *AuthService) IsAccountLocked(identifier string) (bool, int) {
-	if locked, remaining := auth.IsInLockdown(); locked {
-		return true, remaining
-	}
-
 	if auth.config.Auth.LoginMaxRetries <= 0 || auth.config.Auth.LoginTimeout <= 0 {
 		return false, 0
 	}
@@ -271,15 +281,7 @@ func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
 		return
 	}
 
-	if !success && auth.config.Auth.LockdownEnabled && auth.caches.login.Size() >= auth.maxLoginLimits {
-		if locked, _ := auth.IsInLockdown(); locked {
-			return
-		}
-		go auth.lockdownMode()
-		return
-	}
-
-	auth.caches.login.WithLock(func(actions CacheStoreActions[LoginAttempt]) {
+	auth.caches.login.WithLock(func(actions cache.CacheStoreActions[LoginAttempt]) {
 		entry, ok := actions.Get(identifier)
 
 		if !ok {
@@ -344,7 +346,7 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 		return nil, fmt.Errorf("tailscale service not configured, cannot create session for tailscale user")
 	}
 
-	uuid, err := uuid.NewRandom()
+	u, err := uuid.NewRandom()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate session uuid: %w", err)
@@ -361,7 +363,7 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 	expiresAt := time.Now().Add(time.Duration(expiry) * time.Second)
 
 	session := repository.CreateSessionParams{
-		UUID:        uuid.String(),
+		UUID:        u.String(),
 		Username:    data.Username,
 		Email:       data.Email,
 		Name:        data.Name,
@@ -616,62 +618,7 @@ func (auth *AuthService) GetOAuthPendingSession(sessionId string) (*OAuthPending
 	return &session, nil
 }
 
-func (auth *AuthService) lockdownMode() {
-	auth.lockdown.mu.Lock()
-
-	if auth.lockdown.active {
-		auth.lockdown.mu.Unlock()
-		return
-	}
-
-	ctx, cancel := context.WithCancel(auth.ctx)
-
-	auth.log.App.Warn().Msg("Too many failed login attempts, entering lockdown mode")
-
-	auth.lockdown.active = true
-	auth.lockdown.ctx = ctx
-	auth.lockdown.cancelFunc = cancel
-
-	d := time.Duration(auth.config.Auth.LoginTimeout) * time.Second
-	auth.lockdown.until = time.Now().Add(d)
-	timer := time.NewTimer(d)
-
-	auth.lockdown.mu.Unlock()
-
-	defer cancel()
-	defer timer.Stop()
-
-	select {
-	case <-timer.C:
-		// Timer expired, end lockdown
-	case <-ctx.Done():
-		// Context cancelled, end lockdown
-	}
-
-	auth.lockdown.mu.Lock()
-
-	auth.log.App.Info().Msg("Exiting lockdown mode")
-
-	auth.caches.login.Clear()
-	auth.lockdown.active = false
-	auth.lockdown.until = time.Time{}
-	auth.lockdown.ctx = nil
-	auth.lockdown.cancelFunc = nil
-
-	auth.lockdown.mu.Unlock()
-}
-
-func (auth *AuthService) IsInLockdown() (bool, int) {
-	auth.lockdown.mu.RLock()
-	defer auth.lockdown.mu.RUnlock()
-	if auth.lockdown.active {
-		remaining := int(time.Until(auth.lockdown.until).Seconds())
-		return true, remaining
-	}
-	return false, 0
-}
-
-// mostly a testing function, not useful for anything else
+// ClearLoginAttempts is a testing function, not useful for anything else
 func (auth *AuthService) ClearLoginAttempts() {
 	auth.caches.login.Clear()
 }

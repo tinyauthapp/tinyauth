@@ -30,6 +30,16 @@ func (app *BootstrapApp) setupRouter() error {
 		if err != nil {
 			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
+
+		app.runtime.TrustedProxiesConfigured = true
+	} else {
+		err := engine.SetTrustedProxies(nil)
+
+		if err != nil {
+			return fmt.Errorf("failed to set trusted proxies: %w", err)
+		}
+
+		app.log.App.Warn().Msg("Trusted proxies are not configured, IP access controls will NOT work")
 	}
 
 	middlewareProvideFor := []any{

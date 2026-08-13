@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -372,20 +373,14 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	// Create the authorization code
 	code := controller.oidc.CreateCode(*authorizeReq, *userContext)
 
-	queries, err := query.Values(AuthorizeCallback{
-		Code:  code,
-		State: authorizeReq.State,
-	})
+	cu, err := url.Parse(authorizeReq.RedirectURI)
 
 	if err != nil {
 		controller.authorizeError(c, authorizeErrorParams{
-			err:           err,
-			reason:        "Failed to build query",
-			reasonPublic:  "Failed to build query",
-			callback:      authorizeReq.RedirectURI,
-			callbackError: "server_error",
-			state:         authorizeReq.State,
-			json:          true,
+			err:          err,
+			reason:       "Failed to parse redirect URI",
+			reasonPublic: "Failed to parse redirect URI",
+			json:         true,
 		})
 		return
 	}
@@ -406,9 +401,19 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 
 	http.SetCookie(c.Writer, cookie)
 
+	q := cu.Query()
+
+	q.Set("code", code)
+
+	if authorizeReq.State != "" {
+		q.Set("state", authorizeReq.State)
+	}
+
+	cu.RawQuery = q.Encode()
+
 	c.JSON(200, gin.H{
 		"status":       200,
-		"redirect_uri": fmt.Sprintf("%s?%s", authorizeReq.RedirectURI, queries.Encode()),
+		"redirect_uri": cu.String(),
 	})
 }
 
@@ -684,37 +689,37 @@ func (controller *OIDCController) authorizeError(c *gin.Context, params authoriz
 	controller.log.App.Error().Err(params.err).Str("reason", params.reason).Msg("Authorization error")
 
 	if params.callback != "" {
-		errorQueries := CallbackError{
-			Error: params.callbackError,
-		}
-
-		if params.reasonPublic != "" {
-			errorQueries.ErrorDescription = params.reasonPublic
-		}
-
-		if params.state != "" {
-			errorQueries.State = params.state
-		}
-
-		queries, err := query.Values(errorQueries)
+		cu, err := url.Parse(params.callback)
 
 		if err != nil {
-			controller.log.App.Error().Err(err).Msg("Failed to build callback error query")
+			controller.log.App.Error().Err(err).Msg("Failed to parse callback URL")
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
-		redirectUrl := fmt.Sprintf("%s?%s", params.callback, queries.Encode())
+		q := cu.Query()
+
+		q.Set("error", params.callbackError)
+
+		if params.reasonPublic != "" {
+			q.Set("error_description", params.reasonPublic)
+		}
+
+		if params.state != "" {
+			q.Set("state", params.state)
+		}
+
+		cu.RawQuery = q.Encode()
 
 		if params.json {
 			c.JSON(200, gin.H{
 				"status":       200,
-				"redirect_uri": redirectUrl,
+				"redirect_uri": cu.String(),
 			})
 			return
 		}
 
-		c.Redirect(http.StatusFound, redirectUrl)
+		c.Redirect(http.StatusFound, cu.String())
 		return
 	}
 

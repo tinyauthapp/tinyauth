@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
@@ -111,9 +112,10 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	clientIP := c.ClientIP()
 
 	aclsCtx := &service.ACLContext{
-		ACLs: acls,
-		IP:   net.ParseIP(clientIP),
-		Path: proxyCtx.Path,
+		ACLs:                     acls,
+		IP:                       net.ParseIP(clientIP),
+		Path:                     proxyCtx.Path,
+		TrustedProxiesConfigured: controller.runtime.TrustedProxiesConfigured,
 	}
 
 	if controller.policyEngine.Evaluate(service.RuleIPBypassed, aclsCtx) {
@@ -549,6 +551,19 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 	if err != nil {
 		return ProxyContext{}, err
 	}
+
+	// remove any query params from the request path
+	upath, err := url.Parse(ctx.Path)
+
+	if err != nil {
+		return ProxyContext{}, fmt.Errorf("failed to parse request path: %v", err)
+	}
+
+	if upath.Host != "" || !strings.HasPrefix(upath.Path, "/") {
+		return ProxyContext{}, fmt.Errorf("invalid request path")
+	}
+
+	ctx.Path = path.Clean(upath.Path)
 
 	// We don't care if the header is empty, we will just assume it's not a browser
 	userAgent, _ := controller.getHeader(c, "user-agent")

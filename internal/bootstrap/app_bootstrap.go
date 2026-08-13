@@ -88,17 +88,13 @@ func (app *BootstrapApp) Setup() error {
 	app.log.App.Info().Msgf("Starting Tinyauth version: %s", model.Version)
 
 	// get app url
-	if app.config.AppURL == "" {
-		return errors.New("app url cannot be empty, perhaps config loading failed")
-	}
-
-	appUrl, err := url.Parse(app.config.AppURL)
+	appURL, err := utils.SafeParseAppURL(app.config.AppURL)
 
 	if err != nil {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.AppURL = strings.ToLower(appUrl.Scheme + "://" + appUrl.Host)
+	app.runtime.AppURL = appURL
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -172,7 +168,13 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.CookieDomain = cookieDomain
 
 	// cookie names
-	app.runtime.UUID = utils.GenerateUUID(appUrl.Hostname())
+	u, err := url.Parse(app.runtime.AppURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to parse app url: %w", err)
+	}
+
+	app.runtime.UUID = utils.GenerateUUID(u.Hostname())
 
 	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 

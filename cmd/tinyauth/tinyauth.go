@@ -32,6 +32,7 @@ func main() {
 		Configuration: tConfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
+			// enable this on experimental features
 			if !reflect.DeepEqual(model.NewDefaultConfiguration(env).Experimental, tConfig.Experimental) {
 				colors := getColors()
 				fmt.Println(colors.yellow.Render("⚠") + " Experimental features are enabled, use with caution. Experimental features may change with each release.")

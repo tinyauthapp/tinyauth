@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router";
 import { toast } from "sonner";
 import {
-  recompileScreenParams,
+  searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
 import { useLoginFor } from "@/lib/hooks/login-for";
@@ -32,10 +32,16 @@ export const TotpPage = () => {
 
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
   const loginForUrl = useLoginFor({
     login_for: screenParams.login_for,
-    compiledParams,
+    params: searchParamsFromObject(screenParams),
   });
 
   const totpMutation = useMutation({

@@ -116,11 +116,11 @@ func generateTotpCmd() *cli.Command {
 		userStr := fmt.Sprintf("%s:%s:%s", user.Username, user.Password, user.TOTPSecret)
 
 		fmt.Print("\nOr add the following TOTP secret to your authenticator app: ")
-		fmt.Print(colors.green.Render(secret))
+		fmt.Print(colors.blue.Render(secret))
 		fmt.Print("\n\n")
 
 		fmt.Printf("Finally, add your user '%s' back to your configuration: ", user.Username)
-		fmt.Print(colors.green.Render(userStr))
+		fmt.Print(colors.blue.Render(userStr))
 		fmt.Print("\n")
 
 		return nil

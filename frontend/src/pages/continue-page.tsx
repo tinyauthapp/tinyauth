@@ -13,7 +13,7 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRedirectUri } from "@/lib/hooks/redirect-uri";
 import {
-  recompileScreenParams,
+  searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
 
@@ -31,8 +31,14 @@ export const ContinuePage = () => {
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
   const redirectUri = screenParams.redirect_uri;
-  const isAppLogin = screenParams.login_for === "app";
-  const recompiledParams = recompileScreenParams(screenParams);
+  const isAppLogin = screenParams.login_for === "app" || !screenParams.login_for;
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
 
   const { url, valid, trusted, allowedProto, httpsDowngrade } = useRedirectUri(
     redirectUri,
@@ -89,7 +95,7 @@ export const ContinuePage = () => {
   }, [shouldAutoRedirect, redirectToTarget]);
 
   if (!auth.authenticated) {
-    return <Navigate to={`/login${recompiledParams}`} replace />;
+    return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
   if (!hasValidRedirect || !isAppLogin) {

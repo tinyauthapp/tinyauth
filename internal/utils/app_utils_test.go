@@ -7,7 +7,86 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
 
-func TestGetRootDomain(t *testing.T) {
+func TestSafeParseAPPURL(t *testing.T) {
+	// Normal app url
+	appURL := "http://sub.tinyauth.app"
+	expected := "http://sub.tinyauth.app"
+	result, err := utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Strip path
+	appURL = "http://sub.tinyauth.app/path"
+	expected = "http://sub.tinyauth.app"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Preserve port
+	appURL = "http://sub.tinyauth.app:8080"
+	expected = "http://sub.tinyauth.app:8080"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Remove trailing dot
+	appURL = "http://sub.tinyauth.app."
+	expected = "http://sub.tinyauth.app"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Convert to ascii
+	appURL = "http://bücher.example.com"
+	expected = "http://xn--bcher-kva.example.com"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Lowercase
+	appURL = "HTTP://SUb.tinyAUth.aPP"
+	expected = "http://sub.tinyauth.app"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
+	// Empty string
+	appURL = ""
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorIs(t, err, utils.ErrEmptyURL)
+
+	// Invalid URL
+	appURL = "invalidurl"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "invalid url")
+
+	// Non http or https URL
+	appURL = "ftp://sub.tinyauth.app"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "invalid url")
+
+	// Invalid punycode
+	appURL = "http://ab--cd.example.com"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "failed to convert hostname to ascii")
+
+	// IP address
+	appURL = "http://10.10.10.10"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "ip addresses not allowed")
+
+	// IPv6 address
+	appURL = "http://[::1]:8080"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "ip addresses not allowed")
+
+	// Invalid URL
+	appURL = "://"
+	_, err = utils.SafeParseAppURL(appURL)
+	assert.ErrorContains(t, err, "invalid url")
+}
+
+func TestGetCookieDomain(t *testing.T) {
 	// Normal case
 	domain := "http://sub.tinyauth.app"
 	expected := "tinyauth.app"
@@ -26,11 +105,6 @@ func TestGetRootDomain(t *testing.T) {
 	domain = "com"
 	_, err = utils.GetCookieDomain(domain, true)
 	assert.EqualError(t, err, "invalid app url, must be in format subdomain.domain.tld or domain.tld")
-
-	// IP address
-	domain = "http://10.10.10.10"
-	_, err = utils.GetCookieDomain(domain, true)
-	assert.ErrorContains(t, err, "ip addresses not allowed")
 
 	// Invalid URL
 	domain = "http://[::1]:namedport"
@@ -53,6 +127,11 @@ func TestGetRootDomain(t *testing.T) {
 
 	// Domain managed by ICANN
 	domain = "http://example.co.uk"
+	_, err = utils.GetCookieDomain(domain, true)
+	assert.ErrorContains(t, err, "domain in public suffix list, cannot set cookies")
+
+	// Domain managed by ICANN without subdomain
+	domain = "http://co.uk"
 	_, err = utils.GetCookieDomain(domain, true)
 	assert.ErrorContains(t, err, "domain in public suffix list, cannot set cookies")
 

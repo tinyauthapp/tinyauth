@@ -17,8 +17,8 @@ import { type UseMutationResult } from "@tanstack/react-query";
 import { type AxiosResponse } from "axios";
 import { useLocation } from "react-router";
 import {
+  searchParamsFromObject,
   useScreenParams,
-  recompileScreenParams,
 } from "@/lib/hooks/screen-params";
 
 export const LogoutPage = () => {
@@ -29,7 +29,13 @@ export const LogoutPage = () => {
   const redirectTimer = useRef<number | null>(null);
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
 
   const logoutMutation = useMutation({
     mutationFn: () => axios.post("/api/user/logout"),

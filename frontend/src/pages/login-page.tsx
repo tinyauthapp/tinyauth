@@ -26,7 +26,7 @@ import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router";
 import { toast } from "sonner";
 import {
-  recompileScreenParams,
+  searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
 import { useLoginFor } from "@/lib/hooks/login-for";
@@ -63,18 +63,21 @@ export const LoginPage = () => {
 
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams({
-    ...screenParams,
-    oidc_prompt: undefined,
-  });
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
   const loginForUrl = useLoginFor({
     login_for: screenParams.login_for,
-    compiledParams,
+    params: searchParamsFromObject({ ...screenParams, oidc_prompt: undefined}),
   });
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
     providers.find((provider) => provider.id === oauth.autoRedirect) !==
-      undefined && screenParams.redirect_uri !== undefined,
+      undefined && (screenParams.redirect_uri || screenParams.oidc_ticket),
   );
 
   const oauthProviders = providers.filter(
@@ -171,8 +174,7 @@ export const LoginPage = () => {
       !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
-      screenParams.redirect_uri &&
-      screenParams.login_for
+      (screenParams.redirect_uri || screenParams.oidc_ticket)
     ) {
       hasAutoRedirectedRef.current = true;
       oauthMutate(oauth.autoRedirect);
@@ -183,8 +185,8 @@ export const LoginPage = () => {
     hasAutoRedirectedRef,
     oauth.autoRedirect,
     isOauthAutoRedirect,
-    screenParams.login_for,
     screenParams.redirect_uri,
+    screenParams.oidc_ticket
   ]);
 
   useEffect(() => {

@@ -78,17 +78,9 @@ test-race:
 dev:
 	docker compose -f $(DEV_COMPOSE) up --force-recreate --pull=always --remove-orphans --build
 
-# Development - Infisical
-dev-infisical:
-	infisical run --env=dev -- docker compose -f $(DEV_COMPOSE) up --force-recreate --pull=always --remove-orphans --build
-
 # Production
 prod:
 	docker compose -f $(PROD_COMPOSE) up --force-recreate --pull=always --remove-orphans
-
-# Production - Infisical
-prod-infisical:
-	infisical run --env=dev -- docker compose -f $(PROD_COMPOSE) up --force-recreate --pull=always --remove-orphans
 
 # SQL
 sql:

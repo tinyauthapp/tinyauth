@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  recompileScreenParams,
+  searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
 import { useEffect } from "react";
@@ -89,7 +89,13 @@ export const AuthorizePage = () => {
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
   const isOidc = screenParams.login_for === "oidc";
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
 
   // TODO: maybe a better way to do this
   const shouldAutoAuthorize =

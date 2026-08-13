@@ -27,16 +27,10 @@ export function useScreenParams(params: URLSearchParams): ScreenParams {
   return parsed.data;
 }
 
-export function recompileScreenParams(params: ScreenParams): string {
-  const p = new URLSearchParams(
+export function searchParamsFromObject(obj: object): URLSearchParams {
+  return new URLSearchParams(
     Object.fromEntries(
-      Object.entries(params).filter(([, v]) => v !== undefined),
+      Object.entries(obj).filter(([, v]) => v !== undefined),
     ) as Record<string, string>,
-  ).toString();
-
-  if (p.length > 0) {
-    return "?" + p;
-  }
-
-  return "";
+  );
 }

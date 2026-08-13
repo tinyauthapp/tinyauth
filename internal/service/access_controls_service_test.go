@@ -4,224 +4,184 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-type mockLabelProvider struct {
-	getLabelsFn func(appDomain string) (*model.App, error)
-	calledWith  string
-	callCount   int
+type mockProvider struct {
+	acls        map[string]model.App
+	shouldError bool
 }
 
-func (m *mockLabelProvider) GetLabels(appDomain string) (*model.App, error) {
-	m.calledWith = appDomain
-	m.callCount++
-	if m.getLabelsFn != nil {
-		return m.getLabelsFn(appDomain)
+func newMockProvider(acls map[string]model.App, shouldError bool) *mockProvider {
+	return &mockProvider{acls: acls, shouldError: shouldError}
+}
+
+func (m *mockProvider) Lookup(locator func(name string, app *model.App) bool) error {
+	if m.shouldError {
+		return errors.New("mock error")
 	}
-	return nil, nil
+	for name, app := range m.acls {
+		if ok := locator(name, &app); ok {
+			return nil
+		}
+	}
+	return nil
 }
 
-func TestLookupStaticACLs(t *testing.T) {
+func TestAccessControlsService(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
 	tests := []struct {
-		name           string
-		apps           map[string]model.App
-		domain         string
-		expectNil      bool
-		expectedDomain string
+		name   string
+		domain string
+		acls   map[string]model.App
+		want   *model.App
 	}{
 		{
-			name:      "returns nil when no apps are configured",
-			apps:      nil,
-			domain:    "foo.example.com",
-			expectNil: true,
+			name:   "returns ACLs for domain",
+			domain: "example.com",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "example.com"}},
+			},
+			want: &model.App{Config: model.AppConfig{Domain: "example.com"}},
 		},
 		{
-			name: "returns nil when no app matches",
-			apps: map[string]model.App{
-				"foo": {Config: model.AppConfig{Domain: "foo.example.com"}},
+			name:   "returns ACLs for domain with port",
+			domain: "example.com:8080",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "example.com"}},
 			},
-			domain:    "bar.example.com",
-			expectNil: true,
+			want: &model.App{Config: model.AppConfig{Domain: "example.com"}},
 		},
 		{
-			name: "matches by exact domain",
-			apps: map[string]model.App{
-				"foo": {Config: model.AppConfig{Domain: "foo.example.com"}},
+			name:   "returns ACLs for domain with trailing dot",
+			domain: "example.com.",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "example.com"}},
 			},
-			domain:         "foo.example.com",
-			expectedDomain: "foo.example.com",
+			want: &model.App{Config: model.AppConfig{Domain: "example.com"}},
 		},
 		{
-			name: "matches by app name when domain does not match any app",
-			apps: map[string]model.App{
-				"foo": {Config: model.AppConfig{Domain: "configured.example.com"}},
+			name:   "returns ACLs for non-ascii domain",
+			domain: "bücher.example.com",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "bücher.example.com"}},
 			},
-			domain:         "foo.example.com",
-			expectedDomain: "configured.example.com",
+			want: &model.App{Config: model.AppConfig{Domain: "bücher.example.com"}},
 		},
 		{
-			name: "matches by app name for nested subdomains",
-			apps: map[string]model.App{
-				"foo": {Config: model.AppConfig{Domain: "configured.example.com"}},
+			name:   "returns ACLs for punycode domain and non-ascii config",
+			domain: "bücher.example.com",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "xn--bcher-kva.example.com"}},
 			},
-			domain:         "foo.sub.example.com",
-			expectedDomain: "configured.example.com",
+			want: &model.App{Config: model.AppConfig{Domain: "xn--bcher-kva.example.com"}},
 		},
 		{
-			name: "selects the app matching by domain among multiple apps",
-			apps: map[string]model.App{
-				"unrelated": {Config: model.AppConfig{Domain: "other.example.com"}},
-				"target":    {Config: model.AppConfig{Domain: "foo.example.com"}},
+			name:   "returns ACLs with case-insensitive matching",
+			domain: "Example.com",
+			acls: map[string]model.App{
+				"foo": {Config: model.AppConfig{Domain: "example.com"}},
 			},
-			domain:         "foo.example.com",
-			expectedDomain: "foo.example.com",
+			want: &model.App{Config: model.AppConfig{Domain: "example.com"}},
+		},
+		{
+			name:   "falls back to name matching when domain fails",
+			domain: "app.example.com",
+			acls: map[string]model.App{
+				"app": {Path: model.AppPath{Allow: "/foo"}},
+			},
+			want: &model.App{Path: model.AppPath{Allow: "/foo"}},
+		},
+		{
+			name:   "name matching is case-insensitive",
+			domain: "aPp.example.com",
+			acls: map[string]model.App{
+				"APP": {Path: model.AppPath{Allow: "/foo"}},
+			},
+			want: &model.App{Path: model.AppPath{Allow: "/foo"}},
+		},
+		{
+			name:   "returns nil when no ACLs are found",
+			domain: "example.com",
+			acls:   map[string]model.App{},
+			want:   nil,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc := NewAccessControlsService(AccessControlServiceInput{
+	// run once for a mock provider
+	for _, test := range tests {
+		t.Run(test.name+"(getACLs)", func(t *testing.T) {
+			mock := newMockProvider(test.acls, false)
+			acls := NewAccessControlsService(AccessControlServiceInput{
 				Log:           log,
-				Config:        &model.Config{Apps: tt.apps},
-				LabelProvider: nil,
+				Config:        &model.Config{},
+				LabelProvider: mock,
 			})
-			got := svc.lookupStaticACLs(tt.domain)
-			if tt.expectNil {
-				assert.Nil(t, got)
-				return
-			}
-			require.NotNil(t, got)
-			assert.Equal(t, tt.expectedDomain, got.Config.Domain)
+			app, err := acls.getACLs(test.domain, mock.Lookup)
+			require.NoError(t, err)
+			require.Equal(t, test.want, app)
 		})
 	}
-}
 
-func TestGetAccessControls(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-
-	t.Run("returns static ACLs when domain matches", func(t *testing.T) {
-		config := model.Config{
-			Apps: map[string]model.App{
-				"foo": {
-					Config: model.AppConfig{Domain: "foo.example.com"},
-					Users:  model.AppUsers{Allow: "alice"},
+	// run again for static acls
+	for _, test := range tests {
+		t.Run(test.name+"(staticACLs)", func(t *testing.T) {
+			acls := NewAccessControlsService(AccessControlServiceInput{
+				Log: log,
+				Config: &model.Config{
+					Apps: test.acls,
 				},
-			},
-		}
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &config,
-			LabelProvider: nil,
+			})
+			app, err := acls.lookupStaticACLs(test.domain)
+			require.NoError(t, err)
+			require.Equal(t, test.want, app)
 		})
+	}
 
-		got, err := svc.GetAccessControls("foo.example.com")
-
-		require.NoError(t, err)
-		require.NotNil(t, got)
-		assert.Equal(t, "foo.example.com", got.Config.Domain)
-		assert.Equal(t, "alice", got.Users.Allow)
+	// get acls should return an error when the provider fails
+	mock := newMockProvider(map[string]model.App{}, true)
+	acls := NewAccessControlsService(AccessControlServiceInput{
+		Log:    log,
+		Config: &model.Config{},
 	})
+	_, err := acls.getACLs("example.com", mock.Lookup)
+	require.Error(t, err)
 
-	t.Run("returns nil when no static match and no label provider", func(t *testing.T) {
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &model.Config{},
-			LabelProvider: nil,
-		})
-
-		got, err := svc.GetAccessControls("unknown.example.com")
-
-		require.NoError(t, err)
-		assert.Nil(t, got)
-	})
-
-	t.Run("returns nil when label provider pointer wraps a nil interface", func(t *testing.T) {
-		var provider LabelProvider
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &model.Config{},
-			LabelProvider: provider, // nil provider
-		})
-
-		got, err := svc.GetAccessControls("unknown.example.com")
-
-		require.NoError(t, err)
-		assert.Nil(t, got)
-	})
-
-	t.Run("falls back to label provider when no static match", func(t *testing.T) {
-		expected := &model.App{
-			Config: model.AppConfig{Domain: "dynamic.example.com"},
-			Users:  model.AppUsers{Allow: "bob"},
-		}
-		mock := &mockLabelProvider{
-			getLabelsFn: func(appDomain string) (*model.App, error) {
-				return expected, nil
-			},
-		}
-		var provider LabelProvider = mock
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &model.Config{},
-			LabelProvider: provider,
-		})
-
-		got, err := svc.GetAccessControls("dynamic.example.com")
-
-		require.NoError(t, err)
-		assert.Same(t, expected, got)
-		assert.Equal(t, "dynamic.example.com", mock.calledWith)
-		assert.Equal(t, 1, mock.callCount)
-	})
-
-	t.Run("does not call label provider when static match found", func(t *testing.T) {
-		mock := &mockLabelProvider{}
-		var provider LabelProvider = mock
-		config := model.Config{
+	// get access controls should get acls from
+	// static when static acls are configured
+	acls = NewAccessControlsService(AccessControlServiceInput{
+		Log: log,
+		Config: &model.Config{
 			Apps: map[string]model.App{
 				"foo": {Config: model.AppConfig{Domain: "foo.example.com"}},
 			},
-		}
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &config,
-			LabelProvider: provider,
-		})
-
-		got, err := svc.GetAccessControls("foo.example.com")
-
-		require.NoError(t, err)
-		require.NotNil(t, got)
-		assert.Equal(t, "foo.example.com", got.Config.Domain)
-		assert.Equal(t, 0, mock.callCount)
+		},
 	})
+	app, err := acls.GetAccessControls("foo.example.com")
+	require.NoError(t, err)
+	require.Equal(t, &model.App{Config: model.AppConfig{Domain: "foo.example.com"}}, app)
 
-	t.Run("propagates label provider errors", func(t *testing.T) {
-		providerErr := errors.New("provider boom")
-		mock := &mockLabelProvider{
-			getLabelsFn: func(appDomain string) (*model.App, error) {
-				return nil, providerErr
-			},
-		}
-		var provider LabelProvider = mock
-		svc := NewAccessControlsService(AccessControlServiceInput{
-			Log:           log,
-			Config:        &model.Config{},
-			LabelProvider: provider,
-		})
+	// should return nil for no apps
+	app, err = acls.GetAccessControls("bar.example.com")
+	require.NoError(t, err)
+	require.Nil(t, app)
 
-		got, err := svc.GetAccessControls("dynamic.example.com")
-
-		assert.Nil(t, got)
-		assert.ErrorIs(t, err, providerErr)
-		assert.Equal(t, 1, mock.callCount)
+	// Should use label provider if available
+	mock = newMockProvider(map[string]model.App{
+		"bar": {
+			Config: model.AppConfig{Domain: "bar.example.com"},
+		},
+	}, false)
+	acls = NewAccessControlsService(AccessControlServiceInput{
+		Log:           log,
+		Config:        &model.Config{},
+		LabelProvider: mock,
 	})
+	app, err = acls.GetAccessControls("bar.example.com")
+	require.NoError(t, err)
+	require.Equal(t, &model.App{Config: model.AppConfig{Domain: "bar.example.com"}}, app)
 }

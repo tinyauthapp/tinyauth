@@ -58,7 +58,15 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					Domain: "path-allow.example.com",
 				},
 				Path: model.AppPath{
-					Allow: "/allowed",
+					Allow: "^/allowed$",
+				},
+			},
+			"app_path_block": {
+				Config: model.AppConfig{
+					Domain: "path-block.example.com",
+				},
+				Path: model.AppPath{
+					Block: "^/admin$",
 				},
 			},
 			"app_user_allow": {
@@ -163,9 +171,10 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 				},
 			},
 		},
-		CookieDomain:      "example.com",
-		AppURL:            "https://tinyauth.example.com",
-		SessionCookieName: "tinyauth-session",
+		CookieDomain:             "example.com",
+		AppURL:                   "https://tinyauth.example.com",
+		SessionCookieName:        "tinyauth-session",
+		TrustedProxiesConfigured: true,
 	}
 
 	return config, runtime

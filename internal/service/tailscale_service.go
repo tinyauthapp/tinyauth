@@ -10,6 +10,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 )
 
@@ -59,8 +60,8 @@ type TailscaleService struct {
 	apiToken string
 
 	caches struct {
-		devices *CacheStore[tailscaleAPIDevices]
-		users   *CacheStore[tailscaleAPIUsers]
+		devices *cache.CacheStore[tailscaleAPIDevices]
+		users   *cache.CacheStore[tailscaleAPIUsers]
 	}
 
 	urls struct {
@@ -100,8 +101,8 @@ func NewTailscaleService(i TailscaleServiceInput) (*TailscaleService, error) {
 		apiToken: apiToken,
 	}
 
-	devicesCache := NewCacheStore[tailscaleAPIDevices](0)
-	usersCache := NewCacheStore[tailscaleAPIUsers](0)
+	devicesCache := cache.NewCacheStore[tailscaleAPIDevices](0)
+	usersCache := cache.NewCacheStore[tailscaleAPIUsers](0)
 
 	s.caches.devices = devicesCache
 	s.caches.users = usersCache

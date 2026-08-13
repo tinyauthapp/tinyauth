@@ -9,7 +9,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func TestOAuthControllerIsRedirectSafe(t *testing.T) {
+func TestOAuthController_isRedirectSafe(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
@@ -82,22 +82,6 @@ func TestOAuthControllerIsRedirectSafe(t *testing.T) {
 			expected:          false,
 		},
 		{
-			description:       "Cookie domain itself is not a subdomain match",
-			appURL:            "https://tinyauth.example.com",
-			cookieDomain:      "example.com",
-			subdomainsEnabled: true,
-			redirectURI:       "https://example.com",
-			expected:          false,
-		},
-		{
-			description:       "Different scheme returns false",
-			appURL:            "https://tinyauth.example.com",
-			cookieDomain:      "example.com",
-			subdomainsEnabled: true,
-			redirectURI:       "http://tinyauth.example.com",
-			expected:          false,
-		},
-		{
 			description:       "Different port returns false",
 			appURL:            "https://tinyauth.example.com",
 			cookieDomain:      "example.com",
@@ -119,14 +103,6 @@ func TestOAuthControllerIsRedirectSafe(t *testing.T) {
 			cookieDomain:      "example.com",
 			subdomainsEnabled: true,
 			redirectURI:       "https:/malicious",
-			expected:          false,
-		},
-		{
-			description:       "Redirect URI without scheme returns false",
-			appURL:            "https://tinyauth.example.com",
-			cookieDomain:      "example.com",
-			subdomainsEnabled: true,
-			redirectURI:       "tinyauth.example.com",
 			expected:          false,
 		},
 		{

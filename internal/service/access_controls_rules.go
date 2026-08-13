@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 
@@ -43,6 +44,10 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 		rule.Log.App.Debug().Msg("User is an OAuth user, checking OAuth whitelist")
 		match, err := utils.CheckFilter(ctx.ACLs.OAuth.Whitelist, ctx.UserContext.OAuth.Email)
 		if err != nil {
+			if errors.Is(err, utils.ErrFilterEmpty) {
+				rule.Log.App.Debug().Msg("OAuth whitelist is empty, abstaining")
+				return EffectAbstain
+			}
 			rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.OAuth.Email).Msg("Invalid entry in OAuth whitelist")
 			return EffectDeny
 		}
@@ -72,7 +77,7 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 	match, err := utils.CheckFilter(ctx.ACLs.Users.Allow, ctx.UserContext.GetUsername())
 
 	if err != nil {
-		if err == utils.ErrFilterEmpty {
+		if errors.Is(err, utils.ErrFilterEmpty) {
 			return EffectAbstain
 		}
 		rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.GetUsername()).Msg("Invalid entry in users allow list")
@@ -215,6 +220,10 @@ type IPAllowedRule struct {
 }
 
 func (rule *IPAllowedRule) Evaluate(ctx *ACLContext) Effect {
+	if !ctx.TrustedProxiesConfigured {
+		return EffectAllow // We can't block the proxy
+	}
+
 	// merge global and per-app block/allow lists
 	blockedIps := append([]string{}, rule.Config.Auth.IP.Block...)
 	allowedIPs := append([]string{}, rule.Config.Auth.IP.Allow...)
@@ -263,6 +272,10 @@ type IPBypassedRule struct {
 }
 
 func (rule *IPBypassedRule) Evaluate(ctx *ACLContext) Effect {
+	if !ctx.TrustedProxiesConfigured {
+		return EffectDeny
+	}
+
 	// merge global and per-app bypass lists
 	bypassList := append([]string{}, rule.Config.Auth.IP.Bypass...)
 	if ctx.ACLs != nil {

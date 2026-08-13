@@ -7,10 +7,55 @@ import (
 	"strings"
 
 	"github.com/weppos/publicsuffix-go/publicsuffix"
+	"golang.org/x/net/idna"
 )
 
-// GetCookieDomain parses the app url and returns the domain value to use for cookies.
+var (
+	ErrEmptyURL = fmt.Errorf("invalid url")
+)
+
+func SafeParseAppURL(str string) (string, error) {
+	if strings.TrimSpace(str) == "" {
+		return "", ErrEmptyURL
+	}
+
+	u, err := url.Parse(str)
+
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+
+	if u.Host == "" ||
+		(u.Scheme != "http" &&
+			u.Scheme != "https") {
+		return "", fmt.Errorf("invalid url, must be in format https(s)://host")
+	}
+
+	hostname := strings.ToLower(u.Hostname())
+	hostname = strings.TrimSuffix(hostname, ".")
+
+	if netIP := net.ParseIP(hostname); netIP != nil {
+		return "", fmt.Errorf("ip addresses not allowed")
+	}
+
+	hostname, err = idna.Lookup.ToASCII(hostname)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to convert hostname to ascii: %w", err)
+	}
+
+	appURL := fmt.Sprintf("%s://%s", u.Scheme, hostname)
+
+	if u.Port() != "" {
+		appURL += ":" + u.Port()
+	}
+
+	return appURL, nil
+}
+
+// GetCookieDomain parses the app URL and returns the domain value to use for cookies.
 // When auth for subdomains is enabled, it strips the leftmost label
+// GetCookieDomain assumes the app URL is first parsed with SafeParseAppURL
 // (e.g. sub1.sub2.domain.com -> sub2.domain.com), otherwise it returns the full hostname.
 func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 	u, err := url.Parse(appUrl)
@@ -20,10 +65,6 @@ func GetCookieDomain(appUrl string, subdomainsEnabled bool) (string, error) {
 	}
 
 	hostname := strings.ToLower(u.Hostname())
-
-	if netIP := net.ParseIP(hostname); netIP != nil {
-		return "", fmt.Errorf("ip addresses not allowed")
-	}
 
 	parts := strings.Split(hostname, ".")
 

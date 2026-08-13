@@ -12,8 +12,8 @@ import { useTranslation } from "react-i18next";
 import Markdown from "react-markdown";
 import { useLocation } from "react-router";
 import {
-  recompileScreenParams,
-  useScreenParams,
+    searchParamsFromObject,
+    useScreenParams,
 } from "@/lib/hooks/screen-params";
 
 export const ForgotPasswordPage = () => {
@@ -22,7 +22,13 @@ export const ForgotPasswordPage = () => {
   const { search } = useLocation();
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = (() => {
+      const params = searchParamsFromObject(screenParams).toString();
+      if (params.length > 0) {
+          return `?${params}`;
+      }
+      return "";
+  })();
 
   return (
     <Card>

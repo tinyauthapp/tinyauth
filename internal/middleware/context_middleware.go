@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,6 +40,7 @@ var (
 type ContextMiddleware struct {
 	log       *logger.Logger
 	runtime   *model.RuntimeConfig
+	config    *model.Config
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
@@ -49,6 +51,7 @@ type ContextMiddlewareInput struct {
 
 	Log              *logger.Logger
 	RuntimeConfig    *model.RuntimeConfig
+	StaticConfig     *model.Config
 	AuthService      *service.AuthService
 	BrokerService    *service.OAuthBrokerService
 	TailscaleService *service.TailscaleService
@@ -58,6 +61,7 @@ func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 	return &ContextMiddleware{
 		log:       i.Log,
 		runtime:   i.RuntimeConfig,
+		config:    i.StaticConfig,
 		auth:      i.AuthService,
 		broker:    i.BrokerService,
 		tailscale: i.TailscaleService,
@@ -200,7 +204,11 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 		}
 
 		userContext.LDAP.Groups = user.Groups
-		userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		if search.Name != "" {
+			userContext.LDAP.Name = search.Name
+		} else {
+			userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		}
 
 		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
 		if search.Email != "" {
@@ -244,6 +252,9 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 	search, err := m.auth.SearchUser(username)
 
 	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			m.auth.DummyPasswordCheck(password)
+		}
 		return nil, nil, fmt.Errorf("error searching for user: %w", err)
 	}
 
@@ -278,16 +289,20 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		}
 		userContext.Provider = model.ProviderLocal
 	case model.UserLDAP:
-		user, err := m.auth.GetLDAPUser(username)
+		user, err := m.auth.GetLDAPUser(search.Username)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
+		name := search.Name
+		if name == "" {
+			name = utils.Capitalize(username)
+		}
 		userContext.LDAP = &model.LDAPContext{
 			BaseContext: model.BaseContext{
 				Username: username,
-				Name:     utils.Capitalize(username),
+				Name:     name,
 			},
 			Groups: user.Groups,
 		}
@@ -328,15 +343,18 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 		return nil, nil
 	}
 
-	username := strings.Replace(whois.LoginName, "@", "_", 1)
-
 	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
-			Username: username,
-			Email:    whois.LoginName,
-			Name:     whois.DisplayName,
+			Email: whois.LoginName,
+			Name:  whois.DisplayName,
 		},
 		NodeName: whois.NodeName,
+	}
+
+	if m.config.Experimental.OAuthBridgeEnabled {
+		uctx.BaseContext.Username = strings.SplitN(whois.LoginName, "@", 2)[0]
+	} else {
+		uctx.BaseContext.Username = strings.Replace(whois.LoginName, "@", "_", 1)
 	}
 
 	return &uctx, nil

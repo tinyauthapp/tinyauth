@@ -24,6 +24,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string, ctx context.Con
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: config.Insecure,
 				MinVersion:         tls.VersionTLS12,

@@ -32,8 +32,8 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
 import { useRef } from "react";
 import {
+  searchParamsFromObject,
   useScreenParams,
-  recompileScreenParams,
 } from "@/lib/hooks/screen-params";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
@@ -70,7 +70,13 @@ export const QuickActions = () => {
   const redirectTimer = useRef<number | null>(null);
   const searchParams = new URLSearchParams(search);
   const screenParams = useScreenParams(searchParams);
-  const compiledParams = recompileScreenParams(screenParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
 
   const [isOpen, setIsOpen] = useState(false);
 

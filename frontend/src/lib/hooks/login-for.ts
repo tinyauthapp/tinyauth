@@ -1,10 +1,11 @@
 type UseLoginForProps = {
   login_for?: "oidc" | "app";
-  compiledParams: string;
+  params: URLSearchParams;
 };
 
 export const useLoginFor = (props: UseLoginForProps): string => {
-  const { login_for, compiledParams } = props;
+  const { login_for, params } = props;
+  const compiledParams = params.toString() ? "?" + params.toString() : "";
 
   switch (login_for) {
     case "oidc":
@@ -12,6 +13,9 @@ export const useLoginFor = (props: UseLoginForProps): string => {
     case "app":
       return "/continue" + compiledParams;
     default:
+      if (params.get("redirect_uri")) {
+        return "/continue" + compiledParams
+      }
       return "/logout";
   }
 };
