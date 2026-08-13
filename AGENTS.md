@@ -126,7 +126,7 @@ NEVER run any destructive commands like `make clean-data` or delete any configur
 
 ## Creating a pull request
 
-When committing, you MUST use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) standard for your commit messages. You can add a commit description if you like. You MUST also use your standard no reply Co-Author trailer.
+When committing, you MUST use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) standard for your commit messages. You can add a commit description if you like. You MUST also use your standard no-reply Co-Author trailer (`Co-Authored-By:`).
 
 You should work in separate branches unless it's clearly specified to work in the main branch. When working in a separate branch, follow the naming convention below:
 
