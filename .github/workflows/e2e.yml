@@ -21,7 +21,7 @@ jobs:
           package_json_file: ./e2e/package.json
 
       - name: Set up Docker
-        uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # ratchet:docker/setup-docker-action@v5
+        uses: docker/setup-docker-action@77e84dbf09b47d1e29270283c22f16145aa85ca1 # ratchet:docker/setup-docker-action@v5
 
       - name: Install dependencies
         run: pnpm ci
