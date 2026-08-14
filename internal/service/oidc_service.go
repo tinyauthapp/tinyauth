@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"slices"
@@ -162,6 +163,10 @@ type OIDCService struct {
 		code      *cache.CacheStore[AuthorizeCodeEntry]
 		usedCode  *cache.CacheStore[UsedCodeEntry]
 		authorize *cache.CacheStore[AuthorizeRequest]
+	}
+
+	mus struct {
+		consent *sync.RWMutex
 	}
 }
 
@@ -977,6 +982,9 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 }
 
 func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
+	service.mus.consent.RLock()
+	defer service.mus.consent.RUnlock()
+
 	entry, err := service.queries.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
 		Username: username,
 		ClientID: clientId,
@@ -993,6 +1001,9 @@ func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, client
 }
 
 func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, scope, clientId string) (repository.OidcConsent, error) {
+	service.mus.consent.Lock()
+	defer service.mus.consent.Unlock()
+
 	existing, err := service.GetOIDCConsent(ctx, username, clientId)
 
 	if err != nil {
