@@ -166,7 +166,7 @@ type OIDCService struct {
 	}
 
 	mus struct {
-		consent *sync.RWMutex
+		consent sync.RWMutex
 	}
 }
 
@@ -981,10 +981,7 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	return parsedPromps
 }
 
-func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
-	service.mus.consent.RLock()
-	defer service.mus.consent.RUnlock()
-
+func (service *OIDCService) getOIDCConsentUnsafe(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
 	entry, err := service.queries.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
 		Username: username,
 		ClientID: clientId,
@@ -1000,11 +997,17 @@ func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, client
 	return &entry, nil
 }
 
+func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
+	service.mus.consent.RLock()
+	defer service.mus.consent.RUnlock()
+	return service.getOIDCConsentUnsafe(ctx, username, clientId)
+}
+
 func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, scope, clientId string) (repository.OidcConsent, error) {
 	service.mus.consent.Lock()
 	defer service.mus.consent.Unlock()
 
-	existing, err := service.GetOIDCConsent(ctx, username, clientId)
+	existing, err := service.getOIDCConsentUnsafe(ctx, username, clientId)
 
 	if err != nil {
 		return repository.OidcConsent{}, err
