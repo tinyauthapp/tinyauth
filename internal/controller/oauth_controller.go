@@ -224,6 +224,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		Username: user.PreferredUsername,
 		Email:    user.Email,
 		Name:     user.Name,
+		Groups:   utils.CoalesceToString(user.Groups),
 	})
 
 	sessionCookie := repository.Session{
@@ -231,7 +232,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		Name:        oauthUserInfo.Name,
 		Email:       oauthUserInfo.Email,
 		Provider:    svc.ID(),
-		OAuthGroups: utils.CoalesceToString(user.Groups),
+		OAuthGroups: oauthUserInfo.Groups,
 		OAuthName:   svc.Name(),
 		OAuthSub:    user.Sub,
 	}
@@ -341,6 +342,7 @@ type oauthUserInfo struct {
 	Email    string
 	Username string
 	Name     string
+	Groups   string
 }
 
 func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oauthUserInfo {
@@ -348,8 +350,12 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		Email: input.Email,
 	}
 
+	userAttribs := controller.getUserAttributes(input.Email)
+
 	if controller.config.Experimental.OAuthBridgeEnabled {
-		if input.Username != "" {
+		if userAttribs.PreferredUsername != "" {
+			info.Username = userAttribs.PreferredUsername
+		} else if input.Username != "" {
 			info.Username = input.Username
 		} else {
 			parts := strings.SplitN(input.Email, "@", 2)
@@ -360,7 +366,9 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 			}
 		}
 
-		if input.Name != "" {
+		if userAttribs.Name != "" {
+			info.Name = userAttribs.Name
+		} else if input.Name != "" {
 			info.Name = input.Name
 		} else {
 			info.Name = utils.Capitalize(info.Username)
@@ -369,7 +377,9 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		return info
 	}
 
-	if input.Name != "" {
+	if userAttribs.Name != "" {
+		info.Name = userAttribs.Name
+	} else if input.Name != "" {
 		controller.log.App.Debug().Msg("Using name from OAuth provider")
 		info.Name = input.Name
 	} else {
@@ -382,7 +392,10 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		}
 	}
 
-	if input.Username != "" {
+	if userAttribs.PreferredUsername != "" {
+		controller.log.App.Debug().Msg("Using preferred username from Auth user attributes")
+		info.Username = userAttribs.PreferredUsername
+	} else if input.Username != "" {
 		controller.log.App.Debug().Msg("Using preferred username from OAuth provider")
 		info.Username = input.Username
 	} else {
@@ -390,5 +403,20 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		info.Username = strings.Replace(info.Email, "@", "_", 1)
 	}
 
+	if userAttribs.Groups != nil {
+		info.Groups = strings.Join(userAttribs.Groups, ",")
+		controller.log.App.Debug().Msgf("Using groups from Auth user attributes: %s", userAttribs.Groups)
+	} else if input.Groups != "" {
+		controller.log.App.Debug().Msg("Using groups from OAuth provider")
+		info.Groups = input.Groups
+	}
+
 	return info
+}
+
+func (controller *OAuthController) getUserAttributes(email string) model.UserAttributes {
+	email = strings.ReplaceAll(email, "@", "-")
+	email = strings.ReplaceAll(email, ".", "-")
+	attribs := controller.config.Auth.UserAttributes[email]
+	return attribs
 }
