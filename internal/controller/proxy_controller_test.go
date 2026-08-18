@@ -261,7 +261,7 @@ func TestProxyController(t *testing.T) {
 			description: "Ensure extauthz with envoy non browser returns json",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/hello", nil)
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy", nil)
 				req.Header.Set("x-forwarded-host", "test.example.com")
 				req.Header.Set("x-forwarded-proto", "https")
 				req.Header.Set("x-forwarded-uri", "/hello")
@@ -875,6 +875,32 @@ func TestProxyController(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, recorder.Code)
 				assert.Equal(t, "bar", recorder.Header().Get("x-foo"))
+			},
+		},
+		{
+			description: "Forward auth and auth request headers should fail for nginx",
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/nginx", nil)
+				req.Header.Set("x-forwarded-host", "foo.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/foo?bar=foo")
+				req.Header.Set("x-original-url", "https://foo.example.com/foo?bar=foo")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			description: "Forward auth and ext authz headers should fail for envoy",
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/hello", nil)
+				req.Host = "foo.example.com"
+				req.Header.Set("x-forwarded-host", "foo.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/foo?bar=foo")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}

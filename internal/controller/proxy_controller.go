@@ -465,6 +465,10 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 	// We get the path from the query string
 	path := c.Query("path")
 
+	if strings.TrimSpace(path) == "" {
+		return ProxyContext{}, errors.New("path not found")
+	}
+
 	// For envoy we need to support every method
 	method := c.Request.Method
 
@@ -536,20 +540,32 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 		return ProxyContext{}, fmt.Errorf("no auth modules supported for proxy: %v", req.Proxy)
 	}
 
-	var ctx ProxyContext
+	ctxs := make(map[AuthModuleType]ProxyContext)
 
 	for _, module := range authModules {
 		controller.log.App.Debug().Msgf("Trying to get context from auth module %v", module)
-		ctx, err = controller.getContextFromAuthModule(c, module)
-		if err == nil {
-			controller.log.App.Debug().Msgf("Successfully got context from auth module %v", module)
-			break
+		ctx, err := controller.getContextFromAuthModule(c, module)
+		if err != nil {
+			controller.log.App.Debug().Msgf("Failed to get context from auth module %v: %v", module, err)
+			continue
 		}
-		controller.log.App.Debug().Msgf("Failed to get context from auth module %v: %v", module, err)
+		controller.log.App.Debug().Msgf("Successfully got context from auth module %v", module)
+		ctxs[module] = ctx
 	}
 
-	if err != nil {
-		return ProxyContext{}, err
+	if len(ctxs) == 0 {
+		return ProxyContext{}, fmt.Errorf("no auth module context found")
+	}
+
+	if len(ctxs) > 1 {
+		controller.log.App.Warn().Msg("Multiple auth module contexts found, something is wrong in your proxy config or someone is trying to spoof the request, denying")
+		return ProxyContext{}, fmt.Errorf("multiple auth module contexts found")
+	}
+
+	var ctx ProxyContext
+
+	for _, c := range ctxs {
+		ctx = c
 	}
 
 	// Parse the raw path to populate the cleaned path used for ACLs
