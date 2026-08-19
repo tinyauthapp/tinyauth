@@ -18,7 +18,7 @@ func newMockProvider(acls map[string]model.App, shouldError bool) *mockProvider 
 	return &mockProvider{acls: acls, shouldError: shouldError}
 }
 
-func (m *mockProvider) Lookup(locator func(name string, app *model.App) bool) error {
+func (m *mockProvider) Lookup(_ string, locator func(name string, app *model.App) bool) error {
 	if m.shouldError {
 		return errors.New("mock error")
 	}
@@ -121,7 +121,7 @@ func TestAccessControlsService(t *testing.T) {
 				Config:        &model.Config{},
 				LabelProvider: mock,
 			})
-			app, err := acls.getACLs(test.domain, mock.Lookup)
+			app, err := acls.GetAccessControls(test.domain)
 			require.NoError(t, err)
 			require.Equal(t, test.want, app)
 		})
@@ -145,10 +145,11 @@ func TestAccessControlsService(t *testing.T) {
 	// get acls should return an error when the provider fails
 	mock := newMockProvider(map[string]model.App{}, true)
 	acls := NewAccessControlsService(AccessControlServiceInput{
-		Log:    log,
-		Config: &model.Config{},
+		Log:           log,
+		Config:        &model.Config{},
+		LabelProvider: mock,
 	})
-	_, err := acls.getACLs("example.com", mock.Lookup)
+	_, err := acls.GetAccessControls("example.com")
 	require.Error(t, err)
 
 	// get access controls should get acls from

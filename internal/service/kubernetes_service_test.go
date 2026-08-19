@@ -27,6 +27,22 @@ var (
 	testGRPCRouteResource = mustWatchedResource("grpcroutes")
 )
 
+// aclLocator mimics the way the access controls service matches apps, first on
+// the configured domain and then on the app name.
+func aclLocator(domain string, got **model.App) func(name string, app *model.App) bool {
+	return func(name string, app *model.App) bool {
+		if app.Config.Domain == domain {
+			*got = app
+			return true
+		}
+		if strings.HasPrefix(strings.ToLower(domain), strings.ToLower(name+".")) {
+			*got = app
+			return true
+		}
+		return false
+	}
+}
+
 func TestKubernetesService(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
@@ -45,7 +61,7 @@ func TestKubernetesService(t *testing.T) {
 					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []resourceEntry{
+				}, []string{"foo.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -53,7 +69,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "foo.example.com" {
 						got = app
 						return true
@@ -62,6 +78,13 @@ func TestKubernetesService(t *testing.T) {
 				})
 				require.NotNil(t, got)
 				assert.Equal(t, "foo.example.com", got.Config.Domain)
+
+				got = nil
+				svc.getEntry("unknown.example.com", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
 			},
 		},
 		{
@@ -74,7 +97,7 @@ func TestKubernetesService(t *testing.T) {
 				}
 
 				app := model.App{Config: model.AppConfig{Domain: "foo.example.com"}}
-				svc.addResourceEntries(key, []resourceEntry{
+				svc.addResourceEntries(key, []string{"foo.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -82,7 +105,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "foo.example.com" {
 						got = app
 						return true
@@ -95,7 +118,7 @@ func TestKubernetesService(t *testing.T) {
 				got = nil
 				svc.removeResource(key)
 
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "foo.example.com" {
 						got = app
 						return true
@@ -115,7 +138,7 @@ func TestKubernetesService(t *testing.T) {
 				}
 
 				old := model.App{Config: model.AppConfig{Domain: "old.example.com"}}
-				svc.addResourceEntries(key, []resourceEntry{
+				svc.addResourceEntries(key, []string{"old.example.com"}, []resourceEntry{
 					{
 						app:  old,
 						name: "foo",
@@ -123,7 +146,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				updated := model.App{Config: model.AppConfig{Domain: "new.example.com"}}
-				svc.addResourceEntries(key, []resourceEntry{
+				svc.addResourceEntries(key, []string{"new.example.com"}, []resourceEntry{
 					{
 						app:  updated,
 						name: "foo",
@@ -131,7 +154,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("old.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "old.example.com" {
 						got = app
 						return true
@@ -140,7 +163,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 				assert.Nil(t, got)
 
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("new.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "new.example.com" {
 						got = app
 						return true
@@ -180,7 +203,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &httpRoute)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("ingapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "ingapp.example.com" {
 						got = app
 						return true
@@ -190,7 +213,7 @@ func TestKubernetesService(t *testing.T) {
 				require.NotNil(t, got)
 
 				got = nil
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "gwapp.example.com" {
 						got = app
 						return true
@@ -210,7 +233,7 @@ func TestKubernetesService(t *testing.T) {
 					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []resourceEntry{
+				}, []string{"hit.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -218,7 +241,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
+				err := svc.Lookup("hit.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "hit.example.com" {
 						got = app
 						return true
@@ -236,7 +259,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.connected = true
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
+				err := svc.Lookup("notfound.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "notfound.example.com" {
 						got = app
 						return true
@@ -257,7 +280,7 @@ func TestKubernetesService(t *testing.T) {
 					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []resourceEntry{
+				}, []string{"foo.internal.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -265,13 +288,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
-					if strings.HasPrefix("foo.internal.example.com", "foo.") {
-						got = app
-						return true
-					}
-					return false
-				})
+				err := svc.Lookup("foo.internal.example.com", aclLocator("foo.internal.example.com", &got))
 				require.NoError(t, err)
 				require.NotNil(t, got)
 				assert.Equal(t, "/foo", got.Path.Allow)
@@ -280,9 +297,138 @@ func TestKubernetesService(t *testing.T) {
 		{
 			description: "GetLabels returns empty app when service not yet started",
 			run: func(t *testing.T, svc *KubernetesService) {
+				app := model.App{Config: model.AppConfig{Domain: "hit.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"hit.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "foo",
+					},
+				})
+
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
-					return false
+				err := svc.Lookup("hit.example.com", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				require.NoError(t, err)
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "Lookup withholds apps that are served on another host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "myapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(testIngressResource, &item)
+
+				// The app is served on myapp.example.com, so it must not be
+				// able to define the ACLs of a look-alike domain it does not
+				// route just because the name happens to prefix it
+				var got *model.App
+				err := svc.Lookup("myapp.evil.com", aclLocator("myapp.evil.com", &got))
+				require.NoError(t, err)
+				assert.Nil(t, got)
+
+				err = svc.Lookup("myapp.example.com", aclLocator("myapp.example.com", &got))
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+			},
+		},
+		{
+			description: "Lookup yields apps for any domain covered by a wildcard host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"*.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				// A wildcard is a suffix match, so nested subdomains stay
+				// resolvable by app name
+				var got *model.App
+				err := svc.Lookup("myapp.sub.example.com", aclLocator("myapp.sub.example.com", &got))
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+
+				got = nil
+				err = svc.Lookup("myapp.example.net", aclLocator("myapp.example.net", &got))
+				require.NoError(t, err)
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "Lookup ignores the port of the domain",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				app := model.App{Config: model.AppConfig{Domain: "myapp.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"myapp.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "myapp",
+					},
+				})
+
+				var got *model.App
+				err := svc.Lookup("myapp.example.com:8443", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			},
+		},
+		{
+			description: "Lookup skips an invalid domain",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				app := model.App{Config: model.AppConfig{Domain: "myapp.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"myapp.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "myapp",
+					},
+				})
+
+				var got *model.App
+				err := svc.Lookup("not a domain", func(name string, app *model.App) bool {
+					got = app
+					return true
 				})
 				require.NoError(t, err)
 				assert.Nil(t, got)
@@ -309,7 +455,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -335,7 +481,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -366,7 +512,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -385,7 +531,7 @@ func TestKubernetesService(t *testing.T) {
 					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []resourceEntry{
+				}, []string{"todelete.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -399,7 +545,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("todelete.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "todelete.example.com" {
 						got = app
 						return true
@@ -695,7 +841,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "gwapp.example.com" {
 						got = app
 						return true
@@ -724,7 +870,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testGRPCRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("grpcapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "grpcapp.example.com" {
 						got = app
 						return true
@@ -749,7 +895,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -772,7 +918,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("deep.gwapp.example.com", func(name string, app *model.App) bool {
 					if name == "gwapp" {
 						got = app
 						return true
@@ -799,7 +945,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					if name == "gwapp" {
 						got = app
 						return true
@@ -865,7 +1011,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					if name == "gwapp" {
 						got = app
 						return true
@@ -904,7 +1050,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testHTTPRouteResource, &httpRoute)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("ingapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "ingapp.example.com" {
 						got = app
 						return true
@@ -915,7 +1061,7 @@ func TestKubernetesService(t *testing.T) {
 				assert.Equal(t, "ingapp.example.com", got.Config.Domain)
 
 				got = nil
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "gwapp.example.com" {
 						got = app
 						return true
@@ -944,7 +1090,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -973,7 +1119,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -1002,7 +1148,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("other.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -1027,7 +1173,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -1045,7 +1191,7 @@ func TestKubernetesService(t *testing.T) {
 					namespace: "default",
 					name:      "test-ingress",
 				}
-				svc.addResourceEntries(key, []resourceEntry{
+				svc.addResourceEntries(key, []string{"stale.example.com"}, []resourceEntry{
 					{
 						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
 						name: "foo",
@@ -1063,7 +1209,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("stale.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -1078,7 +1224,7 @@ func TestKubernetesService(t *testing.T) {
 					namespace: "default",
 					name:      "test-ingress",
 				}
-				svc.addResourceEntries(key, []resourceEntry{
+				svc.addResourceEntries(key, []string{"stale.example.com"}, []resourceEntry{
 					{
 						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
 						name: "foo",
@@ -1095,7 +1241,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("stale.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -1107,8 +1253,8 @@ func TestKubernetesService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			svc := &KubernetesService{
-				resourceEntries: make(map[resourceKey][]resourceEntry),
-				log:             log,
+				resourceApps: make(map[resourceKey]routedApps),
+				log:          log,
 			}
 			test.run(t, svc)
 		})

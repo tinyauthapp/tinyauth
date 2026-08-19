@@ -73,6 +73,13 @@ type resourceEntry struct {
 	app  model.App
 }
 
+// routedApps holds the apps annotated on a resource along with the hosts that
+// resource routes, which bound the domains those apps may define ACLs for.
+type routedApps struct {
+	hosts   []string
+	entries []resourceEntry
+}
+
 // resourceKey identifies a watched resource. The kind is part of the key
 // because an Ingress and an HTTPRoute may share a name within a namespace.
 type resourceKey struct {
@@ -84,10 +91,10 @@ type resourceKey struct {
 type KubernetesService struct {
 	log *logger.Logger
 
-	client          dynamic.Interface
-	connected       bool
-	mu              sync.RWMutex
-	resourceEntries map[resourceKey][]resourceEntry
+	client       dynamic.Interface
+	connected    bool
+	mu           sync.RWMutex
+	resourceApps map[resourceKey]routedApps
 }
 
 type KubernetesServiceInput struct {
@@ -110,9 +117,9 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	}
 
 	service := &KubernetesService{
-		log:             i.Log,
-		client:          client,
-		resourceEntries: make(map[resourceKey][]resourceEntry),
+		log:          i.Log,
+		client:       client,
+		resourceApps: make(map[resourceKey]routedApps),
 	}
 
 	watching := 0
@@ -148,25 +155,43 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	return service, nil
 }
 
-func (k *KubernetesService) addResourceEntries(key resourceKey, entries []resourceEntry) {
+func (k *KubernetesService) addResourceEntries(key resourceKey, hosts []string, entries []resourceEntry) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	k.resourceEntries[key] = entries
+	k.resourceApps[key] = routedApps{
+		hosts:   hosts,
+		entries: entries,
+	}
 }
 
 func (k *KubernetesService) removeResource(key resourceKey) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	delete(k.resourceEntries, key)
+	delete(k.resourceApps, key)
 }
 
-func (k *KubernetesService) getEntry(locator func(name string, app *model.App) bool) {
+func (k *KubernetesService) getEntry(domain string, locator func(name string, app *model.App) bool) {
+	v := validators.NewDomainValidator(validators.DomainValidatorOptions{})
+
+	hostname, err := v.SafeHostname(domain)
+	if err != nil {
+		k.log.App.Debug().Err(err).Str("domain", domain).Msg("Domain is invalid, skipping lookup")
+		return
+	}
+
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
 	// O(n^2) is not great but the number of resource entries is expected to be small
-	for _, entries := range k.resourceEntries {
-		for _, entry := range entries {
+	for _, apps := range k.resourceApps {
+		// Only a resource that routes the domain may define its ACLs, otherwise
+		// an app could claim any domain that happens to start with its name
+		if !slices.ContainsFunc(apps.hosts, func(host string) bool {
+			return hostMatches(host, hostname)
+		}) {
+			continue
+		}
+		for _, entry := range apps.entries {
 			if ok := locator(entry.name, &entry.app); ok {
 				return
 			}
@@ -439,7 +464,7 @@ func (k *KubernetesService) updateFromItem(res watchedResource, item *unstructur
 		return
 	}
 
-	k.addResourceEntries(key, entries)
+	k.addResourceEntries(key, hosts, entries)
 }
 
 func (k *KubernetesService) resyncGVR(res watchedResource, ctx context.Context) error {
@@ -533,13 +558,16 @@ func (k *KubernetesService) watchGVR(res watchedResource, ctx context.Context) {
 	}
 }
 
-func (k *KubernetesService) Lookup(locator func(name string, app *model.App) bool) error {
+// Lookup yields the apps annotated on the resources that route domain. Apps
+// annotated on any other resource are withheld, since they are served
+// elsewhere and must not define the ACLs of this domain.
+func (k *KubernetesService) Lookup(domain string, locator func(name string, app *model.App) bool) error {
 	if !k.connected {
 		k.log.App.Debug().Msg("Kubernetes label provider not started, skipping")
 		return nil
 	}
 
-	k.getEntry(locator)
+	k.getEntry(domain, locator)
 
 	return nil
 }
