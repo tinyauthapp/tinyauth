@@ -8,7 +8,7 @@ Contributing to Tinyauth is straightforward. Follow the steps below to set up a 
 ## Requirements
 
 - pnpm
-- Golang v1.24.0 or later
+- Golang v1.26.4 or later
 - Git
 - Docker
 - Make

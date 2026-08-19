@@ -5,25 +5,30 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"go.uber.org/dig"
 )
 
 type ResourcesController struct {
-	config     model.Config
+	config     *model.Config
 	fileServer http.Handler
 }
 
-func NewResourcesController(
-	config model.Config,
-	router *gin.RouterGroup,
-) *ResourcesController {
-	fileServer := http.StripPrefix("/resources", http.FileServer(http.Dir(config.Resources.Path)))
+type ResourcesControllerInput struct {
+	dig.In
+
+	RouterGroup *gin.RouterGroup `name:"mainRouterGroup"`
+	Config      *model.Config
+}
+
+func NewResourcesController(i ResourcesControllerInput) *ResourcesController {
+	fileServer := http.StripPrefix("/resources", http.FileServer(http.Dir(i.Config.Resources.Path)))
 
 	controller := &ResourcesController{
-		config:     config,
+		config:     i.Config,
 		fileServer: fileServer,
 	}
 
-	router.GET("/resources/*resource", controller.resourcesHandler)
+	i.RouterGroup.GET("/resources/*resource", controller.resourcesHandler)
 
 	return controller
 }

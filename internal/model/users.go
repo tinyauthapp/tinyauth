@@ -7,6 +7,16 @@ const (
 	UserLDAP
 )
 
+func (t UserSearchType) String() string {
+	switch t {
+	case UserLocal:
+		return "local"
+	case UserLDAP:
+		return "ldap"
+	}
+	return "unknown"
+}
+
 type LDAPUser struct {
 	DN     string
 	Groups []string
@@ -22,5 +32,6 @@ type LocalUser struct {
 type UserSearch struct {
 	Username string
 	Email    string // used for LDAP, we can't throw it to LDAPUser because it would need another cache or an LDAP lookup every time
+	Name     string // used for LDAP cn attribute
 	Type     UserSearchType
 }

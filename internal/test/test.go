@@ -40,6 +40,10 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			SessionExpiry:   10,
 			LoginTimeout:    10,
 			LoginMaxRetries: 3,
+			ACLs: model.ACLsConfig{
+				Policy: "allow",
+			},
+			SubdomainsEnabled: true,
 		},
 		Database: model.DatabaseConfig{
 			Path: filepath.Join(tempDir, "test.db"),
@@ -47,6 +51,84 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 		Resources: model.ResourcesConfig{
 			Enabled: true,
 			Path:    filepath.Join(tempDir, "resources"),
+		},
+		Apps: map[string]model.App{
+			"app_path_allow": {
+				Config: model.AppConfig{
+					Domain: "path-allow.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "^/allowed$",
+				},
+			},
+			"app_path_block": {
+				Config: model.AppConfig{
+					Domain: "path-block.example.com",
+				},
+				Path: model.AppPath{
+					Block: "^/admin$",
+				},
+			},
+			"app_user_allow": {
+				Config: model.AppConfig{
+					Domain: "user-allow.example.com",
+				},
+				Users: model.AppUsers{
+					Allow: "testuser",
+				},
+			},
+			"ip_bypass": {
+				Config: model.AppConfig{
+					Domain: "ip-bypass.example.com",
+				},
+				IP: model.AppIP{
+					Bypass: []string{"10.10.10.10"},
+				},
+			},
+			"ip_block": {
+				Config: model.AppConfig{
+					Domain: "ip-block.example.com",
+				},
+				IP: model.AppIP{
+					Block: []string{"10.10.10.10"},
+				},
+			},
+			"oauth_group": {
+				Config: model.AppConfig{
+					Domain: "oauth-group.example.com",
+				},
+				OAuth: model.AppOAuth{
+					Whitelist: "testuser@example.com",
+					Groups:    "group1,group2",
+				},
+			},
+			"ldap_group": {
+				Config: model.AppConfig{
+					Domain: "ldap-group.example.com",
+				},
+				LDAP: model.AppLDAP{
+					Groups: "group1,group2",
+				},
+			},
+			"basic_auth": {
+				Config: model.AppConfig{
+					Domain: "basic-auth.example.com",
+				},
+				Response: model.AppResponse{
+					BasicAuth: model.AppBasicAuth{
+						Username: "test",
+						Password: "password",
+					},
+				},
+			},
+			"response_headers": {
+				Config: model.AppConfig{
+					Domain: "response-headers.example.com",
+				},
+				Response: model.AppResponse{
+					Headers: []string{"x-foo=bar"},
+				},
+			},
 		},
 	}
 
@@ -89,17 +171,10 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 				},
 			},
 		},
-		CookieDomain:      "example.com",
-		AppURL:            "https://tinyauth.example.com",
-		SessionCookieName: "tinyauth-session",
-		OIDCClients: func() []model.OIDCClientConfig {
-			var clients []model.OIDCClientConfig
-			for id, client := range config.OIDC.Clients {
-				client.ID = id
-				clients = append(clients, client)
-			}
-			return clients
-		}(),
+		CookieDomain:             "example.com",
+		AppURL:                   "https://tinyauth.example.com",
+		SessionCookieName:        "tinyauth-session",
+		TrustedProxiesConfigured: true,
 	}
 
 	return config, runtime

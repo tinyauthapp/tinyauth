@@ -12,10 +12,14 @@ import { Trans, useTranslation } from "react-i18next";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRedirectUri } from "@/lib/hooks/redirect-uri";
+import {
+  searchParamsFromObject,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
 
 export const ContinuePage = () => {
-  const { cookieDomain, warningsEnabled } = useAppContext();
-  const { isLoggedIn } = useUserContext();
+  const { app, ui } = useAppContext();
+  const { auth } = useUserContext();
   const { search } = useLocation();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -25,24 +29,37 @@ export const ContinuePage = () => {
   const hasRedirected = useRef(false);
 
   const searchParams = new URLSearchParams(search);
-  const redirectUri = searchParams.get("redirect_uri");
+  const screenParams = useScreenParams(searchParams);
+  const redirectUri = screenParams.redirect_uri;
+  const isAppLogin = screenParams.login_for === "app" || !screenParams.login_for;
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
 
   const { url, valid, trusted, allowedProto, httpsDowngrade } = useRedirectUri(
     redirectUri,
-    cookieDomain,
+    app.cookieDomain,
+    app.appUrl,
+    app.subdomainsEnabled,
   );
 
   const urlHref = url?.href;
 
   const hasValidRedirect = valid && allowedProto;
-  const showUntrustedWarning = hasValidRedirect && !trusted && warningsEnabled;
+  const showUntrustedWarning =
+    hasValidRedirect && !trusted && ui.warningsEnabled;
   const showInsecureWarning =
-    hasValidRedirect && httpsDowngrade && warningsEnabled;
+    hasValidRedirect && httpsDowngrade && ui.warningsEnabled;
   const shouldAutoRedirect =
-    isLoggedIn &&
+    auth.authenticated &&
     hasValidRedirect &&
     !showUntrustedWarning &&
-    !showInsecureWarning;
+    !showInsecureWarning &&
+    isAppLogin;
 
   const redirectToTarget = useCallback(() => {
     if (!urlHref || hasRedirected.current) {
@@ -77,16 +94,11 @@ export const ContinuePage = () => {
     };
   }, [shouldAutoRedirect, redirectToTarget]);
 
-  if (!isLoggedIn) {
-    return (
-      <Navigate
-        to={`/login${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
-        replace
-      />
-    );
+  if (!auth.authenticated) {
+    return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
-  if (!hasValidRedirect) {
+  if (!hasValidRedirect || !isAppLogin) {
     return <Navigate to="/logout" replace />;
   }
 
@@ -104,7 +116,11 @@ export const ContinuePage = () => {
               components={{
                 code: <code />,
               }}
-              values={{ cookieDomain }}
+              values={{
+                cookieDomain: app.subdomainsEnabled
+                  ? `.${app.cookieDomain}`
+                  : app.cookieDomain,
+              }}
               shouldUnescape={true}
             />
           </CardDescription>

@@ -3,8 +3,10 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-querystring/query"
@@ -44,6 +47,7 @@ type ProxyContext struct {
 	Host      string
 	Proto     string
 	Path      string
+	PathRaw   string
 	Method    string
 	Type      AuthModuleType
 	IsBrowser bool
@@ -51,27 +55,34 @@ type ProxyContext struct {
 }
 
 type ProxyController struct {
-	log     *logger.Logger
-	runtime model.RuntimeConfig
-	acls    *service.AccessControlsService
-	auth    *service.AuthService
+	log          *logger.Logger
+	runtime      *model.RuntimeConfig
+	acls         *service.AccessControlsService
+	auth         *service.AuthService
+	policyEngine *service.PolicyEngine
 }
 
-func NewProxyController(
-	log *logger.Logger,
-	runtime model.RuntimeConfig,
-	router *gin.RouterGroup,
-	acls *service.AccessControlsService,
-	auth *service.AuthService,
-) *ProxyController {
+type ProxyControllerInput struct {
+	dig.In
+
+	Log           *logger.Logger
+	RuntimeConfig *model.RuntimeConfig
+	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
+	ACLsService   *service.AccessControlsService
+	AuthService   *service.AuthService
+	PolicyEngine  *service.PolicyEngine
+}
+
+func NewProxyController(i ProxyControllerInput) *ProxyController {
 	controller := &ProxyController{
-		log:     log,
-		runtime: runtime,
-		acls:    acls,
-		auth:    auth,
+		log:          i.Log,
+		runtime:      i.RuntimeConfig,
+		acls:         i.ACLsService,
+		auth:         i.AuthService,
+		policyEngine: i.PolicyEngine,
 	}
 
-	proxyGroup := router.Group("/auth")
+	proxyGroup := i.RouterGroup.Group("/auth")
 	proxyGroup.Any("/:proxy", controller.proxyHandler)
 
 	return controller
@@ -101,7 +112,14 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 	clientIP := c.ClientIP()
 
-	if controller.auth.IsBypassedIP(clientIP, acls) {
+	aclsCtx := &service.ACLContext{
+		ACLs:                     acls,
+		IP:                       net.ParseIP(clientIP),
+		Path:                     proxyCtx.Path,
+		TrustedProxiesConfigured: controller.runtime.TrustedProxiesConfigured,
+	}
+
+	if controller.policyEngine.Evaluate(service.RuleIPBypassed, aclsCtx) {
 		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
 			"status":  200,
@@ -110,15 +128,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	authEnabled, err := controller.auth.IsAuthEnabled(proxyCtx.Path, acls)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to determine if authentication is enabled for resource")
-		controller.handleError(c, proxyCtx)
-		return
-	}
-
-	if !authEnabled {
+	if controller.policyEngine.Evaluate(service.RuleAuthEnabled, aclsCtx) {
 		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
 		controller.setHeaders(c, acls)
 		c.JSON(200, gin.H{
@@ -128,7 +138,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if !controller.auth.CheckIP(clientIP, acls) {
+	if !controller.policyEngine.Evaluate(service.RuleIPAllowed, aclsCtx) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
 			IP:       clientIP,
@@ -151,23 +161,26 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			return
 		}
 
-		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
 
 	userContext, err := new(model.UserContext).NewFromGin(c)
 
 	if err != nil {
-		controller.log.App.Debug().Err(err).Msg("Failed to create user context from request, treating as unauthenticated")
+		// No user context found is not an issue
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Error().Err(err).Msg("Failed to create user context from request, treating as unauthenticated")
+		}
 		userContext = &model.UserContext{
 			Authenticated: false,
 		}
 	}
 
-	if userContext.Authenticated {
-		userAllowed := controller.auth.IsUserAllowed(c, *userContext, acls)
+	aclsCtx.UserContext = userContext
 
-		if !userAllowed {
+	if userContext.Authenticated {
+		if !controller.policyEngine.Evaluate(service.RuleUserAllowed, aclsCtx) {
 			controller.log.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User is not allowed to access resource")
 
 			queries, err := query.Values(UnauthorizedQuery{
@@ -197,7 +210,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 				return
 			}
 
-			c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+			c.Redirect(http.StatusFound, redirectURL)
 			return
 		}
 
@@ -205,9 +218,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			var groupOK bool
 
 			if userContext.IsOAuth() {
-				groupOK = controller.auth.IsInOAuthGroup(c, *userContext, acls)
+				groupOK = controller.policyEngine.Evaluate(service.RuleOAuthGroup, aclsCtx)
 			} else {
-				groupOK = controller.auth.IsInLDAPGroup(c, *userContext, acls)
+				groupOK = controller.policyEngine.Evaluate(service.RuleLDAPGroup, aclsCtx)
 			}
 
 			if !groupOK {
@@ -241,7 +254,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 					return
 				}
 
-				c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+				c.Redirect(http.StatusFound, redirectURL)
 				return
 			}
 		}
@@ -269,7 +282,8 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 	}
 
 	queries, err := query.Values(RedirectQuery{
-		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.Path),
+		RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.PathRaw),
+		LoginFor:    FrontendLoginForApp,
 	})
 
 	if err != nil {
@@ -289,7 +303,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) setHeaders(c *gin.Context, acls *model.App) {
@@ -325,7 +339,7 @@ func (controller *ProxyController) handleError(c *gin.Context, proxyCtx ProxyCon
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 func (controller *ProxyController) getHeader(c *gin.Context, header string) (string, bool) {
@@ -389,11 +403,11 @@ func (controller *ProxyController) getForwardAuthContext(c *gin.Context) (ProxyC
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   uri,
-		Method: method,
-		Type:   ForwardAuth,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: uri,
+		Method:  method,
+		Type:    ForwardAuth,
 	}, nil
 }
 
@@ -422,15 +436,14 @@ func (controller *ProxyController) getAuthRequestContext(c *gin.Context) (ProxyC
 		return ProxyContext{}, errors.New("proto not found")
 	}
 
-	path := url.Path
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   path,
-		Method: method,
-		Type:   AuthRequest,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: url.RequestURI(),
+		Method:  method,
+		Type:    AuthRequest,
 	}, nil
 }
 
@@ -456,11 +469,11 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 	method := c.Request.Method
 
 	return ProxyContext{
-		Host:   host,
-		Proto:  proto,
-		Path:   path,
-		Method: method,
-		Type:   ExtAuthz,
+		Host:    host,
+		Proto:   proto,
+		PathRaw: path,
+		Method:  method,
+		Type:    ExtAuthz,
 	}, nil
 }
 
@@ -538,6 +551,19 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 	if err != nil {
 		return ProxyContext{}, err
 	}
+
+	// Parse the raw path to populate the cleaned path used for ACLs
+	upath, err := url.Parse(ctx.PathRaw)
+
+	if err != nil {
+		return ProxyContext{}, fmt.Errorf("failed to parse request path: %v", err)
+	}
+
+	if upath.Host != "" || !strings.HasPrefix(upath.Path, "/") {
+		return ProxyContext{}, fmt.Errorf("invalid request path")
+	}
+
+	ctx.Path = path.Clean(upath.Path)
 
 	// We don't care if the header is empty, we will just assume it's not a browser
 	userAgent, _ := controller.getHeader(c, "user-agent")

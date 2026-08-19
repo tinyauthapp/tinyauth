@@ -16,10 +16,14 @@ import { useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router";
 import { toast } from "sonner";
-import { useOIDCParams } from "@/lib/hooks/oidc";
+import {
+  searchParamsFromObject,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
+import { useLoginFor } from "@/lib/hooks/login-for";
 
 export const TotpPage = () => {
-  const { totpPending } = useUserContext();
+  const { totp, auth } = useUserContext();
   const { t } = useTranslation();
   const { search } = useLocation();
   const formId = useId();
@@ -27,8 +31,18 @@ export const TotpPage = () => {
   const redirectTimer = useRef<number | null>(null);
 
   const searchParams = new URLSearchParams(search);
-  const redirectUri = searchParams.get("redirect_uri") || undefined;
-  const oidcParams = useOIDCParams(searchParams);
+  const screenParams = useScreenParams(searchParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
+  const loginForUrl = useLoginFor({
+    login_for: screenParams.login_for,
+    params: searchParamsFromObject(screenParams),
+  });
 
   const totpMutation = useMutation({
     mutationFn: (values: TotpSchema) => axios.post("/api/user/totp", values),
@@ -39,14 +53,7 @@ export const TotpPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        if (oidcParams.isOidc) {
-          window.location.replace(`/authorize?${oidcParams.compiled}`);
-          return;
-        }
-
-        window.location.replace(
-          `/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
-        );
+        window.location.replace(loginForUrl);
       }, 500);
     },
     onError: () => {
@@ -64,8 +71,11 @@ export const TotpPage = () => {
     };
   }, [redirectTimer]);
 
-  if (!totpPending) {
-    return <Navigate to="/" replace />;
+  if (!totp.pending) {
+    if (auth.authenticated) {
+      return <Navigate to={loginForUrl} replace />;
+    }
+    return <Navigate to={`/login${compiledParams}`} replace />;
   }
 
   return (

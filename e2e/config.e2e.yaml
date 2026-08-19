@@ -1,0 +1,22 @@
+appUrl: http://tinyauth.127.0.0.1.sslip.io
+
+log:
+  level: debug
+
+auth:
+  users:
+    # user1:password,user2:password,user3:password:token
+    - user1:$2a$10$h1laww4k5a4bJcG5KwE3nO45YKSC4mOKHxbcccgxr3Y7H9zHlQe8e
+    - user2:$2a$10$h1laww4k5a4bJcG5KwE3nO45YKSC4mOKHxbcccgxr3Y7H9zHlQe8e
+    - user3:$2a$10$h1laww4k5a4bJcG5KwE3nO45YKSC4mOKHxbcccgxr3Y7H9zHlQe8e:MVR4JQWNXYKNM6HHJEYEFP2O74QIIEJE
+  # disable rate limits for multiple workers to work
+  loginMaxRetries: 0
+
+apps:
+  whoami:
+    config:
+      domain: whoami.127.0.0.1.sslip.io
+    path:
+      allow: /foo
+    users:
+      allow: user1

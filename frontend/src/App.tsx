@@ -2,9 +2,9 @@ import { Navigate } from "react-router";
 import { useUserContext } from "./context/user-context";
 
 export const App = () => {
-  const { isLoggedIn } = useUserContext();
+  const { auth } = useUserContext();
 
-  if (isLoggedIn) {
+  if (auth.authenticated) {
     return <Navigate to="/logout" replace />;
   }
 

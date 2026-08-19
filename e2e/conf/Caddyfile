@@ -1,0 +1,15 @@
+{
+	auto_https off
+}
+
+http://whoami.127.0.0.1.sslip.io {
+	forward_auth tinyauth:3000 {
+		uri /api/auth/caddy
+		copy_headers Remote-User Remote-Name Remote-Email Remote-Groups
+	}
+	reverse_proxy whoami:80
+}
+
+http://tinyauth.127.0.0.1.sslip.io {
+	reverse_proxy tinyauth:3000
+}

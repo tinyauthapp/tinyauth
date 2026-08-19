@@ -18,7 +18,6 @@ import { OAuthButton } from "@/components/ui/oauth-button";
 import { SeperatorWithChildren } from "@/components/ui/separator";
 import { useAppContext } from "@/context/app-context";
 import { useUserContext } from "@/context/user-context";
-import { useOIDCParams } from "@/lib/hooks/oidc";
 import { LoginSchema } from "@/schemas/login-schema";
 import { useMutation } from "@tanstack/react-query";
 import axios, { AxiosError } from "axios";
@@ -26,6 +25,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useLocation } from "react-router";
 import { toast } from "sonner";
+import {
+  searchParamsFromObject,
+  useScreenParams,
+} from "@/lib/hooks/screen-params";
+import { useLoginFor } from "@/lib/hooks/login-for";
 
 const iconMap: Record<string, React.ReactNode> = {
   google: <GoogleIcon />,
@@ -36,12 +40,19 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export const LoginPage = () => {
-  const { isLoggedIn } = useUserContext();
-  const { providers, title, oauthAutoRedirect } = useAppContext();
+  const { auth, tailscale } = useUserContext();
+  const {
+    ui,
+    oauth,
+    auth: { providers },
+  } = useAppContext();
   const { search } = useLocation();
   const { t } = useTranslation();
 
   const [showRedirectButton, setShowRedirectButton] = useState(false);
+  const [useTailscale, setUseTailscale] = useState(
+    tailscale.nodeName !== undefined,
+  );
 
   const hasAutoRedirectedRef = useRef(false);
 
@@ -51,17 +62,28 @@ export const LoginPage = () => {
   const formId = useId();
 
   const searchParams = new URLSearchParams(search);
-  const redirectUri = searchParams.get("redirect_uri") || undefined;
-  const oidcParams = useOIDCParams(searchParams);
+  const screenParams = useScreenParams(searchParams);
+  const compiledParams = (() => {
+    const params = searchParamsFromObject(screenParams).toString();
+    if (params.length > 0) {
+      return `?${params}`;
+    }
+    return "";
+  })();
+  const loginForUrl = useLoginFor({
+    login_for: screenParams.login_for,
+    params: searchParamsFromObject({ ...screenParams, oidc_prompt: undefined}),
+  });
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
-    providers.find((provider) => provider.id === oauthAutoRedirect) !==
-      undefined && redirectUri !== undefined,
+    providers.find((provider) => provider.id === oauth.autoRedirect) !==
+      undefined && (screenParams.redirect_uri || screenParams.oidc_ticket),
   );
 
   const oauthProviders = providers.filter(
     (provider) => provider.id !== "local" && provider.id !== "ldap",
   );
+
   const userAuthConfigured =
     providers.find(
       (provider) => provider.id === "local" || provider.id === "ldap",
@@ -74,16 +96,7 @@ export const LoginPage = () => {
     variables: oauthVariables,
   } = useMutation({
     mutationFn: (provider: string) => {
-      const getParams = function (): string {
-        if (oidcParams.isOidc) {
-          return `?${oidcParams.compiled}`;
-        }
-        if (redirectUri) {
-          return `?redirect_uri=${encodeURIComponent(redirectUri)}`;
-        }
-        return "";
-      };
-      return axios.get(`/api/oauth/url/${provider}${getParams()}`);
+      return axios.get(`/api/oauth/url/${provider}${compiledParams}`);
     },
     mutationKey: ["oauth"],
     onSuccess: (data) => {
@@ -114,13 +127,7 @@ export const LoginPage = () => {
     mutationKey: ["login"],
     onSuccess: (data) => {
       if (data.data.totpPending) {
-        if (oidcParams.isOidc) {
-          window.location.replace(`/totp?${oidcParams.compiled}`);
-          return;
-        }
-        window.location.replace(
-          `/totp${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
-        );
+        window.location.replace(`/totp${compiledParams}`);
         return;
       }
 
@@ -129,13 +136,7 @@ export const LoginPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        if (oidcParams.isOidc) {
-          window.location.replace(`/authorize?${oidcParams.compiled}`);
-          return;
-        }
-        window.location.replace(
-          `/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`,
-        );
+        window.location.replace(loginForUrl);
       }, 500);
     },
     onError: (error: AxiosError) => {
@@ -148,23 +149,44 @@ export const LoginPage = () => {
     },
   });
 
+  const { mutate: tailscaleMutate, isPending: tailscaleIsPending } =
+    useMutation({
+      mutationFn: () => axios.post("/api/user/tailscale"),
+      mutationKey: ["tailscale"],
+      onSuccess: () => {
+        toast.success(t("loginSuccessTitle"), {
+          description: t("loginTailscaleSuccess"),
+        });
+
+        redirectTimer.current = window.setTimeout(() => {
+          window.location.replace(loginForUrl);
+        }, 500);
+      },
+      onError: () => {
+        toast.error(t("loginFailTitle"), {
+          description: t("loginTailscaleFail"),
+        });
+      },
+    });
+
   useEffect(() => {
     if (
-      !isLoggedIn &&
+      !auth.authenticated &&
       isOauthAutoRedirect &&
       !hasAutoRedirectedRef.current &&
-      redirectUri !== undefined
+      (screenParams.redirect_uri || screenParams.oidc_ticket)
     ) {
       hasAutoRedirectedRef.current = true;
-      oauthMutate(oauthAutoRedirect);
+      oauthMutate(oauth.autoRedirect);
     }
   }, [
-    isLoggedIn,
+    auth.authenticated,
     oauthMutate,
     hasAutoRedirectedRef,
-    oauthAutoRedirect,
+    oauth.autoRedirect,
     isOauthAutoRedirect,
-    redirectUri,
+    screenParams.redirect_uri,
+    screenParams.oidc_ticket
   ]);
 
   useEffect(() => {
@@ -179,21 +201,8 @@ export const LoginPage = () => {
     };
   }, [redirectTimer, redirectButtonTimer]);
 
-  if (isLoggedIn && oidcParams.isOidc) {
-    return <Navigate to={`/authorize?${oidcParams.compiled}`} replace />;
-  }
-
-  if (isLoggedIn && redirectUri !== undefined) {
-    return (
-      <Navigate
-        to={`/continue${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ""}`}
-        replace
-      />
-    );
-  }
-
-  if (isLoggedIn) {
-    return <Navigate to="/logout" replace />;
+  if (auth.authenticated && screenParams.oidc_prompt !== "login") {
+    return <Navigate to={loginForUrl} replace />;
   }
 
   if (isOauthAutoRedirect) {
@@ -228,10 +237,49 @@ export const LoginPage = () => {
       </Card>
     );
   }
+
+  if (useTailscale) {
+    return (
+      <Card>
+        <CardHeader className="gap-3">
+          <TailscaleIcon className="mx-auto h-8 w-8" />
+          <CardTitle className="text-center text-xl">
+            {t("loginTailscaleTitle")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="text-muted-foreground text-sm">
+            {t("loginTailscaleDescription")}
+          </div>
+          <div className="text-muted-foreground text-sm">
+            {t("loginTailscaleDeviceName")} <code>{tailscale.nodeName}</code>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col items-stretch gap-3">
+          <Button
+            className="w-full"
+            onClick={() => tailscaleMutate()}
+            loading={tailscaleIsPending}
+          >
+            {t("loginTailscaleTitle")}
+          </Button>
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={() => setUseTailscale(false)}
+            disabled={tailscaleIsPending}
+          >
+            {t("loginTailscaleOtherMethod")}
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="gap-1.5">
-        <CardTitle className="text-center text-xl">{title}</CardTitle>
+        <CardTitle className="text-center text-xl">{ui.title}</CardTitle>
         {providers.length > 0 && (
           <CardDescription className="text-center">
             {oauthProviders.length !== 0

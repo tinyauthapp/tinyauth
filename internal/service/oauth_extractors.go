@@ -1,10 +1,8 @@
 package service
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -17,27 +15,27 @@ type GithubEmailResponse []struct {
 	Verified bool   `json:"verified"`
 }
 
-type GithubUserInfoResponse struct {
+type GithubUserinfoResponse struct {
 	Login string `json:"login"`
 	Name  string `json:"name"`
 	ID    int    `json:"id"`
 }
 
-func defaultExtractor(client *http.Client, url string) (*model.Claims, error) {
-	return simpleReq[model.Claims](client, url, nil)
+func defaultExtractor(client *http.Client, ctx context.Context, url string) (*model.Claims, error) {
+	return simpleReq[model.Claims](client, ctx, url, nil)
 }
 
-func githubExtractor(client *http.Client, _ string) (*model.Claims, error) {
+func githubExtractor(client *http.Client, ctx context.Context, _ string) (*model.Claims, error) {
 	var user model.Claims
 
-	userInfo, err := simpleReq[GithubUserInfoResponse](client, "https://api.github.com/user", map[string]string{
+	userInfo, err := simpleReq[GithubUserinfoResponse](client, ctx, "https://api.github.com/user", map[string]string{
 		"accept": "application/vnd.github+json",
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	userEmails, err := simpleReq[GithubEmailResponse](client, "https://api.github.com/user/emails", map[string]string{
+	userEmails, err := simpleReq[GithubEmailResponse](client, ctx, "https://api.github.com/user/emails", map[string]string{
 		"accept": "application/vnd.github+json",
 	})
 	if err != nil {
@@ -74,39 +72,4 @@ func githubExtractor(client *http.Client, _ string) (*model.Claims, error) {
 	user.Sub = strconv.Itoa(userInfo.ID)
 
 	return &user, nil
-}
-
-func simpleReq[T any](client *http.Client, url string, headers map[string]string) (*T, error) {
-	var decodedRes T
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for key, value := range headers {
-		req.Header.Add(key, value)
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed with status: %s", res.Status)
-	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(body, &decodedRes)
-	if err != nil {
-		return nil, err
-	}
-
-	return &decodedRes, nil
 }

@@ -1,21 +1,20 @@
-package middleware_test
+package middleware
 
 import (
 	"context"
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/bootstrap"
-	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -31,7 +30,7 @@ func TestContextMiddleware(t *testing.T) {
 		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 	}
 
-	seedSession := func(t *testing.T, queries *repository.Queries, params repository.CreateSessionParams) {
+	seedSession := func(t *testing.T, queries repository.Store, params repository.CreateSessionParams) {
 		t.Helper()
 		_, err := queries.CreateSession(context.Background(), params)
 		require.NoError(t, err)
@@ -39,7 +38,7 @@ func TestContextMiddleware(t *testing.T) {
 
 	type runArgs struct {
 		do      func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder)
-		queries *repository.Queries
+		queries repository.Store
 	}
 
 	type testCase struct {
@@ -250,22 +249,47 @@ func TestContextMiddleware(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	wg := &sync.WaitGroup{}
+	dg := ding.New(ctx)
 
-	app := bootstrap.NewBootstrapApp(cfg)
+	store := memory.New()
 
-	err := app.SetupDatabase()
+	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
+		Log:    log,
+		Config: &cfg,
+	})
 	require.NoError(t, err)
 
-	queries := repository.New(app.GetDB())
+	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
+		Log:     log,
+		Runtime: &runtime,
+		Ctx:     ctx,
+	})
 
-	broker := service.NewOAuthBrokerService(log, map[string]model.OAuthServiceConfig{}, ctx)
-	authService := service.NewAuthService(log, cfg, runtime, ctx, wg, nil, queries, broker)
+	authService, err := service.NewAuthService(service.AuthServiceInput{
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		Ctx:          ctx,
+		Ding:         dg,
+		LDAP:         nil,
+		Queries:      store,
+		OAuthBroker:  broker,
+		Tailscale:    nil,
+		PolicyEngine: policyEngine,
+	})
 
-	contextMiddleware := middleware.NewContextMiddleware(log, runtime, authService, broker)
+	require.NoError(t, err)
+
+	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
+		Log:              log,
+		RuntimeConfig:    &runtime,
+		AuthService:      authService,
+		BrokerService:    broker,
+		TailscaleService: nil,
+	})
 
 	for _, test := range tests {
-		authService.ClearRateLimitsTestingOnly()
+		authService.ClearLoginAttempts()
 		t.Run(test.description, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 
@@ -286,11 +310,7 @@ func TestContextMiddleware(t *testing.T) {
 				return captured, recorder
 			}
 
-			test.run(t, runArgs{do: do, queries: queries})
+			test.run(t, runArgs{do: do, queries: store})
 		})
 	}
-
-	t.Cleanup(func() {
-		app.GetDB().Close()
-	})
 }

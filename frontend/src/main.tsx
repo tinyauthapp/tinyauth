@@ -35,7 +35,10 @@ createRoot(document.getElementById("root")!).render(
                     <Route element={<Layout />} errorElement={<ErrorPage />}>
                       <Route path="/" element={<App />} />
                       <Route path="/login" element={<LoginPage />} />
-                      <Route path="/authorize" element={<AuthorizePage />} />
+                      <Route
+                        path="/oidc/authorize"
+                        element={<AuthorizePage />}
+                      />
                       <Route path="/logout" element={<LogoutPage />} />
                       <Route path="/continue" element={<ContinuePage />} />
                       <Route path="/totp" element={<TotpPage />} />

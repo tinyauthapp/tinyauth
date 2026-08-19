@@ -1,29 +1,28 @@
 import { useAppContext } from "@/context/app-context";
-import { LanguageSelector } from "../language/language";
 import { Outlet } from "react-router";
 import { useCallback, useEffect, useState } from "react";
 import { DomainWarning } from "../domain-warning/domain-warning";
-import { ThemeToggle } from "../theme-toggle/theme-toggle";
+import { QuickActions } from "../quick-actions/quick-actions";
+import { isTrustedDomain } from "@/lib/hooks/redirect-uri";
 
 const BaseLayout = ({ children }: { children: React.ReactNode }) => {
-  const { backgroundImage, title } = useAppContext();
+  const { ui } = useAppContext();
 
   useEffect(() => {
-    document.title = title;
-  }, [title]);
+    document.title = ui.title;
+  }, [ui.title]);
 
   return (
     <div
       className="flex flex-col justify-center items-center min-h-svh px-4"
       style={{
-        backgroundImage: `url(${backgroundImage})`,
+        backgroundImage: `url(${ui.backgroundImage})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
     >
-      <div className="absolute top-4 right-4 flex flex-row gap-2">
-        <ThemeToggle />
-        <LanguageSelector />
+      <div className="absolute top-4 right-4">
+        <QuickActions />
       </div>
       <div className="max-w-sm md:min-w-sm min-w-xs">{children}</div>
     </div>
@@ -31,7 +30,7 @@ const BaseLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const Layout = () => {
-  const { appUrl, warningsEnabled } = useAppContext();
+  const { app, ui } = useAppContext();
   const [ignoreDomainWarning, setIgnoreDomainWarning] = useState(() => {
     return window.sessionStorage.getItem("ignoreDomainWarning") === "true";
   });
@@ -42,11 +41,22 @@ export const Layout = () => {
     setIgnoreDomainWarning(true);
   }, [setIgnoreDomainWarning]);
 
-  if (!ignoreDomainWarning && warningsEnabled && appUrl !== currentUrl) {
+  const isTrusted = (() => {
+    try {
+      const appUrlObj = new URL(app.appUrl);
+      const currentUrlObj = new URL(currentUrl);
+
+      return isTrustedDomain(currentUrlObj, appUrlObj, "", false);
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!ignoreDomainWarning && ui.warningsEnabled && !isTrusted) {
     return (
       <BaseLayout>
         <DomainWarning
-          appUrl={appUrl}
+          appUrl={app.appUrl}
           currentUrl={currentUrl}
           onClick={() => handleIgnore()}
         />

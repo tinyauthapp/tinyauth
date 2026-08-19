@@ -1,4 +1,4 @@
-package controller_test
+package controller
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -33,17 +32,26 @@ func TestContextController(t *testing.T) {
 			middlewares: []gin.HandlerFunc{},
 			path:        "/api/context/app",
 			expected: func() string {
-				expectedAppContextResponse := controller.AppContextResponse{
-					Status:                200,
-					Message:               "Success",
-					Providers:             runtime.ConfiguredProviders,
-					Title:                 cfg.UI.Title,
-					AppURL:                runtime.AppURL,
-					CookieDomain:          runtime.CookieDomain,
-					ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
-					BackgroundImage:       cfg.UI.BackgroundImage,
-					OAuthAutoRedirect:     cfg.OAuth.AutoRedirect,
-					WarningsEnabled:       cfg.UI.WarningsEnabled,
+				expectedAppContextResponse := AppContextResponse{
+					Status:  200,
+					Message: "Success",
+					Auth: ACRAuth{
+						Providers: runtime.ConfiguredProviders,
+					},
+					OAuth: ACROAuth{
+						AutoRedirect: cfg.OAuth.AutoRedirect,
+					},
+					UI: ACRUI{
+						Title:                 cfg.UI.Title,
+						ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
+						BackgroundImage:       cfg.UI.BackgroundImage,
+						WarningsEnabled:       cfg.UI.WarningsEnabled,
+					},
+					App: ACRApp{
+						AppURL:            runtime.AppURL,
+						CookieDomain:      runtime.CookieDomain,
+						SubdomainsEnabled: cfg.Auth.SubdomainsEnabled,
+					},
 				}
 				bytes, err := json.Marshal(expectedAppContextResponse)
 				require.NoError(t, err)
@@ -55,7 +63,7 @@ func TestContextController(t *testing.T) {
 			middlewares: []gin.HandlerFunc{},
 			path:        "/api/context/user",
 			expected: func() string {
-				expectedUserContextResponse := controller.UserContextResponse{
+				expectedUserContextResponse := UserContextResponse{
 					Status:  401,
 					Message: "Unauthorized",
 				}
@@ -83,14 +91,16 @@ func TestContextController(t *testing.T) {
 			},
 			path: "/api/context/user",
 			expected: func() string {
-				expectedUserContextResponse := controller.UserContextResponse{
-					Status:     200,
-					Message:    "Success",
-					IsLoggedIn: true,
-					Username:   "johndoe",
-					Name:       "John Doe",
-					Email:      utils.CompileUserEmail("johndoe", runtime.CookieDomain),
-					Provider:   "local",
+				expectedUserContextResponse := UserContextResponse{
+					Status:  200,
+					Message: "Success",
+					Auth: UCRAuth{
+						Authenticated: true,
+						Username:      "johndoe",
+						Name:          "John Doe",
+						Email:         utils.CompileUserEmail("johndoe", runtime.CookieDomain),
+						ProviderID:    "local",
+					},
 				}
 				bytes, err := json.Marshal(expectedUserContextResponse)
 				require.NoError(t, err)
@@ -110,7 +120,12 @@ func TestContextController(t *testing.T) {
 			group := router.Group("/api")
 			gin.SetMode(gin.TestMode)
 
-			controller.NewContextController(log, cfg, runtime, group)
+			NewContextController(ContextControllerInput{
+				Log:         log,
+				Config:      &cfg,
+				Runtime:     &runtime,
+				RouterGroup: group,
+			})
 
 			recorder := httptest.NewRecorder()
 

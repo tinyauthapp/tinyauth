@@ -1,5 +1,12 @@
 package controller
 
+type FrontendLoginFor string
+
+const (
+	FrontendLoginForOIDC FrontendLoginFor = "oidc"
+	FrontendLoginForApp  FrontendLoginFor = "app"
+)
+
 type UnauthorizedQuery struct {
 	Username string `url:"username"`
 	Resource string `url:"resource"`
@@ -8,5 +15,6 @@ type UnauthorizedQuery struct {
 }
 
 type RedirectQuery struct {
-	RedirectURI string `url:"redirect_uri"`
+	RedirectURI string           `url:"redirect_uri"`
+	LoginFor    FrontendLoginFor `url:"login_for"`
 }

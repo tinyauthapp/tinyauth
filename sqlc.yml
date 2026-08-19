@@ -1,12 +1,12 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "sql/*_queries.sql"
-    schema: "sql/*_schemas.sql"
+    queries: "sql/sqlite/*_queries.sql"
+    schema: "sql/sqlite/*_schemas.sql"
     gen:
       go:
-        package: "repository"
-        out: "internal/repository"
+        package: "sqlite"
+        out: "internal/repository/sqlite"
         rename:
           uuid: "UUID"
           oauth_groups: "OAuthGroups"
@@ -22,9 +22,18 @@ sql:
             go_type: "string"
           - column: "sessions.ldap_groups"
             go_type: "string"
-          - column: "oidc_codes.nonce"
+          - column: "oidc_sessions.nonce"
             go_type: "string"
-          - column: "oidc_tokens.nonce"
-            go_type: "string"
-          - column: "oidc_codes.code_challenge"
-            go_type: "string"
+  - engine: "postgresql"
+    queries: "sql/postgres/*_queries.sql"
+    schema: "sql/postgres/*_schemas.sql"
+    gen:
+      go:
+        package: "postgres"
+        out: "internal/repository/postgres"
+        rename:
+          uuid: "UUID"
+          oauth_groups: "OAuthGroups"
+          oauth_name: "OAuthName"
+          oauth_sub: "OAuthSub"
+          redirect_uri: "RedirectURI"

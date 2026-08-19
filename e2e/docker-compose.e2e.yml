@@ -1,0 +1,24 @@
+services:
+  caddy:
+    image: caddy:2.11.4
+    pull_policy: missing
+    ports:
+      - 80:80
+    volumes:
+      - ./conf:/etc/caddy
+
+  whoami:
+    image: traefik/whoami:v1.11.0
+    pull_policy: missing
+
+  tinyauth:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+      args:
+        - VERSION=e2e
+        - BUILD_TAGS=nomsgpack
+        - LDFLAGS=-s -w
+    command: ["--configfile", "/app/config.yaml"]
+    volumes:
+      - ./config.e2e.yaml:/app/config.yaml:ro

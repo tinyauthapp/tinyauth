@@ -10,13 +10,13 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type UserinfoExtractor func(client *http.Client, url string) (*model.Claims, error)
+type OAuthUserinfoExtractor func(client *http.Client, ctx context.Context, url string) (*model.Claims, error)
 
 type OAuthService struct {
 	serviceCfg        model.OAuthServiceConfig
 	config            *oauth2.Config
 	ctx               context.Context
-	userinfoExtractor UserinfoExtractor
+	userinfoExtractor OAuthUserinfoExtractor
 	id                string
 }
 
@@ -24,6 +24,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string, ctx context.Con
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: config.Insecure,
 				MinVersion:         tls.VersionTLS12,
@@ -50,7 +51,7 @@ func NewOAuthService(config model.OAuthServiceConfig, id string, ctx context.Con
 	}
 }
 
-func (s *OAuthService) WithUserinfoExtractor(extractor UserinfoExtractor) *OAuthService {
+func (s *OAuthService) WithUserinfoExtractor(extractor OAuthUserinfoExtractor) *OAuthService {
 	s.userinfoExtractor = extractor
 	return s
 }
@@ -70,7 +71,7 @@ func (s *OAuthService) NewRandom() string {
 	return random
 }
 
-func (s *OAuthService) GetAuthURL(state string, verifier string) string {
+func (s *OAuthService) GetAuthURL(state, verifier string) string {
 	return s.config.AuthCodeURL(state, oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(verifier))
 }
 
@@ -80,5 +81,19 @@ func (s *OAuthService) GetToken(code string, verifier string) (*oauth2.Token, er
 
 func (s *OAuthService) GetUserinfo(token *oauth2.Token) (*model.Claims, error) {
 	client := oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(token))
-	return s.userinfoExtractor(client, s.serviceCfg.UserinfoURL)
+	return s.userinfoExtractor(client, s.ctx, s.serviceCfg.UserinfoURL)
+}
+
+func (s *OAuthService) GetConfig() model.OAuthServiceConfig {
+	return s.serviceCfg
+}
+
+func (s *OAuthService) UpdateConfig(config model.OAuthServiceConfig) {
+	s.serviceCfg = config
+	s.config.ClientID = config.ClientID
+	s.config.ClientSecret = config.ClientSecret
+	s.config.Scopes = config.Scopes
+	s.config.Endpoint.AuthURL = config.AuthURL
+	s.config.Endpoint.TokenURL = config.TokenURL
+	s.config.RedirectURL = config.RedirectURL
 }

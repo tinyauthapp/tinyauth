@@ -57,6 +57,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/robots.txt/, ""),
       },
+      "/authorize": {
+        target: "http://tinyauth-backend:3000/authorize",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/authorize/, ""),
+      },
     },
     allowedHosts: true,
   },

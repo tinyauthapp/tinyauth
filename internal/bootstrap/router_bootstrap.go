@@ -1,10 +1,18 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,34 +30,191 @@ func (app *BootstrapApp) setupRouter() error {
 		if err != nil {
 			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
+
+		app.runtime.TrustedProxiesConfigured = true
+	} else {
+		err := engine.SetTrustedProxies(nil)
+
+		if err != nil {
+			return fmt.Errorf("failed to set trusted proxies: %w", err)
+		}
+
+		app.log.App.Warn().Msg("Trusted proxies are not configured, IP access controls will NOT work")
 	}
 
-	contextMiddleware := middleware.NewContextMiddleware(app.log, app.runtime, app.services.authService, app.services.oauthBrokerService)
-	engine.Use(contextMiddleware.Middleware())
+	middlewareProvideFor := []any{
+		middleware.NewContextMiddleware,
+		middleware.NewUIMiddleware,
+		middleware.NewZerologMiddleware,
+	}
 
-	uiMiddleware, err := middleware.NewUIMiddleware()
+	for _, provider := range middlewareProvideFor {
+		err := app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide middleware: %w", err)
+		}
+	}
+
+	type middlewareInput struct {
+		dig.In
+
+		ContextMiddleware *middleware.ContextMiddleware
+		UIMiddleware      *middleware.UIMiddleware
+		ZerologMiddleware *middleware.ZerologMiddleware
+	}
+
+	err := app.dig.Invoke(func(mi middlewareInput) {
+		engine.Use(mi.ContextMiddleware.Middleware())
+		engine.Use(mi.UIMiddleware.Middleware())
+		engine.Use(mi.ZerologMiddleware.Middleware())
+	})
 
 	if err != nil {
-		return fmt.Errorf("failed to initialize UI middleware: %w", err)
+		return fmt.Errorf("failed to invoke middleware: %w", err)
 	}
 
-	engine.Use(uiMiddleware.Middleware())
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return &engine.RouterGroup
+	}, dig.Name("mainRouterGroup"))
 
-	zerologMiddleware := middleware.NewZerologMiddleware(app.log)
+	if err != nil {
+		return fmt.Errorf("failed to provide main router group: %w", err)
+	}
 
-	engine.Use(zerologMiddleware.Middleware())
+	err = app.dig.Provide(func() *gin.RouterGroup {
+		return engine.Group("/api")
+	}, dig.Name("apiRouterGroup"))
 
-	apiRouter := engine.Group("/api")
+	if err != nil {
+		return fmt.Errorf("failed to provide api router group: %w", err)
+	}
 
-	controller.NewContextController(app.log, app.config, app.runtime, apiRouter)
-	controller.NewOAuthController(app.log, app.config, app.runtime, apiRouter, app.services.authService)
-	controller.NewOIDCController(app.log, app.services.oidcService, app.runtime, apiRouter)
-	controller.NewProxyController(app.log, app.runtime, apiRouter, app.services.accessControlService, app.services.authService)
-	controller.NewUserController(app.log, app.runtime, apiRouter, app.services.authService)
-	controller.NewResourcesController(app.config, &engine.RouterGroup)
-	controller.NewHealthController(apiRouter)
-	controller.NewWellKnownController(app.services.oidcService, &engine.RouterGroup)
+	controllerProvideFor := []any{
+		controller.NewContextController,
+		controller.NewOAuthController,
+		controller.NewOIDCController,
+		controller.NewProxyController,
+		controller.NewUserController,
+		controller.NewResourcesController,
+		controller.NewHealthController,
+		controller.NewWellKnownController,
+	}
+
+	for _, provider := range controllerProvideFor {
+		err := app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide controller: %w", err)
+		}
+	}
+
+	type controllerInput struct {
+		dig.In
+
+		ContextController   *controller.ContextController
+		OAuthController     *controller.OAuthController
+		OIDCController      *controller.OIDCController
+		ProxyController     *controller.ProxyController
+		UserController      *controller.UserController
+		ResourcesController *controller.ResourcesController
+		HealthController    *controller.HealthController
+		WellKnownController *controller.WellKnownController
+	}
+
+	// force dig to build all controllers and register their routes
+	err = app.dig.Invoke(func(ci controllerInput) error {
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke controllers: %w", err)
+	}
 
 	app.router = engine
+	return nil
+}
+
+// Top down
+// 1. Unix socket (if server.socketPath)
+// 2. HTTP - default
+func (app *BootstrapApp) getListenerFunc() (func(ctx context.Context) error, error) {
+	if app.config.Server.SocketPath != "" {
+		return app.serveUnix, nil
+	}
+
+	return app.serveHTTP, nil
+}
+
+func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
+	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
+
+	app.log.App.Info().Msgf("Starting server on http://%s", address)
+
+	listener, err := net.Listen("tcp", address)
+
+	if err != nil {
+		return fmt.Errorf("failed to create tcp listener: %w", err)
+	}
+
+	server := &http.Server{
+		Addr:    address,
+		Handler: app.router.Handler(),
+	}
+
+	return app.serve(listener, server, ctx, "http")
+}
+
+func (app *BootstrapApp) serveUnix(ctx context.Context) error {
+	_, err := os.Stat(app.config.Server.SocketPath)
+
+	if err == nil {
+		app.log.App.Info().Msgf("Removing existing socket file %s", app.config.Server.SocketPath)
+		err := os.Remove(app.config.Server.SocketPath)
+
+		if err != nil {
+			return fmt.Errorf("failed to remove existing socket file: %w", err)
+		}
+	}
+
+	app.log.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
+
+	listener, err := net.Listen("unix", app.config.Server.SocketPath)
+
+	if err != nil {
+		return fmt.Errorf("failed to create unix socket listener: %w", err)
+	}
+
+	server := &http.Server{
+		Handler: app.router.Handler(),
+	}
+
+	return app.serve(listener, server, ctx, "unix socket")
+}
+
+func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, ctx context.Context, name string) error {
+	shutdown := func() {
+		// we use a new context for the shutdown since the main one is cancelled
+		sctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
+		defer cancel()
+		err := server.Shutdown(sctx)
+		if err != nil {
+			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
+		}
+		listener.Close()
+	}
+
+	go func() {
+		<-ctx.Done()
+		app.log.App.Debug().Msgf("Shutting down %s listener", name)
+		shutdown()
+	}()
+
+	err := server.Serve(listener)
+
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("failed to start %s listener: %w", name, err)
+	}
+
 	return nil
 }

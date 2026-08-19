@@ -7,24 +7,32 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/steveiliop56/ding"
+	"go.uber.org/dig"
+
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
+
+// Shutdown order for go routines
+// 1. Janitor routines (e.g. database cleanup, heartbeat) - ding.RingMinor
+// 2. HTTP server listeners - ding.RingNormal
+// 3. Networking layers, user and label providers (e.g. ailscale service, kubernetes service) - ding.RingMajor
+// 4. Database connection - ding.RingCritical
 
 type Services struct {
 	accessControlService *service.AccessControlsService
@@ -34,6 +42,8 @@ type Services struct {
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
+	tailscaleService     *service.TailscaleService
+	policyEngine         *service.PolicyEngine
 }
 
 type BootstrapApp struct {
@@ -43,10 +53,11 @@ type BootstrapApp struct {
 	log      *logger.Logger
 	ctx      context.Context
 	cancel   context.CancelFunc
-	queries  *repository.Queries
+	queries  repository.Store
 	router   *gin.Engine
 	db       *sql.DB
-	wg       sync.WaitGroup
+	ding     *ding.Ding
+	dig      *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -61,23 +72,29 @@ func (app *BootstrapApp) Setup() error {
 	app.ctx = ctx
 	app.cancel = cancel
 
+	// create the dig container
+	c := dig.New()
+	app.dig = c
+
+	// create a ding instance
+	dg := ding.New(ctx)
+	app.ding = dg
+
 	// setup logger
 	log := logger.NewLogger().WithConfig(app.config.Log)
 	log.Init()
 	app.log = log
 
-	// get app url
-	if app.config.AppURL == "" {
-		return errors.New("app url cannot be empty, perhaps config loading failed")
-	}
+	app.log.App.Info().Msgf("Starting Tinyauth version: %s", model.Version)
 
-	appUrl, err := url.Parse(app.config.AppURL)
+	// get app url
+	appURL, err := utils.SafeParseAppURL(app.config.AppURL)
 
 	if err != nil {
 		return fmt.Errorf("failed to parse app url: %w", err)
 	}
 
-	app.runtime.AppURL = appUrl.Scheme + "://" + appUrl.Host
+	app.runtime.AppURL = appURL
 
 	// validate session config
 	if app.config.Auth.SessionMaxLifetime != 0 && app.config.Auth.SessionMaxLifetime < app.config.Auth.SessionExpiry {
@@ -91,7 +108,12 @@ func (app *BootstrapApp) Setup() error {
 		return fmt.Errorf("failed to load users: %w", err)
 	}
 
-	app.runtime.LocalUsers = *users
+	if users != nil {
+		app.runtime.LocalUsers = *users
+	} else {
+		log.App.Debug().Msg("No local users found, local authentication will not be available")
+		app.runtime.LocalUsers = []model.LocalUser{}
+	}
 
 	// load oauth whitelist
 	oauthWhitelist, err := utils.GetStringList(app.config.OAuth.Whitelist, app.config.OAuth.WhitelistFile)
@@ -106,19 +128,21 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthProviders = app.config.OAuth.Providers
 
 	for id, provider := range app.runtime.OAuthProviders {
+		if slices.Contains(model.ReservedProviderNames, id) {
+			return fmt.Errorf("provider id %s is reserved and cannot be used", id)
+		}
+
+		providerWhitelist, err := utils.GetStringList(provider.Whitelist, provider.WhitelistFile)
+		if err != nil {
+			return fmt.Errorf("failed to load oauth whitelist for provider %s: %w", id, err)
+		}
+
+		provider.Whitelist = providerWhitelist
+
 		secret := utils.GetSecret(provider.ClientSecret, provider.ClientSecretFile)
 		provider.ClientSecret = secret
 		provider.ClientSecretFile = ""
 
-		if provider.RedirectURL == "" {
-			provider.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + id
-		}
-
-		app.runtime.OAuthProviders[id] = provider
-	}
-
-	// set presets for built-in providers
-	for id, provider := range app.runtime.OAuthProviders {
 		if provider.Name == "" {
 			if name, ok := model.OverrideProviders[id]; ok {
 				provider.Name = name
@@ -126,24 +150,16 @@ func (app *BootstrapApp) Setup() error {
 				provider.Name = utils.Capitalize(id)
 			}
 		}
+
 		app.runtime.OAuthProviders[id] = provider
 	}
 
-	// setup oidc clients
-	for id, client := range app.config.OIDC.Clients {
-		client.ID = id
-		app.runtime.OIDCClients = append(app.runtime.OIDCClients, client)
-	}
-
 	// cookie domain
-	cookieDomainResolver := utils.GetCookieDomain
-
 	if !app.config.Auth.SubdomainsEnabled {
-		app.log.App.Warn().Msg("Subdomains are disabled, using standalone cookie domain resolver which will not work with subdomains")
-		cookieDomainResolver = utils.GetStandaloneCookieDomain
+		app.log.App.Warn().Msg("Subdomains are disabled, cookies will be set for the current domain only")
 	}
 
-	cookieDomain, err := cookieDomainResolver(app.runtime.AppURL)
+	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL, app.config.Auth.SubdomainsEnabled)
 
 	if err != nil {
 		return fmt.Errorf("failed to get cookie domain: %w", err)
@@ -152,33 +168,67 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.CookieDomain = cookieDomain
 
 	// cookie names
-	app.runtime.UUID = utils.GenerateUUID(appUrl.Hostname())
+	u, err := url.Parse(app.runtime.AppURL)
+
+	if err != nil {
+		return fmt.Errorf("failed to parse app url: %w", err)
+	}
+
+	app.runtime.UUID = utils.GenerateUUID(u.Hostname())
 
 	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 
 	app.runtime.SessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
-	app.runtime.CSRFCookieName = fmt.Sprintf("%s-%s", model.CSRFCookieName, cookieId)
-	app.runtime.RedirectCookieName = fmt.Sprintf("%s-%s", model.RedirectCookieName, cookieId)
 	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
 
 	// database
-	err = app.SetupDatabase()
+	store, err := app.SetupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
 	}
 
-	// after this point, we start initializing dependencies so it's a good time to setup a defer
-	// to ensure that resources are cleaned up properly in case of an error during initialization
-	defer func() {
-		app.cancel()
-		app.wg.Wait()
-		app.db.Close()
-	}()
+	app.ding.Go(func(ctx context.Context) {
+		<-ctx.Done()
+		app.log.App.Debug().Msg("Shutting down database connection")
+		if app.db == nil {
+			// using memory store, no db instance
+			return
+		}
+		if err := app.db.Close(); err != nil {
+			app.log.App.Error().Err(err).Msg("Failed to close database connection")
+		}
+	}, ding.RingCritical)
 
-	// queries
-	queries := repository.New(app.db)
-	app.queries = queries
+	// store
+	app.queries = store
+
+	// provide basic utilities to container
+	type utilityProvider struct {
+		dig.Out
+
+		Log     *logger.Logger
+		Config  *model.Config
+		Runtime *model.RuntimeConfig
+		Ding    *ding.Ding
+		Ctx     context.Context
+		Queries repository.Store
+	}
+
+	err = app.dig.Provide(func() utilityProvider {
+		return utilityProvider{
+			Log:     app.log,
+			Config:  &app.config,
+			Runtime: &app.runtime,
+			Ding:    app.ding,
+			Ctx:     app.ctx,
+			Queries: app.queries,
+		}
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to provide utilities to container: %w", err)
+	}
 
 	// services
 	err = app.setupServices()
@@ -228,6 +278,24 @@ func (app *BootstrapApp) Setup() error {
 
 	app.runtime.ConfiguredProviders = configuredProviders
 
+	// force an update of the redirect urls for all oauth providers, if they are empty
+	services := app.services.oauthBrokerService.GetConfiguredServices()
+
+	for _, service := range services {
+		oauthService, ok := app.services.oauthBrokerService.GetService(service)
+
+		if !ok {
+			return fmt.Errorf("failed to get oauth service for provider %s", service)
+		}
+
+		providerConfig := oauthService.GetConfig()
+
+		if providerConfig.RedirectURL == "" {
+			providerConfig.RedirectURL = app.runtime.AppURL + "/api/oauth/callback/" + service
+			oauthService.UpdateConfig(providerConfig)
+		}
+	}
+
 	// setup router
 	err = app.setupRouter()
 
@@ -237,142 +305,44 @@ func (app *BootstrapApp) Setup() error {
 
 	// start db cleanup routine
 	app.log.App.Debug().Msg("Starting database cleanup routine")
-	app.wg.Go(app.dbCleanupRoutine)
+	app.ding.Go(app.dbCleanupRoutine, ding.RingMinor)
 
 	// if analytics are not disabled, start heartbeat
 	if app.config.Analytics.Enabled {
 		app.log.App.Debug().Msg("Starting heartbeat routine")
-		app.wg.Go(app.heartbeatRoutine)
+		app.ding.Go(app.heartbeatRoutine, ding.RingMinor)
 	}
 
-	// create err channel to listen for server errors
-	errChanLen := 0
+	// get listener
+	listenerFunc, err := app.getListenerFunc()
 
-	runUnix := app.config.Server.SocketPath != ""
-	runHTTP := app.config.Server.SocketPath == "" || app.config.Server.ConcurrentListenersEnabled
-
-	if runUnix {
-		errChanLen++
+	if err != nil {
+		return fmt.Errorf("failed to get listener function: %w", err)
 	}
 
-	if runHTTP {
-		errChanLen++
-	}
+	// run listener
+	lec := make(chan error, 1)
 
-	errChan := make(chan error, errChanLen)
-
-	if app.config.Server.ConcurrentListenersEnabled {
-		app.log.App.Info().Msg("Concurrent listeners enabled, will run on all available listeners")
-	}
-
-	// serve unix
-	if runUnix {
-		app.wg.Go(func() {
-			if err := app.serveUnix(); err != nil {
-				errChan <- err
-			}
-		})
-	}
-
-	// serve to http
-	if runHTTP {
-		app.wg.Go(func() {
-			if err := app.serveHTTP(); err != nil {
-				errChan <- err
-			}
-		})
-	}
+	app.ding.Go(func(ctx context.Context) {
+		lec <- listenerFunc(ctx)
+	}, ding.RingNormal)
 
 	// monitor cancellation and server errors
 	for {
 		select {
 		case <-app.ctx.Done():
+			app.ding.Wait()
 			app.log.App.Info().Msg("Oh, it's time for me to go, bye!")
 			return nil
-		case err := <-errChan:
+		case err := <-lec:
 			if err != nil {
-				return fmt.Errorf("server error: %w", err)
+				return fmt.Errorf("listener error: %w", err)
 			}
 		}
 	}
 }
 
-func (app *BootstrapApp) serveHTTP() error {
-	address := fmt.Sprintf("%s:%d", app.config.Server.Address, app.config.Server.Port)
-
-	app.log.App.Info().Msgf("Starting server on %s", address)
-
-	server := &http.Server{
-		Addr:    address,
-		Handler: app.router.Handler(),
-	}
-
-	go func() {
-		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down http listener")
-		server.Shutdown(app.ctx)
-	}()
-
-	err := server.ListenAndServe()
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start http listener: %w", err)
-	}
-
-	return nil
-}
-
-func (app *BootstrapApp) serveUnix() error {
-	if app.config.Server.SocketPath == "" {
-		return nil
-	}
-
-	_, err := os.Stat(app.config.Server.SocketPath)
-
-	if err == nil {
-		app.log.App.Info().Msgf("Removing existing socket file %s", app.config.Server.SocketPath)
-		err := os.Remove(app.config.Server.SocketPath)
-
-		if err != nil {
-			return fmt.Errorf("failed to remove existing socket file: %w", err)
-		}
-	}
-
-	app.log.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
-
-	listener, err := net.Listen("unix", app.config.Server.SocketPath)
-
-	if err != nil {
-		return fmt.Errorf("failed to create unix socket listener: %w", err)
-	}
-
-	server := &http.Server{
-		Handler: app.router.Handler(),
-	}
-
-	shutdown := func() {
-		server.Shutdown(app.ctx)
-		listener.Close()
-		os.Remove(app.config.Server.SocketPath)
-	}
-
-	go func() {
-		<-app.ctx.Done()
-		app.log.App.Debug().Msg("Shutting down unix socket listener")
-		shutdown()
-	}()
-
-	err = server.Serve(listener)
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		shutdown()
-		return fmt.Errorf("failed to start unix socket listener: %w", err)
-	}
-
-	return nil
-}
-
-func (app *BootstrapApp) heartbeatRoutine() {
+func (app *BootstrapApp) heartbeatRoutine(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(12) * time.Hour)
 	defer ticker.Stop()
 
@@ -425,7 +395,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 			if res.StatusCode != 200 && res.StatusCode != 201 {
 				app.log.App.Debug().Str("status", res.Status).Msg("Heartbeat returned non-200/201 status")
 			}
-		case <-app.ctx.Done():
+		case <-ctx.Done():
 			app.log.App.Debug().Msg("Stopping heartbeat routine")
 			ticker.Stop()
 			return
@@ -433,7 +403,7 @@ func (app *BootstrapApp) heartbeatRoutine() {
 	}
 }
 
-func (app *BootstrapApp) dbCleanupRoutine() {
+func (app *BootstrapApp) dbCleanupRoutine(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(30) * time.Minute)
 	defer ticker.Stop()
 
@@ -442,14 +412,14 @@ func (app *BootstrapApp) dbCleanupRoutine() {
 		case <-ticker.C:
 			app.log.App.Debug().Msg("Running database cleanup")
 
-			err := app.queries.DeleteExpiredSessions(app.ctx, time.Now().Unix())
+			err := app.queries.DeleteExpiredSessions(ctx, time.Now().Unix())
 
 			if err != nil {
 				app.log.App.Error().Err(err).Msg("Failed to delete expired sessions")
 			}
 
 			app.log.App.Debug().Msg("Database cleanup completed")
-		case <-app.ctx.Done():
+		case <-ctx.Done():
 			app.log.App.Debug().Msg("Stopping database cleanup routine")
 			ticker.Stop()
 			return

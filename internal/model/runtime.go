@@ -1,18 +1,16 @@
 package model
 
 type RuntimeConfig struct {
-	AppURL                 string
-	UUID                   string
-	CookieDomain           string
-	SessionCookieName      string
-	CSRFCookieName         string
-	RedirectCookieName     string
-	OAuthSessionCookieName string
-	LocalUsers             []LocalUser
-	OAuthProviders         map[string]OAuthServiceConfig
-	OAuthWhitelist         []string
-	ConfiguredProviders    []Provider
-	OIDCClients            []OIDCClientConfig
+	AppURL                   string
+	UUID                     string
+	CookieDomain             string
+	SessionCookieName        string
+	OAuthSessionCookieName   string
+	LocalUsers               []LocalUser
+	OAuthProviders           map[string]OAuthServiceConfig
+	OAuthWhitelist           []string
+	ConfiguredProviders      []Provider
+	TrustedProxiesConfigured bool
 }
 
 type Provider struct {
