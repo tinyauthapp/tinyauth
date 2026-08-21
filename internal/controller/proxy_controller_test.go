@@ -213,7 +213,7 @@ func TestProxyController(t *testing.T) {
 			description: "Ensure forward auth fallback for envoy",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/hello", nil)
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy", nil)
 				req.Host = ""
 				req.Header.Set("x-forwarded-host", "test.example.com")
 				req.Header.Set("x-forwarded-proto", "https")

@@ -518,6 +518,39 @@ func (controller *ProxyController) getContextFromAuthModule(c *gin.Context, modu
 	return ProxyContext{}, fmt.Errorf("unsupported auth module: %v", module)
 }
 
+func (controller *ProxyController) authModuleIdentifiersPresent(c *gin.Context, module AuthModuleType) bool {
+	switch module {
+	case ForwardAuth:
+		_, host := controller.getHeader(c, "x-forwarded-host")
+		_, uri := controller.getHeader(c, "x-forwarded-uri")
+		return host || uri
+	case AuthRequest:
+		_, ok := controller.getHeader(c, "x-original-url")
+		return ok
+	case ExtAuthz:
+		return strings.TrimSpace(c.Query("path")) != ""
+	default:
+		return false
+	}
+}
+
+func (controller *ProxyController) ensureNoMultipleAuthModules(c *gin.Context, authModules []AuthModuleType) error {
+	present := 0
+
+	for _, module := range authModules {
+		if controller.authModuleIdentifiersPresent(c, module) {
+			present++
+		}
+	}
+
+	if present > 1 {
+		controller.log.App.Warn().Msg("Request carries headers for multiple auth modules, possible spoofing attempt, denying")
+		return fmt.Errorf("conflicting auth module headers")
+	}
+
+	return nil
+}
+
 func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext, error) {
 	var req Proxy
 
@@ -540,32 +573,28 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 		return ProxyContext{}, fmt.Errorf("no auth modules supported for proxy: %v", req.Proxy)
 	}
 
-	ctxs := make(map[AuthModuleType]ProxyContext)
+	err = controller.ensureNoMultipleAuthModules(c, authModules)
+
+	if err != nil {
+		return ProxyContext{}, err
+	}
+
+	var ctx *ProxyContext
 
 	for _, module := range authModules {
 		controller.log.App.Debug().Msgf("Trying to get context from auth module %v", module)
-		ctx, err := controller.getContextFromAuthModule(c, module)
+		authModuleCtx, err := controller.getContextFromAuthModule(c, module)
 		if err != nil {
 			controller.log.App.Debug().Msgf("Failed to get context from auth module %v: %v", module, err)
 			continue
 		}
 		controller.log.App.Debug().Msgf("Successfully got context from auth module %v", module)
-		ctxs[module] = ctx
+		ctx = &authModuleCtx
+		break
 	}
 
-	if len(ctxs) == 0 {
-		return ProxyContext{}, fmt.Errorf("no auth module context found")
-	}
-
-	if len(ctxs) > 1 {
-		controller.log.App.Warn().Msg("Multiple auth module contexts found, something is wrong in your proxy config or someone is trying to spoof the request, denying")
-		return ProxyContext{}, fmt.Errorf("multiple auth module contexts found")
-	}
-
-	var ctx ProxyContext
-
-	for _, c := range ctxs {
-		ctx = c
+	if ctx == nil {
+		return ProxyContext{}, fmt.Errorf("failed to get context from any auth module")
 	}
 
 	// Parse the raw path to populate the cleaned path used for ACLs
@@ -593,5 +622,5 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 
 	ctx.IsBrowser = isBrowser
 	ctx.ProxyType = proxy
-	return ctx, nil
+	return *ctx, nil
 }
