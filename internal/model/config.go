@@ -239,7 +239,8 @@ type LogStreamConfig struct {
 }
 
 type ExperimentalConfig struct {
-	OAuthBridgeEnabled bool `description:"Enable the OAuth bridge, uses a new way to format OAuth user information." yaml:"oauthBridgeEnabled,omitempty"`
+	OAuthBridgeEnabled        bool `description:"Enable the OAuth bridge, uses a new way to format OAuth user information." yaml:"oauthBridgeEnabled,omitempty"`
+	DisableAuthModuleFallback bool `description:"Disable the fallback to forward_auth modules when auth_request or ext_authz fail." yaml:"disableAuthModuleFallback,omitempty"`
 }
 
 type TailscaleConfig struct {

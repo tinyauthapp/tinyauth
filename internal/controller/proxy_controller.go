@@ -57,6 +57,7 @@ type ProxyContext struct {
 type ProxyController struct {
 	log          *logger.Logger
 	runtime      *model.RuntimeConfig
+	config       *model.Config
 	acls         *service.AccessControlsService
 	auth         *service.AuthService
 	policyEngine *service.PolicyEngine
@@ -67,6 +68,7 @@ type ProxyControllerInput struct {
 
 	Log           *logger.Logger
 	RuntimeConfig *model.RuntimeConfig
+	Config        *model.Config
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	ACLsService   *service.AccessControlsService
 	AuthService   *service.AuthService
@@ -77,6 +79,7 @@ func NewProxyController(i ProxyControllerInput) *ProxyController {
 	controller := &ProxyController{
 		log:          i.Log,
 		runtime:      i.RuntimeConfig,
+		config:       i.Config,
 		acls:         i.ACLsService,
 		auth:         i.AuthService,
 		policyEngine: i.PolicyEngine,
@@ -486,9 +489,17 @@ func (controller *ProxyController) determineAuthModules(proxy ProxyType) []AuthM
 	case Traefik, Caddy:
 		return []AuthModuleType{ForwardAuth}
 	case Envoy:
-		return []AuthModuleType{ExtAuthz, ForwardAuth}
+		authModules := []AuthModuleType{ExtAuthz}
+		if !controller.config.Experimental.DisableAuthModuleFallback {
+			authModules = append(authModules, ForwardAuth)
+		}
+		return authModules
 	case Nginx:
-		return []AuthModuleType{AuthRequest, ForwardAuth}
+		authModules := []AuthModuleType{AuthRequest}
+		if !controller.config.Experimental.DisableAuthModuleFallback {
+			authModules = append(authModules, ForwardAuth)
+		}
+		return authModules
 	default:
 		return []AuthModuleType{}
 	}
