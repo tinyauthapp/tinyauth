@@ -101,6 +101,7 @@ func (s *OAuthService) UpdateConfig(config model.OAuthServiceConfig) {
 
 func (s *OAuthService) mapClaims(claims map[string]any) model.Claims {
 	return model.Claims{
+		Sub:               mapClaim[string]("sub", "", claims),
 		Name:              mapClaim[string]("name", s.serviceCfg.Claims.Name, claims),
 		PreferredUsername: mapClaim[string]("preferred_username", s.serviceCfg.Claims.Username, claims),
 		Email:             mapClaim[string]("email", s.serviceCfg.Claims.Email, claims),
