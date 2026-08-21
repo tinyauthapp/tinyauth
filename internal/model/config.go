@@ -253,18 +253,26 @@ type TailscaleConfig struct {
 // OAuth/OIDC config
 
 type OAuthServiceConfig struct {
-	ClientID         string   `description:"OAuth client ID." yaml:"clientId,omitempty"`
-	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret,omitempty"`
-	ClientSecretFile string   `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile,omitempty"`
-	Whitelist        []string `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist,omitempty"`
-	WhitelistFile    string   `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile,omitempty"`
-	Scopes           []string `description:"OAuth scopes." yaml:"scopes,omitempty"`
-	RedirectURL      string   `description:"OAuth redirect URL." yaml:"redirectUrl,omitempty"`
-	AuthURL          string   `description:"OAuth authorization URL." yaml:"authUrl,omitempty"`
-	TokenURL         string   `description:"OAuth token URL." yaml:"tokenUrl,omitempty"`
-	UserinfoURL      string   `description:"OAuth userinfo URL." yaml:"userinfoUrl,omitempty"`
-	Insecure         bool     `description:"Allow insecure OAuth connections." yaml:"insecure,omitempty"`
-	Name             string   `description:"Provider name in UI." yaml:"name,omitempty"`
+	ClientID         string                `description:"OAuth client ID." yaml:"clientId,omitempty"`
+	ClientSecret     string                `description:"OAuth client secret." yaml:"clientSecret,omitempty"`
+	ClientSecretFile string                `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile,omitempty"`
+	Whitelist        []string              `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist,omitempty"`
+	WhitelistFile    string                `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile,omitempty"`
+	Scopes           []string              `description:"OAuth scopes." yaml:"scopes,omitempty"`
+	RedirectURL      string                `description:"OAuth redirect URL." yaml:"redirectUrl,omitempty"`
+	AuthURL          string                `description:"OAuth authorization URL." yaml:"authUrl,omitempty"`
+	TokenURL         string                `description:"OAuth token URL." yaml:"tokenUrl,omitempty"`
+	UserinfoURL      string                `description:"OAuth userinfo URL." yaml:"userinfoUrl,omitempty"`
+	Insecure         bool                  `description:"Allow insecure OAuth connections." yaml:"insecure,omitempty"`
+	Name             string                `description:"Provider name in UI." yaml:"name,omitempty"`
+	Claims           OAuthServiceClaimsMap `description:"Map of claims to extract from the userinfo response." yaml:"claims,omitempty"`
+}
+
+type OAuthServiceClaimsMap struct {
+	Username string `description:"Username claim." yaml:"username,omitempty"`
+	Email    string `description:"Email claim." yaml:"email,omitempty"`
+	Name     string `description:"Name claim." yaml:"name,omitempty"`
+	Groups   string `description:"Groups claim." yaml:"groups,omitempty"`
 }
 
 type OIDCClientConfig struct {

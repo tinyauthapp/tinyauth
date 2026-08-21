@@ -21,11 +21,15 @@ type GithubUserinfoResponse struct {
 	ID    int    `json:"id"`
 }
 
-func defaultExtractor(client *http.Client, ctx context.Context, url string) (*model.Claims, error) {
-	return simpleReq[model.Claims](client, ctx, url, nil)
+func defaultExtractor(client *http.Client, ctx context.Context, url string, mapClaims MapClaims) (*model.Claims, error) {
+	claims, err := simpleReq[map[string]any](client, ctx, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return new(mapClaims(*claims)), nil
 }
 
-func githubExtractor(client *http.Client, ctx context.Context, _ string) (*model.Claims, error) {
+func githubExtractor(client *http.Client, ctx context.Context, _ string, _ MapClaims) (*model.Claims, error) {
 	var user model.Claims
 
 	userInfo, err := simpleReq[GithubUserinfoResponse](client, ctx, "https://api.github.com/user", map[string]string{

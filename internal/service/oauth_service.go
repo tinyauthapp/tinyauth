@@ -10,7 +10,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type OAuthUserinfoExtractor func(client *http.Client, ctx context.Context, url string) (*model.Claims, error)
+type MapClaims func(claims map[string]any) model.Claims
+type OAuthUserinfoExtractor func(client *http.Client, ctx context.Context, url string, mapClaims MapClaims) (*model.Claims, error)
 
 type OAuthService struct {
 	serviceCfg        model.OAuthServiceConfig
@@ -81,7 +82,7 @@ func (s *OAuthService) GetToken(code string, verifier string) (*oauth2.Token, er
 
 func (s *OAuthService) GetUserinfo(token *oauth2.Token) (*model.Claims, error) {
 	client := oauth2.NewClient(s.ctx, oauth2.StaticTokenSource(token))
-	return s.userinfoExtractor(client, s.ctx, s.serviceCfg.UserinfoURL)
+	return s.userinfoExtractor(client, s.ctx, s.serviceCfg.UserinfoURL, s.mapClaims)
 }
 
 func (s *OAuthService) GetConfig() model.OAuthServiceConfig {
@@ -96,4 +97,26 @@ func (s *OAuthService) UpdateConfig(config model.OAuthServiceConfig) {
 	s.config.Endpoint.AuthURL = config.AuthURL
 	s.config.Endpoint.TokenURL = config.TokenURL
 	s.config.RedirectURL = config.RedirectURL
+}
+
+func (s *OAuthService) mapClaims(claims map[string]any) model.Claims {
+	return model.Claims{
+		Name:              mapClaim[string]("name", s.serviceCfg.Claims.Name, claims),
+		PreferredUsername: mapClaim[string]("preferred_username", s.serviceCfg.Claims.Username, claims),
+		Email:             mapClaim[string]("email", s.serviceCfg.Claims.Email, claims),
+		Groups:            mapClaim[any]("groups", s.serviceCfg.Claims.Groups, claims),
+	}
+}
+
+func mapClaim[T any](fallback, override string, kv map[string]any) T {
+	key := fallback
+	if override != "" {
+		key = override
+	}
+	v, ok := kv[key].(T)
+	if !ok {
+		var zero T
+		return zero
+	}
+	return v
 }
