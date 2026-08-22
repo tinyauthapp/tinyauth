@@ -294,7 +294,9 @@ func (controller *OAuthController) getCookieDomain() string {
 
 func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
 	v := validators.NewDomainValidator(validators.DomainValidatorOptions{
-		WithPort: true,
+		WithPort:       true,
+		WithScheme:     true,
+		AllowedSchemes: []string{"https", "http"},
 	})
 
 	_, err := v.SafeHostname(controller.runtime.AppURL)

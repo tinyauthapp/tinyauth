@@ -978,6 +978,7 @@ func TestProxyController(t *testing.T) {
 			NewProxyController(ProxyControllerInput{
 				Log:           log,
 				RuntimeConfig: &runtime,
+				Config:        &cfg,
 				RouterGroup:   group,
 				ACLsService:   aclsService,
 				AuthService:   authService,
