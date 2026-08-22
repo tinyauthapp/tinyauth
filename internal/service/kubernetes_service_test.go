@@ -12,6 +12,37 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
+func mustWatchedResource(resource string) watchedResource {
+	for _, res := range watchedResources {
+		if res.gvr.Resource == resource {
+			return res
+		}
+	}
+	panic("unknown watched resource: " + resource)
+}
+
+var (
+	testIngressResource   = mustWatchedResource("ingresses")
+	testHTTPRouteResource = mustWatchedResource("httproutes")
+	testGRPCRouteResource = mustWatchedResource("grpcroutes")
+)
+
+// aclLocator mimics the way the access controls service matches apps, first on
+// the configured domain and then on the app name.
+func aclLocator(domain string, got **model.App) func(name string, app *model.App) bool {
+	return func(name string, app *model.App) bool {
+		if app.Config.Domain == domain {
+			*got = app
+			return true
+		}
+		if strings.HasPrefix(strings.ToLower(domain), strings.ToLower(name+".")) {
+			*got = app
+			return true
+		}
+		return false
+	}
+}
+
 func TestKubernetesService(t *testing.T) {
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
@@ -26,10 +57,11 @@ func TestKubernetesService(t *testing.T) {
 			description: "Cache by domain returns app and misses unknown domain",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "foo.example.com"}}
-				svc.addIngressEntries(ingressKey{
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []ingressEntry{
+				}, []string{"foo.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -37,33 +69,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
-					if app.Config.Domain == "foo.example.com" {
-						got = app
-						return true
-					}
-					return false
-				})
-				require.NotNil(t, got)
-				assert.Equal(t, "foo.example.com", got.Config.Domain)
-			},
-		},
-		{
-			description: "RemoveIngress clears domain and app name entries",
-			run: func(t *testing.T, svc *KubernetesService) {
-				app := model.App{Config: model.AppConfig{Domain: "foo.example.com"}}
-				svc.addIngressEntries(ingressKey{
-					namespace: "default",
-					name:      "my-ingress",
-				}, []ingressEntry{
-					{
-						app:  app,
-						name: "foo",
-					},
-				})
-
-				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "foo.example.com" {
 						got = app
 						return true
@@ -74,12 +80,45 @@ func TestKubernetesService(t *testing.T) {
 				assert.Equal(t, "foo.example.com", got.Config.Domain)
 
 				got = nil
-				svc.removeIngress(ingressKey{
+				svc.getEntry("unknown.example.com", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "RemoveResource clears domain and app name entries",
+			run: func(t *testing.T, svc *KubernetesService) {
+				key := resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
+				}
+
+				app := model.App{Config: model.AppConfig{Domain: "foo.example.com"}}
+				svc.addResourceEntries(key, []string{"foo.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "foo",
+					},
 				})
 
-				svc.getEntry(func(name string, app *model.App) bool {
+				var got *model.App
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "foo.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "foo.example.com", got.Config.Domain)
+
+				got = nil
+				svc.removeResource(key)
+
+				svc.getEntry("foo.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "foo.example.com" {
 						got = app
 						return true
@@ -90,13 +129,16 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
-			description: "AddIngressApps replaces stale entries for the same ingress",
+			description: "AddResourceEntries replaces stale entries for the same resource",
 			run: func(t *testing.T, svc *KubernetesService) {
-				old := model.App{Config: model.AppConfig{Domain: "old.example.com"}}
-				svc.addIngressEntries(ingressKey{
+				key := resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []ingressEntry{
+				}
+
+				old := model.App{Config: model.AppConfig{Domain: "old.example.com"}}
+				svc.addResourceEntries(key, []string{"old.example.com"}, []resourceEntry{
 					{
 						app:  old,
 						name: "foo",
@@ -104,10 +146,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				updated := model.App{Config: model.AppConfig{Domain: "new.example.com"}}
-				svc.addIngressEntries(ingressKey{
-					namespace: "default",
-					name:      "my-ingress",
-				}, []ingressEntry{
+				svc.addResourceEntries(key, []string{"new.example.com"}, []resourceEntry{
 					{
 						app:  updated,
 						name: "foo",
@@ -115,7 +154,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("old.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "old.example.com" {
 						got = app
 						return true
@@ -124,7 +163,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 				assert.Nil(t, got)
 
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("new.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "new.example.com" {
 						got = app
 						return true
@@ -136,15 +175,65 @@ func TestKubernetesService(t *testing.T) {
 			},
 		},
 		{
+			description: "Resources of different kinds with the same name do not clobber each other",
+			run: func(t *testing.T, svc *KubernetesService) {
+				ingress := unstructured.Unstructured{}
+				ingress.SetNamespace("default")
+				ingress.SetName("shared")
+				ingress.SetAnnotations(map[string]string{
+					"tinyauth.apps.ingapp.config.domain": "ingapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(ingress.Object, []any{
+					map[string]any{
+						"host": "ingapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				httpRoute := unstructured.Unstructured{}
+				httpRoute.SetNamespace("default")
+				httpRoute.SetName("shared")
+				httpRoute.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(httpRoute.Object, []string{
+					"gwapp.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testIngressResource, &ingress)
+				svc.updateFromItem(testHTTPRouteResource, &httpRoute)
+
+				var got *model.App
+				svc.getEntry("ingapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "ingapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+
+				got = nil
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "gwapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+			},
+		},
+		{
 			description: "GetLabels returns app from cache when connected",
 			run: func(t *testing.T, svc *KubernetesService) {
 				svc.connected = true
 
 				app := model.App{Config: model.AppConfig{Domain: "hit.example.com"}}
-				svc.addIngressEntries(ingressKey{
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []ingressEntry{
+				}, []string{"hit.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -152,7 +241,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
+				err := svc.Lookup("hit.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "hit.example.com" {
 						got = app
 						return true
@@ -170,7 +259,7 @@ func TestKubernetesService(t *testing.T) {
 				svc.connected = true
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
+				err := svc.Lookup("notfound.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "notfound.example.com" {
 						got = app
 						return true
@@ -187,10 +276,11 @@ func TestKubernetesService(t *testing.T) {
 				svc.connected = true
 
 				app := model.App{Path: model.AppPath{Allow: "/foo"}}
-				svc.addIngressEntries(ingressKey{
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []ingressEntry{
+				}, []string{"foo.internal.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -198,13 +288,7 @@ func TestKubernetesService(t *testing.T) {
 				})
 
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
-					if strings.HasPrefix("foo.internal.example.com", "foo.") {
-						got = app
-						return true
-					}
-					return false
-				})
+				err := svc.Lookup("foo.internal.example.com", aclLocator("foo.internal.example.com", &got))
 				require.NoError(t, err)
 				require.NotNil(t, got)
 				assert.Equal(t, "/foo", got.Path.Allow)
@@ -213,9 +297,138 @@ func TestKubernetesService(t *testing.T) {
 		{
 			description: "GetLabels returns empty app when service not yet started",
 			run: func(t *testing.T, svc *KubernetesService) {
+				app := model.App{Config: model.AppConfig{Domain: "hit.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"hit.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "foo",
+					},
+				})
+
 				var got *model.App
-				err := svc.Lookup(func(name string, app *model.App) bool {
-					return false
+				err := svc.Lookup("hit.example.com", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				require.NoError(t, err)
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "Lookup withholds apps that are served on another host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-ingress")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"host": "myapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(testIngressResource, &item)
+
+				// The app is served on myapp.example.com, so it must not be
+				// able to define the ACLs of a look-alike domain it does not
+				// route just because the name happens to prefix it
+				var got *model.App
+				err := svc.Lookup("myapp.evil.com", aclLocator("myapp.evil.com", &got))
+				require.NoError(t, err)
+				assert.Nil(t, got)
+
+				err = svc.Lookup("myapp.example.com", aclLocator("myapp.example.com", &got))
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+			},
+		},
+		{
+			description: "Lookup yields apps for any domain covered by a wildcard host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.myapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"*.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				// A wildcard is a suffix match, so nested subdomains stay
+				// resolvable by app name
+				var got *model.App
+				err := svc.Lookup("myapp.sub.example.com", aclLocator("myapp.sub.example.com", &got))
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+
+				got = nil
+				err = svc.Lookup("myapp.example.net", aclLocator("myapp.example.net", &got))
+				require.NoError(t, err)
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "Lookup ignores the port of the domain",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				app := model.App{Config: model.AppConfig{Domain: "myapp.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"myapp.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "myapp",
+					},
+				})
+
+				var got *model.App
+				err := svc.Lookup("myapp.example.com:8443", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			},
+		},
+		{
+			description: "Lookup skips an invalid domain",
+			run: func(t *testing.T, svc *KubernetesService) {
+				svc.connected = true
+
+				app := model.App{Config: model.AppConfig{Domain: "myapp.example.com"}}
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
+					namespace: "default",
+					name:      "my-ingress",
+				}, []string{"myapp.example.com"}, []resourceEntry{
+					{
+						app:  app,
+						name: "myapp",
+					},
+				})
+
+				var got *model.App
+				err := svc.Lookup("not a domain", func(name string, app *model.App) bool {
+					got = app
+					return true
 				})
 				require.NoError(t, err)
 				assert.Nil(t, got)
@@ -239,10 +452,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -265,10 +478,10 @@ func TestKubernetesService(t *testing.T) {
 					"tinyauth.apps.myapp.config.domain": "myapp.example.com",
 				})
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -296,10 +509,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "myapp.example.com" {
 						got = app
 						return true
@@ -314,10 +527,11 @@ func TestKubernetesService(t *testing.T) {
 			description: "UpdateFromItem with no annotations removes existing cache entries",
 			run: func(t *testing.T, svc *KubernetesService) {
 				app := model.App{Config: model.AppConfig{Domain: "todelete.example.com"}}
-				svc.addIngressEntries(ingressKey{
+				svc.addResourceEntries(resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "my-ingress",
-				}, []ingressEntry{
+				}, []string{"todelete.example.com"}, []resourceEntry{
 					{
 						app:  app,
 						name: "foo",
@@ -328,10 +542,10 @@ func TestKubernetesService(t *testing.T) {
 				item.SetNamespace("default")
 				item.SetName("my-ingress")
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("todelete.example.com", func(name string, app *model.App) bool {
 					if app.Config.Domain == "todelete.example.com" {
 						got = app
 						return true
@@ -421,7 +635,7 @@ func TestKubernetesService(t *testing.T) {
 					"not-a-map",
 				}, "spec", "rules"))
 
-				hosts, err := svc.extractHosts(&item)
+				hosts, err := svc.extractHosts(testIngressResource, &item)
 				require.NoError(t, err)
 				assert.Equal(t, []string{"foo.example.com", "bar.example.com"}, hosts)
 			},
@@ -443,7 +657,7 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				hosts, err := svc.extractHosts(&item)
+				hosts, err := svc.extractIngressHosts(&item)
 				require.NoError(t, err)
 				assert.Equal(t, []string{"foo.example.com"}, hosts)
 			},
@@ -461,7 +675,7 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				hosts, err := svc.extractHosts(&item)
+				hosts, err := svc.extractIngressHosts(&item)
 				require.NoError(t, err)
 				assert.Equal(t, []string{"foo.example.com"}, hosts)
 			},
@@ -473,7 +687,7 @@ func TestKubernetesService(t *testing.T) {
 				item.SetNamespace("default")
 				item.SetName("test-ingress")
 
-				hosts, err := svc.extractHosts(&item)
+				hosts, err := svc.extractIngressHosts(&item)
 				require.NoError(t, err)
 				assert.Empty(t, hosts)
 			},
@@ -486,9 +700,376 @@ func TestKubernetesService(t *testing.T) {
 				item.SetName("test-ingress")
 				require.NoError(t, unstructured.SetNestedField(item.Object, "invalid", "spec", "rules"))
 
-				hosts, err := svc.extractHosts(&item)
+				hosts, err := svc.extractIngressHosts(&item)
 				require.Error(t, err)
 				assert.Nil(t, hosts)
+			},
+		},
+		{
+			description: "ExtractRouteHosts returns the hostnames of a route",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"foo.example.com",
+					"",
+					"*.bar.example.com",
+				}, "spec", "hostnames"))
+
+				hosts, err := svc.extractHosts(testHTTPRouteResource, &item)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"foo.example.com", "*.bar.example.com"}, hosts)
+			},
+		},
+		{
+			description: "ExtractRouteHosts returns nothing when spec.hostnames is missing",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+
+				hosts, err := svc.extractRouteHosts(testHTTPRouteResource, &item)
+				require.NoError(t, err)
+				assert.Empty(t, hosts)
+			},
+		},
+		{
+			description: "ExtractRouteHosts errors when spec.hostnames is not a string slice",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				require.NoError(t, unstructured.SetNestedField(item.Object, "invalid", "spec", "hostnames"))
+
+				hosts, err := svc.extractRouteHosts(testHTTPRouteResource, &item)
+				require.Error(t, err)
+				assert.Nil(t, hosts)
+			},
+		},
+		{
+			description: "ExtractRoutePaths treats omitted matches as a catch all",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, catchAll, err := svc.extractRoutePaths(map[string]any{})
+				require.NoError(t, err)
+				assert.True(t, catchAll)
+				assert.Empty(t, paths)
+			},
+		},
+		{
+			description: "ExtractRoutePaths applies the default path match",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, catchAll, err := svc.extractRoutePaths(map[string]any{
+					"matches": []any{
+						map[string]any{
+							"path": map[string]any{},
+						},
+					},
+				})
+				require.NoError(t, err)
+				assert.True(t, catchAll)
+				assert.Equal(t, []string{"/"}, paths)
+			},
+		},
+		{
+			description: "ExtractRoutePaths reports no catch all for scoped path matches",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, catchAll, err := svc.extractRoutePaths(map[string]any{
+					"matches": []any{
+						map[string]any{
+							"path": map[string]any{
+								"type":  "PathPrefix",
+								"value": "/api",
+							},
+						},
+						map[string]any{
+							"path": map[string]any{
+								"type":  "Exact",
+								"value": "/",
+							},
+						},
+						"not-a-map",
+					},
+				})
+				require.NoError(t, err)
+				assert.False(t, catchAll)
+				assert.Equal(t, []string{"/api", "/"}, paths)
+			},
+		},
+		{
+			description: "ExtractRoutePaths treats a match without a path as a catch all",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, catchAll, err := svc.extractRoutePaths(map[string]any{
+					"matches": []any{
+						map[string]any{
+							"method": map[string]any{
+								"service": "com.example.Service",
+							},
+						},
+					},
+				})
+				require.NoError(t, err)
+				assert.True(t, catchAll)
+				assert.Empty(t, paths)
+			},
+		},
+		{
+			description: "ExtractRoutePaths errors when matches is not a slice",
+			run: func(t *testing.T, svc *KubernetesService) {
+				paths, catchAll, err := svc.extractRoutePaths(map[string]any{
+					"matches": "invalid",
+				})
+				require.Error(t, err)
+				assert.False(t, catchAll)
+				assert.Nil(t, paths)
+			},
+		},
+		{
+			description: "UpdateFromItem parses annotations and populates cache from httproute",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+					"tinyauth.apps.gwapp.users.allow":   "bob",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"gwapp.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "gwapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "gwapp.example.com", got.Config.Domain)
+				assert.Equal(t, "bob", got.Users.Allow)
+			},
+		},
+		{
+			description: "UpdateFromItem parses annotations and populates cache from grpcroute",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-grpcroute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.grpcapp.config.domain": "grpcapp.example.com",
+					"tinyauth.apps.grpcapp.users.allow":   "carol",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"grpcapp.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testGRPCRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("grpcapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "grpcapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "grpcapp.example.com", got.Config.Domain)
+				assert.Equal(t, "carol", got.Users.Allow)
+			},
+		},
+		{
+			description: "UpdateFromItem skips routes without hostnames",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+				})
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					got = app
+					return true
+				})
+				assert.Nil(t, got)
+			},
+		},
+		{
+			description: "UpdateFromItem registers an app whose domain is covered by a wildcard hostname",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "deep.gwapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"*.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("deep.gwapp.example.com", func(name string, app *model.App) bool {
+					if name == "gwapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "deep.gwapp.example.com", got.Config.Domain)
+			},
+		},
+		{
+			description: "UpdateFromItem registers an app by name under a wildcard hostname",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.users.allow": "alice",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"*.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					if name == "gwapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "alice", got.Users.Allow)
+			},
+		},
+		{
+			description: "HostMatches honours the gateway api wildcard suffix rule",
+			run: func(t *testing.T, svc *KubernetesService) {
+				assert.True(t, hostMatches("foo.example.com", "foo.example.com"))
+				assert.True(t, hostMatches("Foo.Example.com", "foo.example.com"))
+				assert.False(t, hostMatches("bar.example.com", "foo.example.com"))
+
+				// A wildcard is a suffix match over one or more labels
+				assert.True(t, hostMatches("*.example.com", "foo.example.com"))
+				assert.True(t, hostMatches("*.example.com", "foo.test.example.com"))
+				assert.False(t, hostMatches("*.example.com", "example.com"))
+				assert.False(t, hostMatches("*.example.com", "foo.example.net"))
+			},
+		},
+		{
+			description: "HostCoversName matches app names against a host",
+			run: func(t *testing.T, svc *KubernetesService) {
+				assert.True(t, hostCoversName("foo.example.com", "foo"))
+				assert.True(t, hostCoversName("Foo.example.com", "FOO"))
+				assert.False(t, hostCoversName("bar.example.com", "foo"))
+				assert.False(t, hostCoversName("example.com", "foo"))
+
+				// A wildcard routes <name>.<suffix> for every name
+				assert.True(t, hostCoversName("*.example.com", "foo"))
+				assert.True(t, hostCoversName("*.example.com", "bar"))
+			},
+		},
+		{
+			description: "UpdateFromItem registers a route that has no catch-all path",
+			run: func(t *testing.T, svc *KubernetesService) {
+				item := unstructured.Unstructured{}
+				item.SetNamespace("default")
+				item.SetName("test-httproute")
+				item.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(item.Object, []string{
+					"gwapp.example.com",
+				}, "spec", "hostnames"))
+				require.NoError(t, unstructured.SetNestedSlice(item.Object, []any{
+					map[string]any{
+						"matches": []any{
+							map[string]any{
+								"path": map[string]any{
+									"type":  "PathPrefix",
+									"value": "/api",
+								},
+							},
+						},
+					},
+				}, "spec", "rules"))
+
+				svc.updateFromItem(testHTTPRouteResource, &item)
+
+				var got *model.App
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					if name == "gwapp" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+			},
+		},
+		{
+			description: "Ingress and HTTPRoute apps coexist in cache",
+			run: func(t *testing.T, svc *KubernetesService) {
+				ingress := unstructured.Unstructured{}
+				ingress.SetNamespace("default")
+				ingress.SetName("my-ingress")
+				ingress.SetAnnotations(map[string]string{
+					"tinyauth.apps.ingapp.config.domain": "ingapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedSlice(ingress.Object, []any{
+					map[string]any{
+						"host": "ingapp.example.com",
+					},
+				}, "spec", "rules"))
+
+				httpRoute := unstructured.Unstructured{}
+				httpRoute.SetNamespace("default")
+				httpRoute.SetName("my-httproute")
+				httpRoute.SetAnnotations(map[string]string{
+					"tinyauth.apps.gwapp.config.domain": "gwapp.example.com",
+				})
+				require.NoError(t, unstructured.SetNestedStringSlice(httpRoute.Object, []string{
+					"gwapp.example.com",
+				}, "spec", "hostnames"))
+
+				svc.updateFromItem(testIngressResource, &ingress)
+				svc.updateFromItem(testHTTPRouteResource, &httpRoute)
+
+				var got *model.App
+				svc.getEntry("ingapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "ingapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "ingapp.example.com", got.Config.Domain)
+
+				got = nil
+				svc.getEntry("gwapp.example.com", func(name string, app *model.App) bool {
+					if app.Config.Domain == "gwapp.example.com" {
+						got = app
+						return true
+					}
+					return false
+				})
+				require.NotNil(t, got)
+				assert.Equal(t, "gwapp.example.com", got.Config.Domain)
 			},
 		},
 		{
@@ -506,10 +1087,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -535,10 +1116,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -564,10 +1145,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("other.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -589,10 +1170,10 @@ func TestKubernetesService(t *testing.T) {
 					},
 				}, "spec", "rules"))
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("myapp.example.com", func(name string, app *model.App) bool {
 					if name == "myapp" {
 						got = app
 						return true
@@ -605,11 +1186,12 @@ func TestKubernetesService(t *testing.T) {
 		{
 			description: "UpdateFromItem removes entries when host extraction fails",
 			run: func(t *testing.T, svc *KubernetesService) {
-				key := ingressKey{
+				key := resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "test-ingress",
 				}
-				svc.addIngressEntries(key, []ingressEntry{
+				svc.addResourceEntries(key, []string{"stale.example.com"}, []resourceEntry{
 					{
 						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
 						name: "foo",
@@ -624,10 +1206,10 @@ func TestKubernetesService(t *testing.T) {
 				})
 				require.NoError(t, unstructured.SetNestedField(item.Object, "invalid", "spec", "rules"))
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("stale.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -637,11 +1219,12 @@ func TestKubernetesService(t *testing.T) {
 		{
 			description: "UpdateFromItem removes entries when annotations are not decodable",
 			run: func(t *testing.T, svc *KubernetesService) {
-				key := ingressKey{
+				key := resourceKey{
+					resource:  "ingresses",
 					namespace: "default",
 					name:      "test-ingress",
 				}
-				svc.addIngressEntries(key, []ingressEntry{
+				svc.addResourceEntries(key, []string{"stale.example.com"}, []resourceEntry{
 					{
 						app:  model.App{Config: model.AppConfig{Domain: "stale.example.com"}},
 						name: "foo",
@@ -655,10 +1238,10 @@ func TestKubernetesService(t *testing.T) {
 					"tinyauth.apps.myapp.config.oauthWhitelist": "[",
 				})
 
-				svc.updateFromItem(&item)
+				svc.updateFromItem(testIngressResource, &item)
 
 				var got *model.App
-				svc.getEntry(func(name string, app *model.App) bool {
+				svc.getEntry("stale.example.com", func(name string, app *model.App) bool {
 					got = app
 					return true
 				})
@@ -670,8 +1253,8 @@ func TestKubernetesService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			svc := &KubernetesService{
-				ingressEntries: make(map[ingressKey][]ingressEntry),
-				log:            log,
+				resourceApps: make(map[resourceKey]routedApps),
+				log:          log,
 			}
 			test.run(t, svc)
 		})
