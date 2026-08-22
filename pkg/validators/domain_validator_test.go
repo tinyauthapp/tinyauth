@@ -51,6 +51,16 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			expected:    "example.com",
 		},
 		{
+			description: "Domain with underscores should pass",
+			input:       "https://my_domain.com",
+			expected:    "my_domain.com",
+		},
+		{
+			description: "Domain with leading hyphen should pass",
+			input:       "https://-my-domain.com",
+			expected:    "-my-domain.com",
+		},
+		{
 			description: "Domain without scheme should parse if scheme is disabled",
 			input:       "example.com",
 			expected:    "example.com",
@@ -108,7 +118,7 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 		},
 		{
 			description: "Invalid IDNA domain should fail",
-			input:       "ab--cd.example.com",
+			input:       "xn--r-kva.example.com",
 			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorContains(t, e, "invalid label")
 			},
@@ -196,7 +206,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 		},
 		{
 			description: "Failure to format expected domain should fail",
-			expected:    "ab--cd.example.com",
+			expected:    "xn--r-kva.example.com",
 			actual:      "example.com",
 			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorContains(t, e, "idna: invalid label")
@@ -205,7 +215,7 @@ func TestDomainValidator_Validate(t *testing.T) {
 		{
 			description: "Failure to format check domain should fail",
 			expected:    "example.com",
-			actual:      "ab--cd.example.com",
+			actual:      "xn--r-kva.example.com",
 			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorContains(t, e, "idna: invalid label")
 			},
