@@ -51,16 +51,6 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			expected:    "example.com",
 		},
 		{
-			description: "Domain with underscores should pass",
-			input:       "https://my_domain.com",
-			expected:    "my_domain.com",
-		},
-		{
-			description: "Domain with leading hyphen should pass",
-			input:       "https://-my-domain.com",
-			expected:    "-my-domain.com",
-		},
-		{
 			description: "Domain without scheme should parse if scheme is disabled",
 			input:       "example.com",
 			expected:    "example.com",
@@ -109,18 +99,6 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			input:       "[::1]",
 			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorContains(t, e, "ip addresses are not supported")
-			},
-		},
-		{
-			description: "Domains with unicode characters should be allowed",
-			input:       "bücher.example.com",
-			expected:    "xn--bcher-kva.example.com",
-		},
-		{
-			description: "Invalid IDNA domain should fail",
-			input:       "xn--r-kva.example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "invalid label")
 			},
 		},
 		{
@@ -205,22 +183,6 @@ func TestDomainValidator_Validate(t *testing.T) {
 			actual:      "https://example.com:443",
 		},
 		{
-			description: "Failure to format expected domain should fail",
-			expected:    "xn--r-kva.example.com",
-			actual:      "example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "idna: invalid label")
-			},
-		},
-		{
-			description: "Failure to format check domain should fail",
-			expected:    "example.com",
-			actual:      "xn--r-kva.example.com",
-			errorFunc: func(t *testing.T, e error) {
-				assert.ErrorContains(t, e, "idna: invalid label")
-			},
-		},
-		{
 			description: "Valid domains with matching schemes and ports should pass",
 			options:     DomainValidatorOptions{WithScheme: true, AllowedSchemes: []string{"https", "http"}, WithPort: true},
 			expected:    "https://example.com:8080",
@@ -245,16 +207,6 @@ func TestDomainValidator_Validate(t *testing.T) {
 			description: "Valid domains without ports or schemes should pass",
 			actual:      "example.com",
 			expected:    "example.com",
-		},
-		{
-			description: "Unicode valid domains should pass",
-			expected:    "xn--bcher-kva.example.com",
-			actual:      "bücher.example.com",
-		},
-		{
-			description: "Unicode valid domains should pass (reverse)",
-			expected:    "bücher.example.com",
-			actual:      "xn--bcher-kva.example.com",
 		},
 		{
 			description: "Non matching hostnames should fail",

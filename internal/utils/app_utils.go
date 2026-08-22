@@ -38,7 +38,16 @@ func SafeParseAppURL(str string) (string, error) {
 		return "", fmt.Errorf("ip addresses not allowed")
 	}
 
-	hostname, err = idna.Lookup.ToASCII(hostname)
+	i := idna.New(
+		idna.MapForLookup(),
+		idna.Transitional(false),
+		idna.BidiRule(),
+		idna.StrictDomainName(false),
+		idna.CheckHyphens(true),
+		idna.CheckJoiners(false),
+	)
+
+	hostname, err = i.ToASCII(hostname)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to convert hostname to ascii: %w", err)

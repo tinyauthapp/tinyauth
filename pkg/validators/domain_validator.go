@@ -11,8 +11,6 @@ import (
 	"net"
 	"net/url"
 	"strings"
-
-	"golang.org/x/net/idna"
 )
 
 // Errors
@@ -114,23 +112,11 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 }
 
 func (v *DomainValidator) getHostname(hostname string) (string, error) {
-	hostname = strings.ToLower(hostname)
-	hostname = strings.TrimSuffix(hostname, ".")
 	if net.ParseIP(hostname) != nil {
 		return "", fmt.Errorf("ip addresses are not supported")
 	}
-	i := idna.New(
-		idna.MapForLookup(),
-		idna.Transitional(false),
-		idna.BidiRule(),
-		idna.StrictDomainName(false),
-		idna.CheckHyphens(false),
-		idna.CheckJoiners(false),
-	)
-	hostname, err := i.ToASCII(hostname)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert hostname to ascii: %w", err)
-	}
+	hostname = strings.ToLower(hostname)
+	hostname = strings.TrimSuffix(hostname, ".")
 	return hostname, nil
 }
 

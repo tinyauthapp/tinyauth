@@ -43,6 +43,13 @@ func TestSafeParseAPPURL(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 
+	// Underscores
+	appURL = "http://sub_tinyauth.app"
+	expected = "http://sub_tinyauth.app"
+	result, err = utils.SafeParseAppURL(appURL)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
 	// Lowercase
 	appURL = "HTTP://SUb.tinyAUth.aPP"
 	expected = "http://sub.tinyauth.app"
@@ -66,7 +73,7 @@ func TestSafeParseAPPURL(t *testing.T) {
 	assert.ErrorContains(t, err, "invalid url")
 
 	// Invalid punycode
-	appURL = "http://ab--cd.example.com"
+	appURL = "http://xn--h-kva.example.com"
 	_, err = utils.SafeParseAppURL(appURL)
 	assert.ErrorContains(t, err, "failed to convert hostname to ascii")
 
