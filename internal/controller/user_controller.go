@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -51,6 +53,7 @@ func NewUserController(i UserControllerInput) *UserController {
 	userGroup := i.RouterGroup.Group("/user")
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
+	userGroup.GET("/logout/callback", controller.ssoLogoutCallbackHandler)
 	userGroup.POST("/totp", controller.totpHandler)
 	userGroup.POST("/tailscale", controller.tailscaleHandler)
 
@@ -227,51 +230,180 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 func (controller *UserController) logoutHandler(c *gin.Context) {
 	controller.log.App.Debug().Msg("Logout attempt")
 
-	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+	// redirect_uri is a Tinyauth UI/navigation parameter. It is not an
+	// OpenID Connect RP-Initiated Logout parameter. The standardized OP-facing
+	// parameters are added later by buildOAuthLogoutURL.
+	requestedRedirectURI := c.Query("redirect_uri")
+	redirectURI := controller.safeLogoutRedirect(requestedRedirectURI)
 
-	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			controller.log.App.Warn().Msg("Logout attempt without session cookie, treating as successful logout")
-			c.JSON(200, gin.H{
-				"status":  200,
-				"message": "Logout successful",
+	userContext, contextErr := new(model.UserContext).NewFromGin(c)
+	providerID := ""
+	if contextErr == nil && userContext.IsOAuth() {
+		providerID = userContext.GetProviderID()
+	}
+
+	idToken := ""
+	sessionProviderID := ""
+	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+	if err == nil {
+		session, sessionErr := controller.auth.GetSession(c, uuid)
+		if sessionErr != nil {
+			controller.log.App.Warn().Err(sessionErr).Msg("Failed to get session during logout, continuing without session-backed logout metadata")
+		} else {
+			idToken = session.OAuthIDToken
+			sessionProviderID = session.Provider
+		}
+
+		cookie, deleteErr := controller.auth.DeleteSession(c, uuid)
+		if deleteErr != nil {
+			controller.log.App.Error().Err(deleteErr).Msg("Error deleting session on logout")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Internal Server Error",
 			})
 			return
 		}
-		controller.log.App.Error().Err(err).Msg("Error retrieving session cookie on logout")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
 
-	cookie, err := controller.auth.DeleteSession(c, uuid)
+		http.SetCookie(c.Writer, cookie)
 
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
-
-	context, err := new(model.UserContext).NewFromGin(c)
-
-	if err == nil {
-		controller.log.AuditLogout(context.GetUsername(), context.GetProviderID(), c.ClientIP())
+		if contextErr == nil {
+			controller.log.AuditLogout(userContext.GetUsername(), userContext.GetProviderID(), c.ClientIP())
+		} else {
+			controller.log.App.Warn().Err(contextErr).Msg("Failed to get user context during logout, logging audit with unknown user")
+			controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
+		}
+	} else if errors.Is(err, http.ErrNoCookie) {
+		controller.log.App.Warn().Msg("Logout attempt without session cookie, treating as successful logout")
 	} else {
-		controller.log.App.Warn().Err(err).Msg("Failed to get user context during logout, logging audit with unknown user")
-		controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
+		controller.log.App.Error().Err(err).Msg("Error retrieving session cookie on logout")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": "Internal Server Error",
+		})
+		return
 	}
 
-	http.SetCookie(c.Writer, cookie)
+	// If middleware context is missing, fall back to the just-loaded session
+	// provider. If there is no session metadata either, a deployment with exactly
+	// one OAuth provider can still terminate that provider's SSO session.
+	if providerID == "" && contextErr != nil && isSessionOAuthProvider(sessionProviderID) {
+		providerID = sessionProviderID
+	}
+	if providerID == "" && contextErr != nil && sessionProviderID == "" && len(controller.runtime.OAuthProviders) == 1 {
+		for id := range controller.runtime.OAuthProviders {
+			providerID = id
+		}
+	}
 
-	c.JSON(200, gin.H{
-		"status":  200,
+	response := gin.H{
+		"status":  http.StatusOK,
 		"message": "Logout successful",
-	})
+	}
+
+	provider, ok := controller.runtime.OAuthProviders[providerID]
+	if ok && provider.LogoutURL != "" {
+		// OpenID Connect RP-Initiated Logout 1.0:
+		// https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html#RPLogout
+		//
+		// OP-facing standardized parameters:
+		//   id_token_hint
+		//   post_logout_redirect_uri
+		//   state
+		callbackURL := strings.TrimRight(controller.runtime.AppURL, "/") + "/api/user/logout/callback"
+		logoutURL, buildErr := buildOAuthLogoutURL(provider, callbackURL, idToken, redirectURI)
+		if buildErr != nil {
+			controller.log.App.Warn().Err(buildErr).Str("provider", providerID).Msg("Invalid OAuth logout URL, skipping provider logout")
+		} else {
+			response["redirectUrl"] = logoutURL
+		}
+	} else if requestedRedirectURI != "" {
+		// Non-OIDC/local logout can still return to the validated application.
+		response["redirectUrl"] = redirectURI
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (controller *UserController) ssoLogoutCallbackHandler(c *gin.Context) {
+	// state is defined by OpenID Connect RP-Initiated Logout 1.0 as an opaque
+	// RP value that the OP returns unchanged after logout. We use it to carry
+	// the already-validated Tinyauth application return URI across the OP hop.
+	redirectURI := controller.safeLogoutRedirect(c.Query("state"))
+	c.Redirect(http.StatusFound, redirectURI)
+}
+
+func isSessionOAuthProvider(providerID string) bool {
+	switch providerID {
+	case "", "local", "ldap", "tailscale":
+		return false
+	default:
+		return true
+	}
+}
+
+func (controller *UserController) safeLogoutRedirect(raw string) string {
+	fallback := controller.runtime.AppURL
+	if raw == "" {
+		return fallback
+	}
+
+	target, err := url.Parse(raw)
+	if err != nil || target.Host == "" || target.User != nil {
+		return fallback
+	}
+	if target.Scheme != "http" && target.Scheme != "https" {
+		return fallback
+	}
+
+	appURL, err := url.Parse(controller.runtime.AppURL)
+	if err != nil {
+		return fallback
+	}
+	if appURL.Scheme == "https" && target.Scheme != "https" {
+		return fallback
+	}
+
+	targetHost := strings.ToLower(target.Hostname())
+	appHost := strings.ToLower(appURL.Hostname())
+	if targetHost == appHost {
+		return raw
+	}
+
+	cookieDomain := strings.TrimPrefix(strings.ToLower(controller.runtime.CookieDomain), ".")
+	if cookieDomain != "" &&
+		(targetHost == cookieDomain || strings.HasSuffix(targetHost, "."+cookieDomain)) {
+		return raw
+	}
+
+	return fallback
+}
+
+func buildOAuthLogoutURL(provider model.OAuthServiceConfig, callbackURL, idToken, state string) (string, error) {
+	logoutURL, err := url.Parse(provider.LogoutURL)
+	if err != nil || logoutURL.Host == "" {
+		return "", fmt.Errorf("invalid logout URL")
+	}
+	if logoutURL.Scheme != "http" && logoutURL.Scheme != "https" {
+		return "", fmt.Errorf("unsupported logout URL scheme")
+	}
+	if logoutURL.Scheme == "http" && !provider.Insecure {
+		return "", fmt.Errorf("insecure logout URL requires insecure OAuth provider")
+	}
+
+	query := logoutURL.Query()
+	if provider.ClientID != "" {
+		query.Set("client_id", provider.ClientID)
+	}
+	if idToken != "" {
+		query.Set("id_token_hint", idToken)
+	}
+	query.Set("post_logout_redirect_uri", callbackURL)
+	if state != "" {
+		query.Set("state", state)
+	}
+	logoutURL.RawQuery = query.Encode()
+
+	return logoutURL.String(), nil
 }
 
 func (controller *UserController) totpHandler(c *gin.Context) {

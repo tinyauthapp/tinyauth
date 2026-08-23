@@ -160,7 +160,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 	}
 
 	code := c.Query("code")
-	_, err = controller.auth.GetOAuthToken(sessionIdCookie, code)
+	token, err := controller.auth.GetOAuthToken(sessionIdCookie, code)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to exchange code for token")
@@ -234,6 +234,9 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		OAuthGroups: utils.CoalesceToString(user.Groups),
 		OAuthName:   svc.Name(),
 		OAuthSub:    user.Sub,
+	}
+	if idToken, ok := token.Extra("id_token").(string); ok {
+		sessionCookie.OAuthIDToken = idToken
 	}
 
 	controller.log.App.Debug().Msg("Creating session cookie for user")

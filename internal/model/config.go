@@ -253,19 +253,23 @@ type TailscaleConfig struct {
 // OAuth/OIDC config
 
 type OAuthServiceConfig struct {
-	ClientID         string                `description:"OAuth client ID." yaml:"clientId,omitempty"`
-	ClientSecret     string                `description:"OAuth client secret." yaml:"clientSecret,omitempty"`
-	ClientSecretFile string                `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile,omitempty"`
-	Whitelist        []string              `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist,omitempty"`
-	WhitelistFile    string                `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile,omitempty"`
-	Scopes           []string              `description:"OAuth scopes." yaml:"scopes,omitempty"`
-	RedirectURL      string                `description:"OAuth redirect URL." yaml:"redirectUrl,omitempty"`
-	AuthURL          string                `description:"OAuth authorization URL." yaml:"authUrl,omitempty"`
-	TokenURL         string                `description:"OAuth token URL." yaml:"tokenUrl,omitempty"`
-	UserinfoURL      string                `description:"OAuth userinfo URL." yaml:"userinfoUrl,omitempty"`
-	Insecure         bool                  `description:"Allow insecure OAuth connections." yaml:"insecure,omitempty"`
-	Name             string                `description:"Provider name in UI." yaml:"name,omitempty"`
-	Claims           OAuthServiceClaimsMap `description:"Map of claims to extract from the userinfo response." yaml:"claims,omitempty"`
+	ClientID         string   `description:"OAuth client ID." yaml:"clientId,omitempty"`
+	ClientSecret     string   `description:"OAuth client secret." yaml:"clientSecret,omitempty"`
+	ClientSecretFile string   `description:"Path to the file containing the OAuth client secret." yaml:"clientSecretFile,omitempty"`
+	Whitelist        []string `description:"Comma-separated list of allowed OAuth domains for this provider." yaml:"whitelist,omitempty"`
+	WhitelistFile    string   `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile,omitempty"`
+	Scopes           []string `description:"OAuth scopes." yaml:"scopes,omitempty"`
+	RedirectURL      string   `description:"OAuth redirect URL." yaml:"redirectUrl,omitempty"`
+	AuthURL          string   `description:"OAuth authorization URL." yaml:"authUrl,omitempty"`
+	TokenURL         string   `description:"OAuth token URL." yaml:"tokenUrl,omitempty"`
+	UserinfoURL      string   `description:"OAuth userinfo URL." yaml:"userinfoUrl,omitempty"`
+	// LogoutURL is the OpenID Provider end_session_endpoint used for
+	// OpenID Connect RP-Initiated Logout 1.0:
+	// https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html#RPLogout
+	LogoutURL string                `description:"OpenID Connect RP-Initiated Logout end_session_endpoint URL." yaml:"logoutUrl,omitempty"`
+	Insecure  bool                  `description:"Allow insecure OAuth connections." yaml:"insecure,omitempty"`
+	Name      string                `description:"Provider name in UI." yaml:"name,omitempty"`
+	Claims    OAuthServiceClaimsMap `description:"Map of claims to extract from the userinfo response." yaml:"claims,omitempty"`
 }
 
 type OAuthServiceClaimsMap struct {
