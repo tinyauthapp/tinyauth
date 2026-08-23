@@ -484,19 +484,19 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 	}, nil
 }
 
-func (controller *ProxyController) determineAuthModules(proxy ProxyType) []AuthModuleType {
+func (controller *ProxyController) determineAuthModules(proxy ProxyType, fallbacks bool) []AuthModuleType {
 	switch proxy {
 	case Traefik, Caddy:
 		return []AuthModuleType{ForwardAuth}
 	case Envoy:
 		authModules := []AuthModuleType{ExtAuthz}
-		if !controller.config.Experimental.DisableAuthModuleFallback {
+		if fallbacks {
 			authModules = append(authModules, ForwardAuth)
 		}
 		return authModules
 	case Nginx:
 		authModules := []AuthModuleType{AuthRequest}
-		if !controller.config.Experimental.DisableAuthModuleFallback {
+		if fallbacks {
 			authModules = append(authModules, ForwardAuth)
 		}
 		return authModules
@@ -578,13 +578,13 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 
 	controller.log.App.Debug().Msgf("Determined proxy type: %v", proxy)
 
-	authModules := controller.determineAuthModules(proxy)
+	authModules := controller.determineAuthModules(proxy, !controller.config.Experimental.DisableAuthModuleFallback)
 
 	if len(authModules) == 0 {
 		return ProxyContext{}, fmt.Errorf("no auth modules supported for proxy: %v", req.Proxy)
 	}
 
-	err = controller.ensureNoMultipleAuthModules(c, authModules)
+	err = controller.ensureNoMultipleAuthModules(c, controller.determineAuthModules(proxy, true))
 
 	if err != nil {
 		return ProxyContext{}, err
