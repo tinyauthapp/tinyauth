@@ -19,6 +19,7 @@ type LabelProvider interface {
 type AccessControlsService struct {
 	log           *logger.Logger
 	config        *model.Config
+	runtime       *model.RuntimeConfig
 	labelProvider LabelProvider
 }
 
@@ -27,6 +28,7 @@ type AccessControlServiceInput struct {
 
 	Log           *logger.Logger
 	Config        *model.Config
+	Runtime       *model.RuntimeConfig
 	LabelProvider LabelProvider `optional:"true"`
 }
 
@@ -35,6 +37,7 @@ func NewAccessControlsService(i AccessControlServiceInput) *AccessControlsServic
 	return &AccessControlsService{
 		log:           i.Log,
 		config:        i.Config,
+		runtime:       i.Runtime,
 		labelProvider: i.LabelProvider,
 	}
 }
@@ -68,6 +71,10 @@ func (service *AccessControlsService) getACLs(domain string, lookup func(locator
 	var nameMatchedApps []string
 
 	locatorFunc := func(name string, app *model.App) bool {
+		if !strings.HasSuffix(normalizedDomain, "."+service.runtime.CookieDomain) && normalizedDomain != service.runtime.CookieDomain {
+			service.log.App.Debug().Str("name", name).Msg("Domain does not match runtime cookie domain, skipping")
+			return false
+		}
 		if app.Config.Domain != "" {
 			if !service.ensureAscii(app.Config.Domain) {
 				service.log.App.Warn().Str("name", name).Str("domain", app.Config.Domain).Msg("Domain contains non-ascii characters, skipping")
@@ -104,7 +111,7 @@ func (service *AccessControlsService) getACLs(domain string, lookup func(locator
 	}
 
 	if len(nameMatchedApps) > 1 {
-		return nil, fmt.Errorf("multiple apps matched domain by name, app names must be unique")
+		return nil, fmt.Errorf("domain matched multiple apps by name prefix, use explicit domain config")
 	}
 
 	service.log.App.Debug().Str("domain", domain).Msg("Found matching app by app name")
