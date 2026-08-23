@@ -123,6 +123,9 @@ func TestAccessControlsService(t *testing.T) {
 				},
 			},
 			want: nil,
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "domain does not match cookie domain")
+			},
 		},
 		{
 			name:   "App in domain not matching with the cookie domain should return nothing with domain matching",
@@ -134,6 +137,9 @@ func TestAccessControlsService(t *testing.T) {
 				},
 			},
 			want: nil,
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "domain does not match cookie domain")
+			},
 		},
 	}
 

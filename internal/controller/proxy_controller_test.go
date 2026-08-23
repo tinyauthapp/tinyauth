@@ -918,6 +918,7 @@ func TestProxyController(t *testing.T) {
 	aclsService := service.NewAccessControlsService(service.AccessControlServiceInput{
 		Log:           log,
 		Config:        &cfg,
+		Runtime:       &runtime,
 		LabelProvider: nil,
 	})
 

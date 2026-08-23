@@ -66,15 +66,15 @@ func (service *AccessControlsService) getACLs(domain string, lookup func(locator
 
 	normalizedDomain := service.normalizeDomain(domain)
 
+	if !strings.HasSuffix(normalizedDomain, "."+service.runtime.CookieDomain) && normalizedDomain != service.runtime.CookieDomain {
+		return nil, fmt.Errorf("domain does not match cookie domain, expected %s (or a subdomain), got %s", service.runtime.CookieDomain, domain)
+	}
+
 	var domainMatch *model.App
 	var nameMatch *model.App
 	var nameMatchedApps []string
 
 	locatorFunc := func(name string, app *model.App) bool {
-		if !strings.HasSuffix(normalizedDomain, "."+service.runtime.CookieDomain) && normalizedDomain != service.runtime.CookieDomain {
-			service.log.App.Debug().Str("name", name).Msg("Domain does not match runtime cookie domain, skipping")
-			return false
-		}
 		if app.Config.Domain != "" {
 			if !service.ensureAscii(app.Config.Domain) {
 				service.log.App.Warn().Str("name", name).Str("domain", app.Config.Domain).Msg("Domain contains non-ascii characters, skipping")
