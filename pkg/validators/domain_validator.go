@@ -112,11 +112,11 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 }
 
 func (v *DomainValidator) getHostname(hostname string) (string, error) {
+	hostname = strings.ToLower(hostname)
+	hostname = strings.TrimRight(hostname, ".")
 	if net.ParseIP(hostname) != nil {
 		return "", fmt.Errorf("ip addresses are not supported")
 	}
-	hostname = strings.ToLower(hostname)
-	hostname = strings.TrimSuffix(hostname, ".")
 	return hostname, nil
 }
 
