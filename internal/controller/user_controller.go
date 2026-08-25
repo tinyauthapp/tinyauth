@@ -313,6 +313,9 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		logoutURL, buildErr := buildOAuthLogoutURL(provider, callbackURL, idToken, redirectURI)
 		if buildErr != nil {
 			controller.log.App.Warn().Err(buildErr).Str("provider", providerID).Msg("Invalid OAuth logout URL, skipping provider logout")
+			if requestedRedirectURI != "" {
+				response["redirectUrl"] = redirectURI
+			}
 		} else {
 			response["redirectUrl"] = logoutURL
 		}

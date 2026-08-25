@@ -163,6 +163,57 @@ func TestSSOLogoutUsesServerSideIDToken(t *testing.T) {
 	)
 }
 
+func TestSSOLogoutFallsBackToRedirectURIWhenProviderLogoutURLIsInvalid(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+
+	_, runtime := test.CreateTestConfigs(t)
+	runtime.OAuthProviders = map[string]model.OAuthServiceConfig{
+		"pocketid": {
+			LogoutURL: "http://id.example.com/api/oidc/end-session",
+		},
+	}
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("context", &model.UserContext{
+			Authenticated: true,
+			Provider:      model.ProviderOAuth,
+			OAuth: &model.OAuthContext{
+				BaseContext: model.BaseContext{
+					Username: "user@example.com",
+					Name:     "Test User",
+					Email:    "user@example.com",
+				},
+				DisplayName: "Pocket ID",
+				ID:          "pocketid",
+			},
+		})
+		c.Next()
+	})
+
+	NewUserController(UserControllerInput{
+		Log:           log,
+		RuntimeConfig: &runtime,
+		RouterGroup:   router.Group("/api"),
+	})
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/user/logout?redirect_uri=https://app.example.com/", nil)
+
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var response struct {
+		RedirectURL string `json:"redirectUrl"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, "https://app.example.com/", response.RedirectURL)
+}
+
 func TestBuildOAuthLogoutURL(t *testing.T) {
 	got, err := buildOAuthLogoutURL(
 		model.OAuthServiceConfig{
