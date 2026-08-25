@@ -42,6 +42,16 @@ func TestSafeLogoutRedirect(t *testing.T) {
 	assert.Equal(
 		t,
 		"https://auth.example.com",
+		controller.safeLogoutRedirect("https://badexample.com/"),
+	)
+	assert.Equal(
+		t,
+		"https://auth.example.com",
+		controller.safeLogoutRedirect("https://evil.example.net@app.example.com/"),
+	)
+	assert.Equal(
+		t,
+		"https://auth.example.com",
 		controller.safeLogoutRedirect("javascript:alert(1)"),
 	)
 	assert.Equal(
