@@ -77,6 +77,10 @@ export const QuickActions = () => {
     }
     return "";
   })();
+  const logoutParams =
+    screenParams.redirect_uri && screenParams.login_for !== "oidc"
+      ? { login_for: "app", redirect_uri: screenParams.redirect_uri }
+      : undefined;
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -126,9 +130,7 @@ export const QuickActions = () => {
     // It is not the OIDC RP-Initiated Logout post_logout_redirect_uri.
     mutationFn: () =>
       axios.post("/api/user/logout", undefined, {
-        params: screenParams.redirect_uri
-          ? { redirect_uri: screenParams.redirect_uri }
-          : undefined,
+        params: logoutParams,
       }),
     mutationKey: ["logout"],
     onSuccess: (response) => {
