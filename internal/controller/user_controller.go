@@ -371,11 +371,8 @@ func buildOAuthLogoutURL(provider model.OAuthServiceConfig, callbackURL, idToken
 	if err != nil || logoutURL.Host == "" {
 		return "", fmt.Errorf("invalid logout URL")
 	}
-	if logoutURL.Scheme != "http" && logoutURL.Scheme != "https" {
+	if logoutURL.Scheme != "https" {
 		return "", fmt.Errorf("unsupported logout URL scheme")
-	}
-	if logoutURL.Scheme == "http" && !provider.Insecure {
-		return "", fmt.Errorf("insecure logout URL requires insecure OAuth provider")
 	}
 
 	query := logoutURL.Query()

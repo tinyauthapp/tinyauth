@@ -204,7 +204,7 @@ func TestBuildOAuthLogoutURL(t *testing.T) {
 	)
 }
 
-func TestBuildOAuthLogoutURLRejectsHTTPUnlessProviderIsInsecure(t *testing.T) {
+func TestBuildOAuthLogoutURLRejectsHTTP(t *testing.T) {
 	_, err := buildOAuthLogoutURL(
 		model.OAuthServiceConfig{
 			LogoutURL: "http://id.example.com/api/oidc/end-session",
@@ -214,28 +214,4 @@ func TestBuildOAuthLogoutURLRejectsHTTPUnlessProviderIsInsecure(t *testing.T) {
 		"https://app.example.com/",
 	)
 	require.Error(t, err)
-
-	got, err := buildOAuthLogoutURL(
-		model.OAuthServiceConfig{
-			ClientID:  "client-id",
-			LogoutURL: "http://id.example.com/api/oidc/end-session",
-			Insecure:  true,
-		},
-		"https://auth.example.com/api/user/logout/callback",
-		"id-token",
-		"https://app.example.com/",
-	)
-	require.NoError(t, err)
-
-	parsed, err := url.Parse(got)
-	require.NoError(t, err)
-	assert.Equal(t, "http", parsed.Scheme)
-	assert.Equal(t, "id.example.com", parsed.Host)
-	assert.Equal(t, "id-token", parsed.Query().Get("id_token_hint"))
-	assert.Equal(t, "client-id", parsed.Query().Get("client_id"))
-	assert.Equal(
-		t,
-		"https://auth.example.com/api/user/logout/callback",
-		parsed.Query().Get("post_logout_redirect_uri"),
-	)
 }
