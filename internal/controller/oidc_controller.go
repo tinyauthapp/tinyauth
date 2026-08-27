@@ -62,13 +62,17 @@ type ErrorScreen struct {
 	Error string `url:"error"`
 }
 
-type ClientRequest struct {
-	ClientID string `uri:"id" binding:"required"`
-}
-
 type ClientCredentials struct {
 	ClientID     string
 	ClientSecret string
+}
+
+type SkipConsentRequest struct {
+	OIDCTicket string `form:"oidc_ticket" binding:"required"`
+}
+
+type SkipConsentResponse struct {
+	SkipConsent bool `json:"skipConsent"`
 }
 
 type AuthorizeScreenParams struct {
@@ -105,6 +109,7 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 
 	oidcGroup := i.RouterGroup.Group("/oidc")
 	oidcGroup.POST("/authorize-complete", controller.authorizeComplete)
+	oidcGroup.GET("/skip-consent", controller.skipConsent)
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)
 	oidcGroup.POST("/userinfo", controller.Userinfo)
@@ -242,16 +247,6 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 	}
 
-	if userContext != nil && userContext.Authenticated && values.OIDCPrompt != service.OIDCPromptLogin {
-		consent, err := controller.oidc.GetOIDCConsent(c, userContext.GetUsername(), req.ClientID)
-
-		if err != nil {
-			controller.log.App.Warn().Err(err).Msg("Failed to get OIDC consent")
-		} else if consent != nil && scopesGranted(consent.Scope, req.Scope) {
-			values.OIDCPrompt = service.OIDCPromptNone
-		}
-	}
-
 	queries, err := query.Values(values)
 
 	if err != nil {
@@ -268,6 +263,87 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 
 	redirectUrl := fmt.Sprintf("%s/oidc/authorize?%s", controller.oidc.GetIssuer(), queries.Encode())
 	c.Redirect(http.StatusFound, redirectUrl)
+}
+
+func (controller *OIDCController) skipConsent(c *gin.Context) {
+	if controller.oidc == nil {
+		c.JSON(500, SimpleResponse{
+			Status:  500,
+			Message: "OIDC not configured",
+		})
+		return
+	}
+
+	userContext, err := new(model.UserContext).NewFromGin(c)
+
+	if err != nil {
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context")
+		}
+	}
+
+	if err != nil || !userContext.Authenticated {
+		c.JSON(401, SimpleResponse{
+			Status:  401,
+			Message: "User not logged in",
+		})
+		return
+	}
+
+	var req SkipConsentRequest
+
+	err = c.BindQuery(&req)
+
+	if err != nil {
+		c.JSON(400, SimpleResponse{
+			Status:  400,
+			Message: "Bad request",
+		})
+		return
+	}
+
+	controller.log.App.Debug().Interface("req", req).Msg("Received skip consent request")
+
+	authorizeReq, ok := controller.oidc.GetAuthorizeRequestByTicket(req.OIDCTicket)
+
+	if !ok {
+		c.JSON(200, SkipConsentResponse{
+			SkipConsent: false,
+		})
+		return
+	}
+
+	controller.log.App.Debug().Str("client", authorizeReq.ClientID).Str("user", userContext.GetUsername()).Msg("User consented to OIDC")
+
+	if authorizeReq.Prompt == service.OIDCPromptNone.String() {
+		c.JSON(200, SkipConsentResponse{
+			SkipConsent: false,
+		})
+		return
+	}
+
+	consent, err := controller.oidc.GetOIDCConsent(c, userContext.GetUsername(), authorizeReq.ClientID)
+
+	if err != nil || consent == nil {
+		if err != nil {
+			controller.log.App.Warn().Err(err).Msg("Failed to get OIDC consent")
+		}
+		c.JSON(200, SkipConsentResponse{
+			SkipConsent: false,
+		})
+		return
+	}
+
+	if !scopesGranted(consent.Scope, authorizeReq.Scope) {
+		c.JSON(200, SkipConsentResponse{
+			SkipConsent: false,
+		})
+		return
+	}
+
+	c.JSON(200, SkipConsentResponse{
+		SkipConsent: true,
+	})
 }
 
 // The actual **internal** endpoint that actually creates the code and session.
@@ -330,6 +406,9 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		return
 	}
 
+	// We no longer need the ticket
+	controller.oidc.DeleteAuthorizeRequestTicket(req.Ticket)
+
 	// Get the client
 	client, ok := controller.oidc.GetClient(authorizeReq.ClientID)
 
@@ -342,9 +421,6 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 		})
 		return
 	}
-
-	// We no longer need the ticket
-	controller.oidc.DeleteAuthorizeRequestTicket(req.Ticket)
 
 	// Create the sub to find and delete old sessions
 	sub := controller.oidc.CreateSub(*userContext, authorizeReq.ClientID)

@@ -53,6 +53,17 @@ const (
 	OIDCPromptNone  OIDCPrompt = "none"
 )
 
+func (p OIDCPrompt) String() string {
+	switch p {
+	case OIDCPromptLogin:
+		return "login"
+	case OIDCPromptNone:
+		return "none"
+	default:
+		return "login"
+	}
+}
+
 var SupportedPrompts = []string{string(OIDCPromptLogin), string(OIDCPromptNone)}
 
 // This is not spec-compliant, the ID token SHOULD NOT contain user info claims but,

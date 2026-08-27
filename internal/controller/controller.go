@@ -18,3 +18,8 @@ type RedirectQuery struct {
 	RedirectURI string           `url:"redirect_uri"`
 	LoginFor    FrontendLoginFor `url:"login_for"`
 }
+
+type SimpleResponse struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+}

@@ -1,5 +1,5 @@
 import { useUserContext } from "@/context/user-context";
-import { useMutation } from "@tanstack/react-query";
+import {useMutation} from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router";
 import { useLocation } from "react-router";
 import {
@@ -25,7 +25,8 @@ import {
   searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
-import { useEffect } from "react";
+import {useEffect, useState} from "react";
+import { z } from "zod";
 
 type Scope = {
   id: string;
@@ -33,6 +34,10 @@ type Scope = {
   description: string;
   icon: React.ReactNode;
 };
+
+const skipConsentResponseSchema = z.object({
+  skipConsent: z.boolean(),
+})
 
 const scopeMapIconProps = {
   className: "stroke-muted-foreground stroke-[1.75] h-4",
@@ -96,14 +101,7 @@ export const AuthorizePage = () => {
     }
     return "";
   })();
-
-  // TODO: maybe a better way to do this
-  const shouldAutoAuthorize =
-    auth.authenticated &&
-    isOidc &&
-    screenParams.oidc_ticket !== undefined &&
-    screenParams.oidc_scope !== undefined &&
-    screenParams.oidc_prompt === "none";
+  const [autoAuthorize, setAutoAuthorize] = useState(false);
 
   const { mutate: authorizeMutate, isPending: authorizePending } = useMutation({
     mutationFn: () => {
@@ -126,10 +124,21 @@ export const AuthorizePage = () => {
   });
 
   useEffect(() => {
-    if (shouldAutoAuthorize) {
-      authorizeMutate();
-    }
-  }, [shouldAutoAuthorize, authorizeMutate]);
+    const checkSkipConsent = async () => {
+      try {
+        const res = await fetch(
+            `/api/oidc/skip-consent?oidc_ticket=${encodeURIComponent(screenParams.oidc_ticket ?? "")}`,
+        );
+        if (!res.ok) return;
+        const parsed = skipConsentResponseSchema.safeParse(await res.json());
+        if (!parsed.success || !parsed.data.skipConsent) return;
+        setAutoAuthorize(true);
+        authorizeMutate();
+      } catch {}
+    };
+
+    checkSkipConsent();
+  }, []);
 
   if (!isOidc || !screenParams.oidc_ticket || !screenParams.oidc_scope) {
     return (
@@ -190,13 +199,13 @@ export const AuthorizePage = () => {
       <CardFooter className="flex flex-col items-stretch gap-3">
         <Button
           onClick={() => authorizeMutate()}
-          loading={authorizePending || shouldAutoAuthorize}
+          loading={authorizePending || autoAuthorize}
         >
           {t("authorizeTitle")}
         </Button>
         <Button
           onClick={() => navigate(`/logout${compiledParams}`)}
-          disabled={authorizePending || shouldAutoAuthorize}
+          disabled={authorizePending || autoAuthorize}
           variant="outline"
         >
           {t("cancelTitle")}
