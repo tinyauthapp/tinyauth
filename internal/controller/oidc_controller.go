@@ -266,6 +266,9 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 }
 
 func (controller *OIDCController) skipConsent(c *gin.Context) {
+	c.Header("cache-control", "no-store")
+	c.Header("pragma", "no-cache")
+
 	if controller.oidc == nil {
 		c.JSON(500, SimpleResponse{
 			Status:  500,

@@ -102,6 +102,7 @@ export const AuthorizePage = () => {
     return "";
   })();
   const [autoAuthorize, setAutoAuthorize] = useState(false);
+  const [skipConsentChecked, setSkipConsentChecked] = useState(false);
 
   const { mutate: authorizeMutate, isPending: authorizePending } = useMutation({
     mutationFn: () => {
@@ -124,21 +125,34 @@ export const AuthorizePage = () => {
   });
 
   useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
     const checkSkipConsent = async () => {
       try {
         const res = await fetch(
-            `/api/oidc/skip-consent?oidc_ticket=${encodeURIComponent(screenParams.oidc_ticket ?? "")}`,
+          `/api/oidc/skip-consent?oidc_ticket=${encodeURIComponent( screenParams.oidc_ticket ?? "")}`,
+          { signal: controller.signal },
         );
         if (!res.ok) return;
         const parsed = skipConsentResponseSchema.safeParse(await res.json());
-        if (!parsed.success || !parsed.data.skipConsent) return;
+        if (!active || !parsed.success || !parsed.data.skipConsent) return;
         setAutoAuthorize(true);
         authorizeMutate();
-      } catch {}
+      } catch {
+        // Fall back to manual consent on any failure (including abort).
+      } finally {
+        if (active) setSkipConsentChecked(true);
+      }
     };
 
     checkSkipConsent();
-  }, []);
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authorizeMutate,  screenParams.oidc_ticket]);
 
   if (!isOidc || !screenParams.oidc_ticket || !screenParams.oidc_scope) {
     return (
@@ -199,7 +213,7 @@ export const AuthorizePage = () => {
       <CardFooter className="flex flex-col items-stretch gap-3">
         <Button
           onClick={() => authorizeMutate()}
-          loading={authorizePending || autoAuthorize}
+          loading={authorizePending || autoAuthorize || !skipConsentChecked}
         >
           {t("authorizeTitle")}
         </Button>
