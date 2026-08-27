@@ -238,25 +238,17 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 
 	userContext, contextErr := new(model.UserContext).NewFromGin(c)
 	providerID := ""
-	if contextErr == nil && userContext.IsOAuth() {
-		providerID = userContext.GetProviderID()
+	idToken := ""
+	if userContext != nil && userContext.IsOAuth() {
+		providerID = userContext.OAuth.ID
+		idToken = userContext.OAuth.IDToken
 	}
 
-	idToken := ""
-	sessionProviderID := ""
 	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
 	if err == nil {
-		session, sessionErr := controller.auth.GetSession(c, uuid)
-		if sessionErr != nil {
-			controller.log.App.Warn().Err(sessionErr).Msg("Failed to get session during logout, continuing without session-backed logout metadata")
-		} else {
-			idToken = session.OAuthIDToken
-			sessionProviderID = session.Provider
-		}
-
-		cookie, deleteErr := controller.auth.DeleteSession(c, uuid)
-		if deleteErr != nil {
-			controller.log.App.Error().Err(deleteErr).Msg("Error deleting session on logout")
+		cookie, err := controller.auth.DeleteSession(c, uuid)
+		if err != nil {
+			controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
 				"message": "Internal Server Error",
@@ -281,18 +273,6 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 			"message": "Internal Server Error",
 		})
 		return
-	}
-
-	// If middleware context is missing, fall back to the just-loaded session
-	// provider. If there is no session metadata either, a deployment with exactly
-	// one OAuth provider can still terminate that provider's SSO session.
-	if providerID == "" && contextErr != nil && isSessionOAuthProvider(sessionProviderID) {
-		providerID = sessionProviderID
-	}
-	if providerID == "" && contextErr != nil && sessionProviderID == "" && len(controller.runtime.OAuthProviders) == 1 {
-		for id := range controller.runtime.OAuthProviders {
-			providerID = id
-		}
 	}
 
 	response := gin.H{
@@ -333,15 +313,6 @@ func (controller *UserController) ssoLogoutCallbackHandler(c *gin.Context) {
 	// the already-validated Tinyauth application return URI across the OP hop.
 	redirectURI := controller.safeLogoutRedirect(c.Query("state"))
 	c.Redirect(http.StatusFound, redirectURI)
-}
-
-func isSessionOAuthProvider(providerID string) bool {
-	switch providerID {
-	case "", "local", "ldap", "tailscale":
-		return false
-	default:
-		return true
-	}
 }
 
 func (controller *UserController) safeLogoutRedirect(raw string) string {

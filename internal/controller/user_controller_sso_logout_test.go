@@ -118,6 +118,7 @@ func TestSSOLogoutUsesServerSideIDToken(t *testing.T) {
 				},
 				DisplayName: "Pocket ID",
 				ID:          "pocketid",
+				IDToken:     "id-token",
 			},
 		})
 		c.Next()
