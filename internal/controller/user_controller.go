@@ -293,7 +293,7 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		//   id_token_hint
 		//   post_logout_redirect_uri
 		//   state
-		callbackURL := strings.TrimRight(controller.runtime.AppURL, "/") + "/api/user/logout/callback"
+		callbackURL := controller.runtime.AppURL + "/api/user/logout/callback"
 		logoutURL, buildErr := buildOAuthLogoutURL(provider, callbackURL, idToken, redirectURI)
 		if buildErr != nil {
 			controller.log.App.Warn().Err(buildErr).Str("provider", providerID).Msg("Invalid OAuth logout URL, skipping provider logout")
