@@ -93,7 +93,7 @@ func TestSSOLogoutUsesServerSideIDToken(t *testing.T) {
 	})
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/user/logout?redirect_uri=https://app.example.com/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/user/logout?login_for=app&redirect_uri=https://app.example.com/", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  runtime.SessionCookieName,
 		Value: "oauth-session",
@@ -164,7 +164,7 @@ func TestSSOLogoutFallsBackToRedirectURIWhenProviderLogoutURLIsInvalid(t *testin
 	})
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/user/logout?redirect_uri=https://app.example.com/", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/user/logout?login_for=app&redirect_uri=https://app.example.com/", nil)
 
 	router.ServeHTTP(recorder, req)
 

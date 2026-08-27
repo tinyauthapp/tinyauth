@@ -237,7 +237,10 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 	// redirect_uri is a Tinyauth UI/navigation parameter. It is not an
 	// OpenID Connect RP-Initiated Logout parameter. The standardized OP-facing
 	// parameters are added later by buildOAuthLogoutURL.
-	requestedRedirectURI := c.Query("redirect_uri")
+	requestedRedirectURI := ""
+	if c.Query("login_for") == "app" {
+		requestedRedirectURI = c.Query("redirect_uri")
+	}
 	redirectURI := controller.safeLogoutRedirect(requestedRedirectURI)
 
 	userContext, err := new(model.UserContext).NewFromGin(c)
