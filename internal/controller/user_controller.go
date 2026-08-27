@@ -240,7 +240,11 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 	requestedRedirectURI := c.Query("redirect_uri")
 	redirectURI := controller.safeLogoutRedirect(requestedRedirectURI)
 
-	userContext, contextErr := new(model.UserContext).NewFromGin(c)
+	userContext, err := new(model.UserContext).NewFromGin(c)
+	if err != nil {
+		userContext = nil
+	}
+
 	providerID := ""
 	idToken := ""
 	if userContext != nil && userContext.IsOAuth() {
@@ -262,10 +266,10 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 
 		http.SetCookie(c.Writer, cookie)
 
-		if contextErr == nil {
+		if userContext != nil {
 			controller.log.AuditLogout(userContext.GetUsername(), userContext.GetProviderID(), c.ClientIP())
 		} else {
-			controller.log.App.Warn().Err(contextErr).Msg("Failed to get user context during logout, logging audit with unknown user")
+			controller.log.App.Warn().Msg("Failed to get user context during logout, logging audit with unknown user")
 			controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
 		}
 	} else if errors.Is(err, http.ErrNoCookie) {
