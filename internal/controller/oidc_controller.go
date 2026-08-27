@@ -315,7 +315,7 @@ func (controller *OIDCController) skipConsent(c *gin.Context) {
 
 	controller.log.App.Debug().Str("client", authorizeReq.ClientID).Str("user", userContext.GetUsername()).Msg("User consented to OIDC")
 
-	if authorizeReq.Prompt == service.OIDCPromptNone.String() {
+	if authorizeReq.Prompt == service.OIDCPromptLogin.String() {
 		c.JSON(200, SkipConsentResponse{
 			SkipConsent: false,
 		})

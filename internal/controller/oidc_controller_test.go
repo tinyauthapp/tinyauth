@@ -171,7 +171,7 @@ func TestOIDCController(t *testing.T) {
 			},
 		},
 		{
-			description: "Authorize skips the consent screen when all requested scopes were already granted",
+			description: "Authorize does not skip the consent screen even when consent was already granted",
 			middlewares: []gin.HandlerFunc{authedUser},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
 				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
@@ -189,77 +189,9 @@ func TestOIDCController(t *testing.T) {
 				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
 				router.ServeHTTP(recorder, req)
 
-				assert.Equal(t, http.StatusFound, recorder.Code)
-				location := recorder.Header().Get("Location")
-				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
-				assert.Contains(t, location, "oidc_prompt=none")
-			},
-		},
-		{
-			description: "Authorize shows the consent screen when a new scope is requested",
-			middlewares: []gin.HandlerFunc{authedUser},
-			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
-					Username: "testuser", ClientID: "some-client-id",
-					Scope: "openid", CreatedAt: time.Now().Unix(),
-				})
-				require.NoError(t, err)
-
-				q := url.Values{}
-				q.Set("scope", "openid profile")
-				q.Set("response_type", "code")
-				q.Set("client_id", "some-client-id")
-				q.Set("redirect_uri", "https://test.example.com/callback")
-
-				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
-				router.ServeHTTP(recorder, req)
-
-				assert.Equal(t, http.StatusFound, recorder.Code)
-				location := recorder.Header().Get("Location")
-				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
-				assert.NotContains(t, location, "oidc_prompt=none")
-			},
-		},
-		{
-			description: "Authorize skips the consent screen for a subset of already granted scopes",
-			middlewares: []gin.HandlerFunc{authedUser},
-			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
-					Username: "testuser", ClientID: "some-client-id",
-					Scope: "openid profile email", CreatedAt: time.Now().Unix(),
-				})
-				require.NoError(t, err)
-
-				q := url.Values{}
-				q.Set("scope", "openid profile")
-				q.Set("response_type", "code")
-				q.Set("client_id", "some-client-id")
-				q.Set("redirect_uri", "https://test.example.com/callback")
-
-				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
-				router.ServeHTTP(recorder, req)
-
-				assert.Equal(t, http.StatusFound, recorder.Code)
-				location := recorder.Header().Get("Location")
-				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
-				assert.Contains(t, location, "oidc_prompt=none")
-			},
-		},
-		{
-			description: "Authorize shows the consent screen when no consent was granted yet",
-			middlewares: []gin.HandlerFunc{authedUser},
-			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				require.NoError(t, store.DeleteOIDCConsentByClientID(ctx, "some-client-id"))
-
-				q := url.Values{}
-				q.Set("scope", "openid profile")
-				q.Set("response_type", "code")
-				q.Set("client_id", "some-client-id")
-				q.Set("redirect_uri", "https://test.example.com/callback")
-
-				req := httptest.NewRequest("GET", "/authorize?"+q.Encode(), nil)
-				router.ServeHTTP(recorder, req)
-
+				// The consent skip check now happens after auth via the
+				// skip-consent endpoint, so authorize should never set
+				// prompt=none on its own.
 				assert.Equal(t, http.StatusFound, recorder.Code)
 				location := recorder.Header().Get("Location")
 				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
@@ -301,6 +233,232 @@ func TestOIDCController(t *testing.T) {
 				location := recorder.Header().Get("Location")
 				assert.True(t, strings.HasPrefix(location, oidcService.GetIssuer()+"/oidc/authorize?"))
 				assert.Contains(t, location, "oidc_ticket=")
+			},
+		},
+
+		// --- skip-consent ---
+		{
+			description:  "Skip consent returns 500 when OIDC is not configured",
+			oidcDisabled: true,
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket=some-ticket", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		{
+			description: "Skip consent returns 401 when the user context is missing",
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket=some-ticket", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "Skip consent returns 401 when the user is not authenticated",
+			middlewares: []gin.HandlerFunc{
+				func(c *gin.Context) {
+					c.Set("context", &model.UserContext{
+						Authenticated: false,
+						Provider:      model.ProviderLocal,
+						Local: &model.LocalContext{
+							BaseContext: model.BaseContext{Username: "testuser"},
+						},
+					})
+				},
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket=some-ticket", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "Skip consent returns 400 when the ticket is missing",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			description: "Skip consent returns false when the ticket is unknown",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket=nonexistent-ticket", nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.False(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns true when the authorize request has prompt none",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid profile", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+					Prompt:       "none",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.True(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns false when no consent was granted yet",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				require.NoError(t, store.DeleteOIDCConsentByClientID(ctx, "some-client-id"))
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.False(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns false when a new scope is requested",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.False(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns true when all requested scopes were already granted",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid profile", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.True(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns true for a subset of already granted scopes",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "testuser", ClientID: "some-client-id",
+					Scope: "openid profile email", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.True(t, res.SkipConsent)
+			},
+		},
+		{
+			description: "Skip consent returns false when the consent belongs to another user",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				require.NoError(t, store.DeleteOIDCConsentByClientID(ctx, "some-client-id"))
+
+				_, err := store.UpsertOIDCConsent(ctx, repository.UpsertOIDCConsentParams{
+					Username: "otheruser", ClientID: "some-client-id",
+					Scope: "openid profile", CreatedAt: time.Now().Unix(),
+				})
+				require.NoError(t, err)
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.False(t, res.SkipConsent)
 			},
 		},
 
@@ -421,6 +579,60 @@ func TestOIDCController(t *testing.T) {
 				require.True(t, ok)
 				assert.True(t, strings.HasPrefix(redirectURI, "https://test.example.com/callback?code="))
 				assert.Contains(t, redirectURI, "state=state-123")
+			},
+		},
+		{
+			description: "Authorize complete deletes the ticket on success",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid",
+					ResponseType: "code",
+					ClientID:     "some-client-id",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: ticket})
+				require.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
+				req.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				_, ok := oidcService.GetAuthorizeRequestByTicket(ticket)
+				assert.False(t, ok)
+			},
+		},
+		{
+			description: "Authorize complete deletes the ticket even when the client is unknown",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid",
+					ResponseType: "code",
+					ClientID:     "unknown-client",
+					RedirectURI:  "https://test.example.com/callback",
+				})
+
+				body, err := json.Marshal(AuthorizeCompleteRequest{Ticket: ticket})
+				require.NoError(t, err)
+
+				req := httptest.NewRequest("POST", "/api/oidc/authorize-complete", strings.NewReader(string(body)))
+				req.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res map[string]any
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				redirectURI, ok := res["redirect_uri"].(string)
+				require.True(t, ok)
+				assert.Contains(t, redirectURI, oidcService.GetIssuer()+"/error")
+
+				_, ok = oidcService.GetAuthorizeRequestByTicket(ticket)
+				assert.False(t, ok)
 			},
 		},
 
