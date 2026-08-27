@@ -13,6 +13,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,7 @@ type TotpRequest struct {
 
 type UserController struct {
 	log     *logger.Logger
+	config  *model.Config
 	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
@@ -38,6 +40,7 @@ type UserControllerInput struct {
 	dig.In
 
 	Log           *logger.Logger
+	StaticConfig  *model.Config
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	AuthService   *service.AuthService
@@ -46,6 +49,7 @@ type UserControllerInput struct {
 func NewUserController(i UserControllerInput) *UserController {
 	controller := &UserController{
 		log:     i.Log,
+		config:  i.StaticConfig,
 		runtime: i.RuntimeConfig,
 		auth:    i.AuthService,
 	}
@@ -321,31 +325,41 @@ func (controller *UserController) safeLogoutRedirect(raw string) string {
 		return fallback
 	}
 
-	target, err := url.Parse(raw)
-	if err != nil || target.Host == "" || target.User != nil {
-		return fallback
-	}
-	if target.Scheme != "http" && target.Scheme != "https" {
-		return fallback
-	}
-
 	appURL, err := url.Parse(controller.runtime.AppURL)
 	if err != nil {
 		return fallback
 	}
-	if appURL.Scheme == "https" && target.Scheme != "https" {
+
+	allowedSchemes := []string{"http", "https"}
+	if appURL.Scheme == "https" {
+		allowedSchemes = []string{"https"}
+	}
+
+	schemeValidator := validators.NewDomainValidator(validators.DomainValidatorOptions{
+		WithScheme:     true,
+		AllowedSchemes: allowedSchemes,
+	})
+	hostname, err := schemeValidator.SafeHostname(raw)
+	if err != nil {
 		return fallback
 	}
 
-	targetHost := strings.ToLower(target.Hostname())
-	appHost := strings.ToLower(appURL.Hostname())
-	if targetHost == appHost {
+	domainValidator := validators.NewDomainValidator(validators.DomainValidatorOptions{
+		WithPort: true,
+	})
+	err = domainValidator.Validate(raw, controller.runtime.AppURL)
+	if err == nil {
 		return raw
 	}
 
-	cookieDomain := strings.TrimPrefix(strings.ToLower(controller.runtime.CookieDomain), ".")
-	if cookieDomain != "" &&
-		(targetHost == cookieDomain || strings.HasSuffix(targetHost, "."+cookieDomain)) {
+	if !errors.Is(err, validators.ErrHostnameMismatch) ||
+		controller.config == nil ||
+		!controller.config.Auth.SubdomainsEnabled {
+		return fallback
+	}
+
+	cookieDomain := strings.ToLower(controller.runtime.CookieDomain)
+	if hostname == cookieDomain || strings.HasSuffix(hostname, "."+cookieDomain) {
 		return raw
 	}
 

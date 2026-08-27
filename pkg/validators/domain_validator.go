@@ -87,6 +87,10 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 			return nil, fmt.Errorf("missing host or scheme in url: %s", i)
 		}
 
+		if u.User != nil {
+			return nil, fmt.Errorf("userinfo is not supported")
+		}
+
 		return u, nil
 	}
 
@@ -108,6 +112,10 @@ func (v *DomainValidator) getURL(i string) (*url.URL, error) {
 
 	if u.Host == "" {
 		return nil, fmt.Errorf("missing host in url: %s", i)
+	}
+
+	if u.User != nil {
+		return nil, fmt.Errorf("userinfo is not supported")
 	}
 
 	return u, nil

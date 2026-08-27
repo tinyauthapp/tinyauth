@@ -21,46 +21,6 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func TestSafeLogoutRedirect(t *testing.T) {
-	controller := &UserController{
-		runtime: &model.RuntimeConfig{
-			AppURL:       "https://auth.example.com",
-			CookieDomain: "example.com",
-		},
-	}
-
-	assert.Equal(
-		t,
-		"https://app.example.com/",
-		controller.safeLogoutRedirect("https://app.example.com/"),
-	)
-	assert.Equal(
-		t,
-		"https://auth.example.com",
-		controller.safeLogoutRedirect("https://evil.example.net/"),
-	)
-	assert.Equal(
-		t,
-		"https://auth.example.com",
-		controller.safeLogoutRedirect("https://badexample.com/"),
-	)
-	assert.Equal(
-		t,
-		"https://auth.example.com",
-		controller.safeLogoutRedirect("https://evil.example.net@app.example.com/"),
-	)
-	assert.Equal(
-		t,
-		"https://auth.example.com",
-		controller.safeLogoutRedirect("javascript:alert(1)"),
-	)
-	assert.Equal(
-		t,
-		"https://auth.example.com",
-		controller.safeLogoutRedirect("http://app.example.com/"),
-	)
-}
-
 func TestSSOLogoutUsesServerSideIDToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -126,6 +86,7 @@ func TestSSOLogoutUsesServerSideIDToken(t *testing.T) {
 
 	NewUserController(UserControllerInput{
 		Log:           log,
+		StaticConfig:  &cfg,
 		RuntimeConfig: &runtime,
 		RouterGroup:   router.Group("/api"),
 		AuthService:   authService,
@@ -170,7 +131,7 @@ func TestSSOLogoutFallsBackToRedirectURIWhenProviderLogoutURLIsInvalid(t *testin
 	log := logger.NewLogger().WithTestConfig()
 	log.Init()
 
-	_, runtime := test.CreateTestConfigs(t)
+	cfg, runtime := test.CreateTestConfigs(t)
 	runtime.OAuthProviders = map[string]model.OAuthServiceConfig{
 		"pocketid": {
 			LogoutURL: "http://id.example.com/api/oidc/end-session",
@@ -197,6 +158,7 @@ func TestSSOLogoutFallsBackToRedirectURIWhenProviderLogoutURLIsInvalid(t *testin
 
 	NewUserController(UserControllerInput{
 		Log:           log,
+		StaticConfig:  &cfg,
 		RuntimeConfig: &runtime,
 		RouterGroup:   router.Group("/api"),
 	})

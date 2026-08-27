@@ -119,6 +119,13 @@ func TestDomainValidator_SafeHostname(t *testing.T) {
 			input:       "example.com",
 			expected:    "example.com",
 		},
+		{
+			description: "URL with userinfo should fail",
+			input:       "https://evil.example.net@example.com",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorContains(t, e, "userinfo is not supported")
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -250,6 +257,14 @@ func TestDomainValidator_Validate(t *testing.T) {
 			description: "Non matching hostnames should fail",
 			expected:    "example.com",
 			actual:      "foo.com",
+			errorFunc: func(t *testing.T, e error) {
+				assert.ErrorIs(t, e, ErrHostnameMismatch)
+			},
+		},
+		{
+			description: "Hostname ending with expected domain but not subdomain should fail",
+			expected:    "example.com",
+			actual:      "badexample.com",
 			errorFunc: func(t *testing.T, e error) {
 				assert.ErrorIs(t, e, ErrHostnameMismatch)
 			},
