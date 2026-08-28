@@ -27,6 +27,7 @@ type logoutResponse struct {
 
 func TestSSOLogout(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	cfg, runtime := test.CreateTestConfigs(t)
 
 	tests := []struct {
 		description string
@@ -95,14 +96,13 @@ func TestSSOLogout(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.description, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
 			log := logger.NewLogger().WithTestConfig()
 			log.Init()
 
-			cfg, runtime := test.CreateTestConfigs(t)
 			runtime.OAuthProviders = map[string]model.OAuthServiceConfig{
-				"pocketid": tc.provider,
+				"pocketid": test.provider,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -110,8 +110,8 @@ func TestSSOLogout(t *testing.T) {
 
 			store := memory.New()
 			var authService *service.AuthService
-			if tc.session != nil {
-				_, err := store.CreateSession(ctx, *tc.session)
+			if test.session != nil {
+				_, err := store.CreateSession(ctx, *test.session)
 				require.NoError(t, err)
 
 				dg := ding.New(ctx)
@@ -127,9 +127,9 @@ func TestSSOLogout(t *testing.T) {
 			}
 
 			router := gin.New()
-			if tc.userContext != nil {
+			if test.userContext != nil {
 				router.Use(func(c *gin.Context) {
-					c.Set("context", tc.userContext)
+					c.Set("context", test.userContext)
 					c.Next()
 				})
 			}
@@ -143,17 +143,17 @@ func TestSSOLogout(t *testing.T) {
 			})
 
 			recorder := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, tc.requestPath, nil)
-			if tc.session != nil {
+			req := httptest.NewRequest(http.MethodPost, test.requestPath, nil)
+			if test.session != nil {
 				req.AddCookie(&http.Cookie{
 					Name:  runtime.SessionCookieName,
-					Value: tc.session.UUID,
+					Value: test.session.UUID,
 				})
 			}
 
 			router.ServeHTTP(recorder, req)
 
-			tc.validate(t, recorder)
+			test.validate(t, recorder)
 		})
 	}
 }
@@ -194,15 +194,15 @@ func TestBuildOAuthLogoutURL(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.description, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
 			got, err := buildOAuthLogoutURL(
-				tc.provider,
+				test.provider,
 				"https://auth.example.com/api/user/logout/callback",
 				"id-token",
 				"https://app.example.com/",
 			)
-			if tc.expectError {
+			if test.expectError {
 				require.Error(t, err)
 				return
 			}
@@ -210,7 +210,7 @@ func TestBuildOAuthLogoutURL(t *testing.T) {
 			require.NoError(t, err)
 			parsed, err := url.Parse(got)
 			require.NoError(t, err)
-			tc.validate(t, parsed)
+			test.validate(t, parsed)
 		})
 	}
 }
