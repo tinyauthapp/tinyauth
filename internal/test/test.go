@@ -19,6 +19,7 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			Title:                 "Tinyauth Test",
 			ForgotPasswordMessage: "foo",
 			BackgroundImage:       "/background.jpg",
+			BackgroundCSS:         "linear-gradient(135deg, #03045e 0%, #0077b6 50%, #00b4d8 100%)",
 			WarningsEnabled:       true,
 		},
 		OAuth: model.OAuthConfig{
