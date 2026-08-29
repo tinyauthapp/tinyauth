@@ -139,13 +139,12 @@ export const QuickActions = () => {
       });
 
       const redirectUrl = response.data?.redirectUrl;
-      if (typeof redirectUrl === "string" && redirectUrl.length > 0) {
-        window.location.replace(redirectUrl);
-        return;
-      }
-
       redirectTimer.current = window.setTimeout(() => {
-        window.location.replace(`/login${compiledParams}`);
+        if (typeof redirectUrl === "string" && redirectUrl.length > 0) {
+          window.location.replace(redirectUrl);
+        } else {
+          window.location.replace(`/login${compiledParams}`);
+        }
       }, 500);
     },
     onError: () => {
