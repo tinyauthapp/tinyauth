@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
@@ -11,6 +13,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/validators"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +31,7 @@ type TotpRequest struct {
 
 type UserController struct {
 	log     *logger.Logger
+	config  *model.Config
 	runtime *model.RuntimeConfig
 	auth    *service.AuthService
 }
@@ -36,6 +40,7 @@ type UserControllerInput struct {
 	dig.In
 
 	Log           *logger.Logger
+	StaticConfig  *model.Config
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	AuthService   *service.AuthService
@@ -44,6 +49,7 @@ type UserControllerInput struct {
 func NewUserController(i UserControllerInput) *UserController {
 	controller := &UserController{
 		log:     i.Log,
+		config:  i.StaticConfig,
 		runtime: i.RuntimeConfig,
 		auth:    i.AuthService,
 	}
@@ -51,6 +57,7 @@ func NewUserController(i UserControllerInput) *UserController {
 	userGroup := i.RouterGroup.Group("/user")
 	userGroup.POST("/login", controller.loginHandler)
 	userGroup.POST("/logout", controller.logoutHandler)
+	userGroup.GET("/logout/callback", controller.ssoLogoutCallbackHandler)
 	userGroup.POST("/totp", controller.totpHandler)
 	userGroup.POST("/tailscale", controller.tailscaleHandler)
 
@@ -227,51 +234,119 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 func (controller *UserController) logoutHandler(c *gin.Context) {
 	controller.log.App.Debug().Msg("Logout attempt")
 
-	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+	// redirect_uri is a Tinyauth UI/navigation parameter. It is not an
+	// OpenID Connect RP-Initiated Logout parameter. The standardized OP-facing
+	// parameters are added later when compiling the provider logout request.
+	requestedRedirectURI := ""
+	if c.Query("login_for") == "app" {
+		requestedRedirectURI = c.Query("redirect_uri")
+	}
+	redirectURI := controller.safeLogoutRedirect(requestedRedirectURI)
 
+	userContext, err := new(model.UserContext).NewFromGin(c)
 	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			controller.log.App.Warn().Msg("Logout attempt without session cookie, treating as successful logout")
-			c.JSON(200, gin.H{
-				"status":  200,
-				"message": "Logout successful",
-			})
-			return
-		}
+		userContext = nil
+	}
+
+	sessionID, err := c.Cookie(controller.runtime.SessionCookieName)
+	if err != nil && !errors.Is(err, http.ErrNoCookie) {
 		controller.log.App.Error().Err(err).Msg("Error retrieving session cookie on logout")
-		c.JSON(500, gin.H{
-			"status":  500,
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
 			"message": "Internal Server Error",
 		})
 		return
 	}
 
-	cookie, err := controller.auth.DeleteSession(c, uuid)
-
+	result, err := controller.auth.Logout(c, service.LogoutRequest{
+		SessionID:           sessionID,
+		UserContext:         userContext,
+		ClientIP:            c.ClientIP(),
+		RedirectURI:         redirectURI,
+		ProviderCallbackURL: controller.runtime.AppURL + "/api/user/logout/callback",
+		ProviderState:       redirectURI,
+	})
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
-		c.JSON(500, gin.H{
-			"status":  500,
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
 			"message": "Internal Server Error",
 		})
 		return
 	}
-
-	context, err := new(model.UserContext).NewFromGin(c)
-
-	if err == nil {
-		controller.log.AuditLogout(context.GetUsername(), context.GetProviderID(), c.ClientIP())
-	} else {
-		controller.log.App.Warn().Err(err).Msg("Failed to get user context during logout, logging audit with unknown user")
-		controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
+	if result.Cookie != nil {
+		http.SetCookie(c.Writer, result.Cookie)
 	}
 
-	http.SetCookie(c.Writer, cookie)
-
-	c.JSON(200, gin.H{
-		"status":  200,
+	response := gin.H{
+		"status":  http.StatusOK,
 		"message": "Logout successful",
+	}
+	if result.ProviderLogout || requestedRedirectURI != "" {
+		response["redirectUrl"] = result.RedirectURL
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (controller *UserController) ssoLogoutCallbackHandler(c *gin.Context) {
+	if redirectURI, ok := controller.auth.ConsumeLogoutCallbackTicket(c.Query("state")); ok {
+		c.Redirect(http.StatusFound, redirectURI)
+		return
+	}
+
+	// state is defined by OpenID Connect RP-Initiated Logout 1.0 as an opaque
+	// RP value that the OP returns unchanged after logout. We use it to carry
+	// the already-validated Tinyauth application return URI across the OP hop.
+	redirectURI := controller.safeLogoutRedirect(c.Query("state"))
+	c.Redirect(http.StatusFound, redirectURI)
+}
+
+func (controller *UserController) safeLogoutRedirect(raw string) string {
+	fallback := controller.runtime.AppURL
+	if raw == "" {
+		return fallback
+	}
+
+	appURL, err := url.Parse(controller.runtime.AppURL)
+	if err != nil {
+		return fallback
+	}
+
+	allowedSchemes := []string{"http", "https"}
+	if appURL.Scheme == "https" {
+		allowedSchemes = []string{"https"}
+	}
+
+	schemeValidator := validators.NewDomainValidator(validators.DomainValidatorOptions{
+		WithScheme:     true,
+		AllowedSchemes: allowedSchemes,
 	})
+	hostname, err := schemeValidator.SafeHostname(raw)
+	if err != nil {
+		return fallback
+	}
+
+	domainValidator := validators.NewDomainValidator(validators.DomainValidatorOptions{
+		WithPort: true,
+	})
+	err = domainValidator.Validate(raw, controller.runtime.AppURL)
+	if err == nil {
+		return raw
+	}
+
+	if !errors.Is(err, validators.ErrHostnameMismatch) ||
+		controller.config == nil ||
+		!controller.config.Auth.SubdomainsEnabled {
+		return fallback
+	}
+
+	cookieDomain := strings.ToLower(controller.runtime.CookieDomain)
+	if hostname == cookieDomain || strings.HasSuffix(hostname, "."+cookieDomain) {
+		return raw
+	}
+
+	return fallback
 }
 
 func (controller *UserController) totpHandler(c *gin.Context) {

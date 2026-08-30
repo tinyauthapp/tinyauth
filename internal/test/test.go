@@ -27,10 +27,11 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 		OIDC: model.OIDCConfig{
 			Clients: map[string]model.OIDCClientConfig{
 				"test": {
-					ClientID:            "some-client-id",
-					ClientSecret:        "some-client-secret",
-					TrustedRedirectURIs: []string{"https://test.example.com/callback"},
-					Name:                "Test Client",
+					ClientID:                      "some-client-id",
+					ClientSecret:                  "some-client-secret",
+					TrustedRedirectURIs:           []string{"https://test.example.com/callback"},
+					TrustedPostLogoutRedirectURIs: []string{"https://rp.example.net/logged-out"},
+					Name:                          "Test Client",
 				},
 			},
 			PrivateKeyPath: filepath.Join(tempDir, "key.pem"),

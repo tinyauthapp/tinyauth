@@ -34,6 +34,7 @@ type authorizeErrorParams struct {
 type OIDCController struct {
 	log     *logger.Logger
 	oidc    *service.OIDCService
+	auth    *service.AuthService
 	runtime *model.RuntimeConfig
 }
 
@@ -88,6 +89,7 @@ type OIDCControllerInput struct {
 
 	Log           *logger.Logger
 	OIDCService   *service.OIDCService
+	AuthService   *service.AuthService
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	MainRouter    *gin.RouterGroup `name:"mainRouterGroup"`
@@ -97,6 +99,7 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 	controller := &OIDCController{
 		log:     i.Log,
 		oidc:    i.OIDCService,
+		auth:    i.AuthService,
 		runtime: i.RuntimeConfig,
 	}
 
@@ -105,11 +108,85 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 
 	oidcGroup := i.RouterGroup.Group("/oidc")
 	oidcGroup.POST("/authorize-complete", controller.authorizeComplete)
+	oidcGroup.GET("/end-session", controller.endSession)
+	oidcGroup.POST("/end-session", controller.endSession)
 	oidcGroup.POST("/token", controller.Token)
 	oidcGroup.GET("/userinfo", controller.Userinfo)
 	oidcGroup.POST("/userinfo", controller.Userinfo)
 
 	return controller
+}
+
+func (controller *OIDCController) endSession(c *gin.Context) {
+	if controller.oidc == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status":  http.StatusNotFound,
+			"message": "OIDC service not configured",
+		})
+		return
+	}
+
+	req := service.EndSessionRequest{}
+	err := c.ShouldBind(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": "Bad Request",
+		})
+		return
+	}
+
+	userContext, err := new(model.UserContext).NewFromGin(c)
+	if err != nil {
+		userContext = nil
+	}
+
+	redirectURI, err := controller.oidc.ValidateEndSessionRequest(c, req, userContext)
+	if err != nil {
+		if errors.Is(err, service.ErrEndSessionConfirmationNeeded) {
+			c.Redirect(http.StatusFound, controller.runtime.AppURL+"/logout")
+			return
+		}
+		controller.log.App.Warn().Err(err).Msg("Rejected OIDC end-session request")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": "Invalid end-session request",
+		})
+		return
+	}
+
+	sessionID, err := c.Cookie(controller.runtime.SessionCookieName)
+	if err != nil && !errors.Is(err, http.ErrNoCookie) {
+		controller.log.App.Error().Err(err).Msg("Error retrieving session cookie on OIDC logout")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	callbackTicket := controller.auth.CreateLogoutCallbackTicket(redirectURI)
+	result, err := controller.auth.Logout(c, service.LogoutRequest{
+		SessionID:           sessionID,
+		UserContext:         userContext,
+		ClientIP:            c.ClientIP(),
+		RedirectURI:         redirectURI,
+		ProviderCallbackURL: controller.runtime.AppURL + "/api/user/logout/callback",
+		ProviderState:       callbackTicket,
+	})
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Error deleting session on OIDC logout")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+	if result.Cookie != nil {
+		http.SetCookie(c.Writer, result.Cookie)
+	}
+
+	c.Redirect(http.StatusFound, result.RedirectURL)
 }
 
 // This endpoint does **not** return a code, it handles param validation, ticket creation

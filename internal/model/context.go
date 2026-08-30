@@ -48,6 +48,7 @@ type OAuthContext struct {
 	BaseContext
 	Groups      []string
 	Sub         string
+	IDToken     string
 	DisplayName string
 	ID          string
 }
@@ -159,6 +160,7 @@ func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext,
 				return strings.Split(session.OAuthGroups, ",")
 			}(),
 			Sub:         session.OAuthSub,
+			IDToken:     session.OAuthIDToken,
 			DisplayName: session.OAuthName,
 			ID:          session.Provider,
 		}
