@@ -236,7 +236,7 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 
 	// redirect_uri is a Tinyauth UI/navigation parameter. It is not an
 	// OpenID Connect RP-Initiated Logout parameter. The standardized OP-facing
-	// parameters are added later by buildOAuthLogoutURL.
+	// parameters are added later when compiling the provider logout request.
 	requestedRedirectURI := ""
 	if c.Query("login_for") == "app" {
 		requestedRedirectURI = c.Query("redirect_uri")
@@ -248,36 +248,8 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		userContext = nil
 	}
 
-	providerID := ""
-	idToken := ""
-	if userContext != nil && userContext.IsOAuth() {
-		providerID = userContext.OAuth.ID
-		idToken = userContext.OAuth.IDToken
-	}
-
-	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
-	if err == nil {
-		cookie, err := controller.auth.DeleteSession(c, uuid)
-		if err != nil {
-			controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  http.StatusInternalServerError,
-				"message": "Internal Server Error",
-			})
-			return
-		}
-
-		http.SetCookie(c.Writer, cookie)
-
-		if userContext != nil {
-			controller.log.AuditLogout(userContext.GetUsername(), userContext.GetProviderID(), c.ClientIP())
-		} else {
-			controller.log.App.Warn().Msg("Failed to get user context during logout, logging audit with unknown user")
-			controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
-		}
-	} else if errors.Is(err, http.ErrNoCookie) {
-		controller.log.App.Warn().Msg("Logout attempt without session cookie, treating as successful logout")
-	} else {
+	sessionID, err := c.Cookie(controller.runtime.SessionCookieName)
+	if err != nil && !errors.Is(err, http.ErrNoCookie) {
 		controller.log.App.Error().Err(err).Msg("Error retrieving session cookie on logout")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  http.StatusInternalServerError,
@@ -286,39 +258,43 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		return
 	}
 
+	result, err := controller.auth.Logout(c, service.LogoutRequest{
+		SessionID:           sessionID,
+		UserContext:         userContext,
+		ClientIP:            c.ClientIP(),
+		RedirectURI:         redirectURI,
+		ProviderCallbackURL: controller.runtime.AppURL + "/api/user/logout/callback",
+		ProviderState:       redirectURI,
+	})
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  http.StatusInternalServerError,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+	if result.Cookie != nil {
+		http.SetCookie(c.Writer, result.Cookie)
+	}
+
 	response := gin.H{
 		"status":  http.StatusOK,
 		"message": "Logout successful",
 	}
-
-	provider, ok := controller.runtime.OAuthProviders[providerID]
-	if ok && provider.LogoutURL != "" {
-		// OpenID Connect RP-Initiated Logout 1.0:
-		// https://openid.net/specs/openid-connect-rpinitiated-1_0-final.html#RPLogout
-		//
-		// OP-facing standardized parameters:
-		//   id_token_hint
-		//   post_logout_redirect_uri
-		//   state
-		callbackURL := controller.runtime.AppURL + "/api/user/logout/callback"
-		logoutURL, err := buildOAuthLogoutURL(provider, callbackURL, idToken, redirectURI)
-		if err != nil {
-			controller.log.App.Warn().Err(err).Str("provider", providerID).Msg("Invalid OAuth logout URL, skipping provider logout")
-			if requestedRedirectURI != "" {
-				response["redirectUrl"] = redirectURI
-			}
-		} else {
-			response["redirectUrl"] = logoutURL
-		}
-	} else if requestedRedirectURI != "" {
-		// Non-OIDC/local logout can still return to the validated application.
-		response["redirectUrl"] = redirectURI
+	if result.ProviderLogout || requestedRedirectURI != "" {
+		response["redirectUrl"] = result.RedirectURL
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
 func (controller *UserController) ssoLogoutCallbackHandler(c *gin.Context) {
+	if redirectURI, ok := controller.auth.ConsumeLogoutCallbackTicket(c.Query("state")); ok {
+		c.Redirect(http.StatusFound, redirectURI)
+		return
+	}
+
 	// state is defined by OpenID Connect RP-Initiated Logout 1.0 as an opaque
 	// RP value that the OP returns unchanged after logout. We use it to carry
 	// the already-validated Tinyauth application return URI across the OP hop.
@@ -371,31 +347,6 @@ func (controller *UserController) safeLogoutRedirect(raw string) string {
 	}
 
 	return fallback
-}
-
-func buildOAuthLogoutURL(provider model.OAuthServiceConfig, callbackURL, idToken, state string) (string, error) {
-	logoutURL, err := url.Parse(provider.LogoutURL)
-	if err != nil || logoutURL.Host == "" {
-		return "", fmt.Errorf("invalid logout URL")
-	}
-	if logoutURL.Scheme != "https" {
-		return "", fmt.Errorf("unsupported logout URL scheme")
-	}
-
-	query := logoutURL.Query()
-	if provider.ClientID != "" {
-		query.Set("client_id", provider.ClientID)
-	}
-	if idToken != "" {
-		query.Set("id_token_hint", idToken)
-	}
-	query.Set("post_logout_redirect_uri", callbackURL)
-	if state != "" {
-		query.Set("state", state)
-	}
-	logoutURL.RawQuery = query.Encode()
-
-	return logoutURL.String(), nil
 }
 
 func (controller *UserController) totpHandler(c *gin.Context) {

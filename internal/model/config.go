@@ -280,12 +280,13 @@ type OAuthServiceClaimsMap struct {
 }
 
 type OIDCClientConfig struct {
-	ID                  string   `description:"OIDC client ID." yaml:"-"`
-	ClientID            string   `description:"OIDC client ID." yaml:"clientId,omitempty"`
-	ClientSecret        string   `description:"OIDC client secret." yaml:"clientSecret,omitempty"`
-	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile,omitempty"`
-	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris,omitempty"`
-	Name                string   `description:"Client name in UI." yaml:"name,omitempty"`
+	ID                            string   `description:"OIDC client ID." yaml:"-"`
+	ClientID                      string   `description:"OIDC client ID." yaml:"clientId,omitempty"`
+	ClientSecret                  string   `description:"OIDC client secret." yaml:"clientSecret,omitempty"`
+	ClientSecretFile              string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile,omitempty"`
+	TrustedRedirectURIs           []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris,omitempty"`
+	TrustedPostLogoutRedirectURIs []string `description:"List of trusted post-logout redirect URIs." yaml:"trustedPostLogoutRedirectUris,omitempty"`
+	Name                          string   `description:"Client name in UI." yaml:"name,omitempty"`
 }
 
 type ACLsConfig struct {

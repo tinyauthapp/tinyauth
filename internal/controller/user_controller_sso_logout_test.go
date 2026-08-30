@@ -109,22 +109,21 @@ func TestSSOLogout(t *testing.T) {
 			t.Cleanup(cancel)
 
 			store := memory.New()
-			var authService *service.AuthService
 			if test.session != nil {
 				_, err := store.CreateSession(ctx, *test.session)
 				require.NoError(t, err)
-
-				dg := ding.New(ctx)
-				authService, err = service.NewAuthService(service.AuthServiceInput{
-					Log:     log,
-					Config:  &cfg,
-					Runtime: &runtime,
-					Ctx:     ctx,
-					Ding:    dg,
-					Queries: store,
-				})
-				require.NoError(t, err)
 			}
+
+			dg := ding.New(ctx)
+			authService, err := service.NewAuthService(service.AuthServiceInput{
+				Log:     log,
+				Config:  &cfg,
+				Runtime: &runtime,
+				Ctx:     ctx,
+				Ding:    dg,
+				Queries: store,
+			})
+			require.NoError(t, err)
 
 			router := gin.New()
 			if test.userContext != nil {
@@ -154,63 +153,6 @@ func TestSSOLogout(t *testing.T) {
 			router.ServeHTTP(recorder, req)
 
 			test.validate(t, recorder)
-		})
-	}
-}
-
-func TestBuildOAuthLogoutURL(t *testing.T) {
-	tests := []struct {
-		description string
-		provider    model.OAuthServiceConfig
-		expectError bool
-		validate    func(t *testing.T, parsed *url.URL)
-	}{
-		{
-			description: "Builds provider logout URL with OIDC logout parameters",
-			provider: model.OAuthServiceConfig{
-				ClientID:  "client-id",
-				LogoutURL: "https://id.example.com/api/oidc/end-session",
-			},
-			validate: func(t *testing.T, parsed *url.URL) {
-				assert.Equal(t, "https", parsed.Scheme)
-				assert.Equal(t, "id.example.com", parsed.Host)
-				assert.Equal(t, "/api/oidc/end-session", parsed.Path)
-				assert.Equal(t, "client-id", parsed.Query().Get("client_id"))
-				assert.Equal(t, "id-token", parsed.Query().Get("id_token_hint"))
-				assert.Equal(t, "https://app.example.com/", parsed.Query().Get("state"))
-				assert.Equal(
-					t,
-					"https://auth.example.com/api/user/logout/callback",
-					parsed.Query().Get("post_logout_redirect_uri"),
-				)
-			},
-		},
-		{
-			description: "Rejects HTTP provider logout URL",
-			provider: model.OAuthServiceConfig{
-				LogoutURL: "http://id.example.com/api/oidc/end-session",
-			},
-			expectError: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
-			got, err := buildOAuthLogoutURL(
-				test.provider,
-				"https://auth.example.com/api/user/logout/callback",
-				"id-token",
-				"https://app.example.com/",
-			)
-			if test.expectError {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			parsed, err := url.Parse(got)
-			require.NoError(t, err)
-			test.validate(t, parsed)
 		})
 	}
 }

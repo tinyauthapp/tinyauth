@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -57,6 +58,25 @@ type LoginAttempt struct {
 	LockedUntil    time.Time
 }
 
+// LogoutRequest contains the session and redirect information needed to end a
+// local session and optionally cascade logout to its OAuth provider.
+type LogoutRequest struct {
+	SessionID           string
+	UserContext         *model.UserContext
+	ClientIP            string
+	RedirectURI         string
+	ProviderCallbackURL string
+	ProviderState       string
+}
+
+// LogoutResponse contains the local session cookie and the next browser
+// location selected by the logout flow.
+type LogoutResponse struct {
+	Cookie         *http.Cookie
+	RedirectURL    string
+	ProviderLogout bool
+}
+
 type AuthService struct {
 	log     *logger.Logger
 	config  *model.Config
@@ -72,9 +92,10 @@ type AuthService struct {
 	dummyHash string
 
 	caches struct {
-		login *cache.CacheStore[LoginAttempt]
-		oauth *cache.CacheStore[OAuthPendingSession]
-		ldap  *cache.CacheStore[[]string]
+		login          *cache.CacheStore[LoginAttempt]
+		oauth          *cache.CacheStore[OAuthPendingSession]
+		ldap           *cache.CacheStore[[]string]
+		logoutCallback *cache.CacheStore[string]
 	}
 }
 
@@ -119,10 +140,12 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	oauthCache := cache.NewCacheStore[OAuthPendingSession](256)
 	loginCache := cache.NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
 	ldapCache := cache.NewCacheStore[[]string](1024)
+	logoutCallbackCache := cache.NewCacheStore[string](256)
 
 	service.caches.oauth = oauthCache
 	service.caches.login = loginCache
 	service.caches.ldap = ldapCache
+	service.caches.logoutCallback = logoutCallbackCache
 
 	i.Ding.Go(func(ctx context.Context) {
 		ticker := time.NewTicker(1 * time.Minute)
@@ -134,6 +157,7 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 				service.caches.oauth.Sweep()
 				service.caches.login.Sweep()
 				service.caches.ldap.Sweep()
+				service.caches.logoutCallback.Sweep()
 			case <-ctx.Done():
 				return
 			}
@@ -469,6 +493,104 @@ func (auth *AuthService) DeleteSession(ctx context.Context, uuid string) (*http.
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}, nil
+}
+
+// Logout deletes the local session and compiles an upstream provider logout
+// request when the session originated from a configured OAuth provider.
+func (auth *AuthService) Logout(ctx context.Context, req LogoutRequest) (*LogoutResponse, error) {
+	providerID := ""
+	idToken := ""
+	if req.UserContext != nil && req.UserContext.IsOAuth() {
+		providerID = req.UserContext.OAuth.ID
+		idToken = req.UserContext.OAuth.IDToken
+	}
+
+	response := &LogoutResponse{
+		RedirectURL: req.RedirectURI,
+	}
+	if req.SessionID != "" {
+		cookie, err := auth.DeleteSession(ctx, req.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		response.Cookie = cookie
+
+		if req.UserContext != nil {
+			auth.log.AuditLogout(req.UserContext.GetUsername(), req.UserContext.GetProviderID(), req.ClientIP)
+		} else {
+			auth.log.App.Warn().Msg("Failed to get user context during logout, logging audit with unknown user")
+			auth.log.AuditLogout("unknown", "unknown", req.ClientIP)
+		}
+	} else {
+		auth.log.App.Warn().Msg("Logout attempt without session cookie, treating as successful logout")
+	}
+
+	provider, ok := auth.runtime.OAuthProviders[providerID]
+	if !ok || provider.LogoutURL == "" {
+		return response, nil
+	}
+
+	logoutURL, err := buildOAuthLogoutURL(
+		provider,
+		req.ProviderCallbackURL,
+		idToken,
+		req.ProviderState,
+	)
+	if err != nil {
+		auth.log.App.Warn().Err(err).Str("provider", providerID).Msg("Invalid OAuth logout URL, skipping provider logout")
+		return response, nil
+	}
+
+	response.RedirectURL = logoutURL
+	response.ProviderLogout = true
+	return response, nil
+}
+
+// CreateLogoutCallbackTicket stores a previously validated redirect URI under
+// an opaque, short-lived identifier for the upstream provider callback.
+func (auth *AuthService) CreateLogoutCallbackTicket(redirectURI string) string {
+	ticket := utils.GenerateString(32)
+	auth.caches.logoutCallback.Set(ticket, redirectURI, 10*time.Minute)
+	return ticket
+}
+
+// ConsumeLogoutCallbackTicket returns and removes a redirect URI associated
+// with an opaque callback ticket.
+func (auth *AuthService) ConsumeLogoutCallbackTicket(ticket string) (string, bool) {
+	redirectURI := ""
+	found := false
+	auth.caches.logoutCallback.WithLock(func(actions cache.CacheStoreActions[string]) {
+		redirectURI, found = actions.Get(ticket)
+		if found {
+			actions.Delete(ticket)
+		}
+	})
+	return redirectURI, found
+}
+
+func buildOAuthLogoutURL(provider model.OAuthServiceConfig, callbackURL, idToken, state string) (string, error) {
+	logoutURL, err := url.Parse(provider.LogoutURL)
+	if err != nil || logoutURL.Host == "" {
+		return "", fmt.Errorf("invalid logout URL")
+	}
+	if logoutURL.Scheme != "https" {
+		return "", fmt.Errorf("unsupported logout URL scheme")
+	}
+
+	query := logoutURL.Query()
+	if provider.ClientID != "" {
+		query.Set("client_id", provider.ClientID)
+	}
+	if idToken != "" {
+		query.Set("id_token_hint", idToken)
+	}
+	query.Set("post_logout_redirect_uri", callbackURL)
+	if state != "" {
+		query.Set("state", state)
+	}
+	logoutURL.RawQuery = query.Encode()
+
+	return logoutURL.String(), nil
 }
 
 func (auth *AuthService) GetSession(ctx context.Context, uuid string) (*repository.Session, error) {

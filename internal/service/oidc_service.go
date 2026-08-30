@@ -39,11 +39,13 @@ var (
 )
 
 var (
-	ErrCodeExpired   = errors.New("code_expired")
-	ErrCodeNotFound  = errors.New("code_not_found")
-	ErrTokenNotFound = errors.New("token_not_found")
-	ErrTokenExpired  = errors.New("token_expired")
-	ErrInvalidClient = errors.New("invalid_client")
+	ErrCodeExpired                  = errors.New("code_expired")
+	ErrCodeNotFound                 = errors.New("code_not_found")
+	ErrTokenNotFound                = errors.New("token_not_found")
+	ErrTokenExpired                 = errors.New("token_expired")
+	ErrInvalidClient                = errors.New("invalid_client")
+	ErrEndSessionConfirmationNeeded = errors.New("end_session_confirmation_needed")
+	ErrInvalidPostLogoutRedirectURI = errors.New("invalid_post_logout_redirect_uri")
 )
 
 type OIDCPrompt string
@@ -131,6 +133,16 @@ type AuthorizeRequest struct {
 	CodeChallengeMethod string `form:"code_challenge_method" json:"code_challenge_method" url:"code_challenge_method"`
 	Prompt              string `form:"prompt" json:"prompt" url:"prompt"`
 	MaxAge              string `form:"max_age" json:"max_age" url:"max_age"`
+}
+
+// EndSessionRequest contains the parameters defined by OpenID Connect
+// RP-Initiated Logout 1.0.
+type EndSessionRequest struct {
+	IDTokenHint           string `form:"id_token_hint"`
+	LogoutHint            string `form:"logout_hint"`
+	ClientID              string `form:"client_id"`
+	PostLogoutRedirectURI string `form:"post_logout_redirect_uri"`
+	State                 string `form:"state"`
 }
 
 type AuthorizeCodeEntry struct {
@@ -428,6 +440,71 @@ func (service *OIDCService) ValidateAuthorizeParams(req AuthorizeRequest) error 
 	}
 
 	return nil
+}
+
+// ValidateEndSessionRequest validates an ID token hint and compiles the trusted
+// location to which the user agent should be redirected after logout.
+func (service *OIDCService) ValidateEndSessionRequest(ctx context.Context, req EndSessionRequest, userContext *model.UserContext) (string, error) {
+	if req.IDTokenHint == "" {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	object, err := jose.ParseSigned(req.IDTokenHint, []jose.SignatureAlgorithm{jose.RS256})
+	if err != nil {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	payload, err := object.Verify(service.publicKey)
+	if err != nil {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	claims := ClaimSet{}
+	if err = json.Unmarshal(payload, &claims); err != nil {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	if claims.Iss != service.issuer || claims.Aud == "" || claims.Sub == "" {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+	if req.ClientID != "" && req.ClientID != claims.Aud {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	client, ok := service.GetClient(claims.Aud)
+	if !ok {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	session, err := service.queries.GetOIDCSessionBySub(ctx, claims.Sub)
+	if err != nil || session.ClientID != client.ClientID {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	if userContext != nil && userContext.IsAuthenticated() &&
+		claims.Sub != service.CreateSub(*userContext, client.ClientID) {
+		return "", ErrEndSessionConfirmationNeeded
+	}
+
+	if req.PostLogoutRedirectURI == "" {
+		return service.issuer, nil
+	}
+	if !slices.Contains(client.TrustedPostLogoutRedirectURIs, req.PostLogoutRedirectURI) {
+		return "", ErrInvalidPostLogoutRedirectURI
+	}
+	if req.State == "" {
+		return req.PostLogoutRedirectURI, nil
+	}
+
+	parsedRedirectURI, err := url.Parse(req.PostLogoutRedirectURI)
+	if err != nil {
+		return "", ErrInvalidPostLogoutRedirectURI
+	}
+	query := parsedRedirectURI.Query()
+	query.Set("state", req.State)
+	parsedRedirectURI.RawQuery = query.Encode()
+
+	return parsedRedirectURI.String(), nil
 }
 
 func (service *OIDCService) filterScopes(scopes []string) []string {
