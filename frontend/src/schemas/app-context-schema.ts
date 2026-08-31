@@ -18,6 +18,7 @@ const uiSchema = z.object({
   title: z.string(),
   forgotPasswordMessage: z.string(),
   backgroundImage: z.string(),
+  backgroundCss: z.string(),
   warningsEnabled: z.boolean(),
 });
 
