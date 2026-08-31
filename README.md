@@ -87,4 +87,4 @@ A huge thank you to [selfh.st](https://selfh.st) for their generous donation to 
 
 - **Freepik** for providing the police hat and badge.
 - **Renee French** for the original gopher logo.
-- **Syrhu** for providing the background image of the app.
+- [Siru Zhou](https://unsplash.com/@syrhu) for providing the background image of the app.

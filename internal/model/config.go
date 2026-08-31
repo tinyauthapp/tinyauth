@@ -53,7 +53,7 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 		UI: UIConfig{
 			Title:                 "Tinyauth",
 			ForgotPasswordMessage: "You can change your password by changing the configuration.",
-			BackgroundImage:       "/background.jpg",
+			BackgroundImage:       "/background.webp",
 			WarningsEnabled:       true,
 		},
 		LDAP: LDAPConfig{
