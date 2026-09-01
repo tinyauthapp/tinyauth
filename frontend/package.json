@@ -26,7 +26,7 @@
     "i18next": "^26.4.0",
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-resources-to-backend": "^1.2.3",
-    "lucide-react": "^1.35.0",
+    "lucide-react": "^1.37.0",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
@@ -34,11 +34,11 @@
     "react-hook-form": "^7.86.0",
     "react-i18next": "^17.0.12",
     "react-markdown": "^10.1.0",
-    "react-router": "^8.3.0",
+    "react-router": "^8.3.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.3.3",
-    "zod": "^4.3.6"
+    "zod": "^4.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
