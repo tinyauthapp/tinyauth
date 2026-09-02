@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
@@ -31,24 +34,42 @@ type DockerServiceInput struct {
 }
 
 func NewDockerService(i DockerServiceInput) (*DockerService, error) {
-	client, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-
-	client.NegotiateAPIVersion(i.Ctx)
-
-	_, err = client.Ping(i.Ctx)
-
-	if err != nil {
-		i.Log.App.Debug().Err(err).Msg("Docker not connected")
-		return nil, nil
-	}
-
 	service := &DockerService{
 		log:     i.Log,
-		client:  client,
 		context: i.Ctx,
+	}
+
+	service.log.App.Debug().Msg("Attempting to connect to Docker")
+
+	if os.Getenv("DOCKER_HOST") == "" {
+		cli, err := service.connect()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to docker: %w", err)
+		}
+		service.client = cli
+	} else {
+		exp := backoff.NewExponentialBackOff()
+		exp.InitialInterval = 3 * time.Second
+		exp.RandomizationFactor = 0.1
+		exp.Multiplier = 1.5
+		exp.Reset()
+
+		operation := func() (*client.Client, error) {
+			if service.client != nil {
+				service.client.Close()
+			}
+			cli, err := service.connect()
+			if err != nil {
+				return nil, err
+			}
+			return cli, nil
+		}
+
+		_, err := backoff.Retry(service.context, operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to docker after retrying: %w", err)
+		}
 	}
 
 	service.isConnected = true
@@ -57,6 +78,23 @@ func NewDockerService(i DockerServiceInput) (*DockerService, error) {
 	i.Ding.Go(service.watchAndClose, ding.RingMajor)
 
 	return service, nil
+}
+
+func (docker *DockerService) connect() (*client.Client, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cli.Ping(docker.context)
+
+	if err != nil {
+		docker.log.App.Debug().Err(err).Msg("Docker not connected")
+		return nil, nil
+	}
+
+	return cli, nil
 }
 
 func (docker *DockerService) getContainers() ([]container.Summary, error) {
