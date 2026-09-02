@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -15,6 +16,10 @@ import (
 
 	container "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+)
+
+var (
+	ErrPingFailed = fmt.Errorf("failed to ping docker")
 )
 
 type DockerService struct {
@@ -44,6 +49,10 @@ func NewDockerService(i DockerServiceInput) (*DockerService, error) {
 	if os.Getenv("DOCKER_HOST") == "" {
 		cli, err := service.connect()
 		if err != nil {
+			if errors.Is(err, ErrPingFailed) {
+				service.log.App.Debug().Msg("Docker not connected")
+				return nil, nil
+			}
 			return nil, fmt.Errorf("failed to connect to docker: %w", err)
 		}
 		service.client = cli
@@ -65,11 +74,17 @@ func NewDockerService(i DockerServiceInput) (*DockerService, error) {
 			return cli, nil
 		}
 
-		_, err := backoff.Retry(service.context, operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
+		cli, err := backoff.Retry(service.context, operation, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
 
 		if err != nil {
+			if errors.Is(err, ErrPingFailed) {
+				service.log.App.Debug().Msg("Docker not connected after retrying")
+				return nil, nil
+			}
 			return nil, fmt.Errorf("failed to connect to docker after retrying: %w", err)
 		}
+
+		service.client = cli
 	}
 
 	service.isConnected = true
@@ -90,8 +105,7 @@ func (docker *DockerService) connect() (*client.Client, error) {
 	_, err = cli.Ping(docker.context)
 
 	if err != nil {
-		docker.log.App.Debug().Err(err).Msg("Docker not connected")
-		return nil, nil
+		return nil, ErrPingFailed
 	}
 
 	return cli, nil
