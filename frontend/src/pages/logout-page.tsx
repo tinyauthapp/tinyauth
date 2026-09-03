@@ -36,17 +36,31 @@ export const LogoutPage = () => {
     }
     return "";
   })();
+  const logoutParams =
+    screenParams.redirect_uri && screenParams.login_for !== "oidc"
+      ? { login_for: "app", redirect_uri: screenParams.redirect_uri }
+      : undefined;
 
   const logoutMutation = useMutation({
-    mutationFn: () => axios.post("/api/user/logout"),
+    // redirect_uri is Tinyauth's existing application-navigation parameter.
+    // It is not the OIDC RP-Initiated Logout post_logout_redirect_uri.
+    mutationFn: () =>
+      axios.post("/api/user/logout", undefined, {
+        params: logoutParams,
+      }),
     mutationKey: ["logout"],
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast.success(t("logoutSuccessTitle"), {
         description: t("logoutSuccessSubtitle"),
       });
 
+      const redirectUrl = response.data?.redirectUrl;
       redirectTimer.current = window.setTimeout(() => {
-        window.location.replace(`/login${compiledParams}`);
+        if (typeof redirectUrl === "string" && redirectUrl.length > 0) {
+          window.location.replace(redirectUrl);
+        } else {
+          window.location.replace(`/login${compiledParams}`);
+        }
       }, 500);
     },
     onError: () => {

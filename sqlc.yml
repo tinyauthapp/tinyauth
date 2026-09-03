@@ -12,6 +12,7 @@ sql:
           oauth_groups: "OAuthGroups"
           oauth_name: "OAuthName"
           oauth_sub: "OAuthSub"
+          oauth_id_token: "OAuthIDToken"
           redirect_uri: "RedirectURI"
         overrides:
           - column: "sessions.oauth_groups"
@@ -19,6 +20,8 @@ sql:
           - column: "sessions.oauth_name"
             go_type: "string"
           - column: "sessions.oauth_sub"
+            go_type: "string"
+          - column: "sessions.oauth_id_token"
             go_type: "string"
           - column: "sessions.ldap_groups"
             go_type: "string"
@@ -36,4 +39,5 @@ sql:
           oauth_groups: "OAuthGroups"
           oauth_name: "OAuthName"
           oauth_sub: "OAuthSub"
+          oauth_id_token: "OAuthIDToken"
           redirect_uri: "RedirectURI"

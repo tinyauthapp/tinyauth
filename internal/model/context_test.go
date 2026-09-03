@@ -98,12 +98,12 @@ func TestContext(t *testing.T) {
 			run: func(t *testing.T, c *UserContext) any {
 				got, err := c.NewFromSession(&repository.Session{
 					Username: "dave", Provider: "github",
-					OAuthGroups: "devs,admins", OAuthSub: "sub-123", OAuthName: "GitHub",
+					OAuthGroups: "devs,admins", OAuthSub: "sub-123", OAuthIDToken: "id-token", OAuthName: "GitHub",
 				})
 				require.NoError(t, err)
-				return [5]any{got.Provider, got.OAuth.ID, got.OAuth.Sub, got.OAuth.DisplayName, got.OAuth.Groups}
+				return [6]any{got.Provider, got.OAuth.ID, got.OAuth.Sub, got.OAuth.IDToken, got.OAuth.DisplayName, got.OAuth.Groups}
 			},
-			expected: [5]any{ProviderOAuth, "github", "sub-123", "GitHub", []string{"devs", "admins"}},
+			expected: [6]any{ProviderOAuth, "github", "sub-123", "id-token", "GitHub", []string{"devs", "admins"}},
 		},
 		{
 			description: "Local getters return BaseContext fields",

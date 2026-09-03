@@ -24,15 +24,16 @@ type OidcSession struct {
 }
 
 type Session struct {
-	UUID        string
-	Username    string
-	Email       string
-	Name        string
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	Expiry      int64
-	CreatedAt   int64
-	OAuthName   string
-	OAuthSub    string
+	UUID         string
+	Username     string
+	Email        string
+	Name         string
+	Provider     string
+	TotpPending  bool
+	OAuthGroups  string
+	Expiry       int64
+	CreatedAt    int64
+	OAuthName    string
+	OAuthSub     string
+	OAuthIDToken string
 }

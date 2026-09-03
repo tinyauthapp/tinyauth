@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS "sessions" (
     "expiry"       BIGINT  NOT NULL,
     "created_at"   BIGINT  NOT NULL,
     "oauth_name"   TEXT    NOT NULL DEFAULT '',
-    "oauth_sub"    TEXT    NOT NULL DEFAULT ''
+    "oauth_sub"    TEXT    NOT NULL DEFAULT '',
+    "oauth_id_token" TEXT  NOT NULL DEFAULT ''
 );
