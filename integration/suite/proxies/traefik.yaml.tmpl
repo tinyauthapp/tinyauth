@@ -1,0 +1,68 @@
+{{ define "traefik" }}
+traefik:
+  image: traefik:v3.7.13
+  pull_policy: missing
+  ports:
+    - {{ .Proxy.Port }}:80
+  configs:
+    - source: traefik_static
+      target: /etc/traefik/traefik.yml
+      mode: 0664
+    - source: traefik_dynamic
+      target: /etc/traefik/dynamic.yml
+      mode: 0664
+{{ end }}
+
+{{ define "traefik_config" }}
+traefik_static:
+  content: |
+    entryPoints:
+      web:
+        address: ":80"
+
+    providers:
+      file:
+        filename: /etc/traefik/dynamic.yml
+traefik_dynamic:
+  content: |
+    http:
+      routers:
+        {{ if .Services.Whoami.Enabled }}
+        whoami:
+          rule: Host(`{{ .Domains.Whoami }}`)
+          entryPoints:
+            - web
+          service: whoami
+          middlewares:
+            - tinyauth
+        {{ end }}
+
+        tinyauth:
+          rule: Host(`{{ .Domains.Tinyauth }}`)
+          entryPoints:
+            - web
+          service: tinyauth
+
+      middlewares:
+        tinyauth:
+          forwardAuth:
+            address: http://tinyauth:3000/api/auth/traefik
+            authResponseHeaders:
+              - Remote-User
+              - Remote-Name
+              - Remote-Email
+              - Remote-Groups
+
+      services:
+        {{ if .Services.Whoami.Enabled }}
+        whoami:
+          loadBalancer:
+            servers:
+              - url: http://whoami:80
+        {{ end }}
+
+        tinyauth:
+          loadBalancer:
+            servers:
+              - url: http://tinyauth:3000
+{{ end }}

@@ -1,0 +1,79 @@
+{{ define "nginx" }}
+nginx:
+  image: nginx:1.31.6
+  pull_policy: missing
+  ports:
+    - {{ .Proxy.Port }}:80
+  configs:
+    - source: nginx_default
+      target: /etc/nginx/conf.d/default.conf
+      mode: 0664
+    - source: nginx_tinyauth
+      target: /etc/nginx/conf.d/tinyauth.conf
+      mode: 0664
+    {{ if .Services.Whoami.Enabled }}
+    - source: nginx_whoami
+      target: /etc/nginx/conf.d/whoami.conf
+      mode: 0664
+    {{ end }}
+{{ end }}
+
+{{ define "nginx_config" }}
+nginx_default:
+  content: {}
+nginx_tinyauth:
+  content: |
+    server {
+        listen 80;
+        server_name {{ .Domains.Tinyauth }};
+
+        location / {
+            proxy_pass http://tinyauth:3000;
+
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $http_host;
+        }
+    }
+{{ if .Services.Whoami.Enabled }}
+nginx_whoami:
+  content: |
+    server {
+        listen 80;
+        server_name {{ .Domains.Whoami }};
+
+        location / {
+            proxy_pass http://whoami:80;
+
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+
+            auth_request /tinyauth;
+            auth_request_set $redirection_url $upstream_http_x_tinyauth_location;
+            error_page 401 403 =302 $redirection_url;
+        }
+
+        location = /tinyauth {
+            internal;
+
+            proxy_pass http://tinyauth:3000/api/auth/nginx;
+
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+
+            proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+            proxy_set_header X-Original-Method $request_method;
+
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $http_host;
+        }
+    }
+{{ end }}
+{{ end }}

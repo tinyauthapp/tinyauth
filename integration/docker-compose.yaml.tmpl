@@ -1,0 +1,34 @@
+services:
+{{ if eq .Proxy "caddy" }}
+  {{ template "caddy" . }}
+{{ else if eq .Proxy "traefik" }}
+  {{ template "traefik" . }}
+{{ else if eq .Proxy "nginx" }}
+  {{ template "nginx" . }}
+{{ else if eq .Proxy "envoy" }}
+  {{ template "envoy" . }}
+{{ else }}
+  {{ template "traefik" . }}
+{{ end }}
+
+  whoami:
+    image: traefik/whoami:v1.12.0
+    pull_policy: missing
+
+  tinyauth:
+    {{ if .Build }}
+    build:
+      context: ../
+      dockerfile: Dockerfile
+      args:
+        - VERSION=e2e
+        - BUILD_TAGS=nomsgpack
+        - LDFLAGS=-s -w
+    {{ else }}
+    image: ghcr.io/tinyauthapp/tinyauth:{{ .Version }}
+    {{ end }}
+    pull_policy: missing
+    command: ["--configfile", "/config.yaml"]
+    volumes:
+      - ./tinyauth.config.yaml:/config.yaml:ro
+

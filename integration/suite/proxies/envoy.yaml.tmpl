@@ -1,0 +1,137 @@
+{{ define "envoy" }}
+envoy:
+  image: envoyproxy/envoy:v1.33-latest
+  pull_policy: missing
+  ports:
+    - {{ .Proxy.Port }}:80
+  configs:
+   - source: envoy_config
+      target: /etc/envoy/envoy.yaml
+      mode: 0664
+{{ end }}
+
+{{ define "envoy_config" }}
+envoy_config:
+  content: |
+    static_resources:
+      listeners:
+        - name: http
+          address:
+            socket_address:
+              address: 0.0.0.0
+              port_value: 80
+
+          filter_chains:
+            - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: ingress_http
+                    use_remote_address: true
+
+                    route_config:
+                      name: routes
+
+                      virtual_hosts:
+                      {{ if .Services.Whoami.Enabled }}
+                        - name: whoami
+                          domains:
+                            - {{ .Domains.Whoami }}
+
+                          request_headers_to_add:
+                            - header:
+                                key: x-real-ip
+                                value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+                              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+
+                          routes:
+                            - match:
+                                prefix: /
+                              route:
+                                cluster: whoami
+                      {{ end }}
+
+                        - name: tinyauth
+                          domains:
+                            - {{ .Domains.Tinyauth }}
+
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+
+                          routes:
+                            - match:
+                                prefix: /
+                              route:
+                                cluster: tinyauth
+
+                    http_filters:
+                      - name: envoy.filters.http.ext_authz
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                          failure_mode_allow: false
+
+                          http_service:
+                            server_uri:
+                              uri: http://tinyauth:3000
+                              cluster: tinyauth
+                              timeout: 5s
+
+                            path_prefix: "/api/auth/envoy?path="
+
+                            authorization_request:
+                              allowed_headers:
+                                patterns:
+                                  - exact: cookie
+                                  - exact: x-forwarded-for
+                                  - exact: x-forwarded-proto
+                                  - exact: x-real-ip
+                                  - exact: user-agent
+
+                            authorization_response:
+                              allowed_upstream_headers:
+                                patterns:
+                                  - exact: remote-user
+                                  - exact: remote-name
+                                  - exact: remote-email
+                                  - exact: remote-groups
+                                  - exact: remote-sub
+                                  - exact: authorization
+
+                              allowed_client_headers:
+                                patterns:
+                                  - exact: set-cookie
+                                  - exact: content-type
+
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+      clusters:
+        {{ if .Services.Whoami.Enabled }}
+        - name: whoami
+          type: LOGICAL_DNS
+          load_assignment:
+            cluster_name: whoami
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: whoami
+                          port_value: 80
+        {{ end }}
+
+        - name: tinyauth
+          type: LOGICAL_DNS
+          load_assignment:
+            cluster_name: tinyauth
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: tinyauth
+                          port_value: 3000
+{{ end }}

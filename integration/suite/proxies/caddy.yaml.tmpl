@@ -1,0 +1,33 @@
+{{ define "caddy" }}
+caddy:
+  image: caddy:2.11.4
+  pull_policy: missing
+  ports:
+    - {{ .Proxy.Port }}:80
+  configs:
+    - source: caddy_caddyfile
+      target: /etc/caddy/Caddyfile
+      mode: 0664
+{{ end }}
+
+{{ define "caddy_config" }}
+caddy_caddyfile:
+  content: |
+    {
+        auto_https off
+    }
+
+    {{ if .Services.Whoami.Enabled }}
+    http://{{ .Domains.Whoami }} {
+        forward_auth tinyauth:3000 {
+            uri /api/auth/caddy
+            copy_headers Remote-User Remote-Name Remote-Email Remote-Groups
+        }
+        reverse_proxy whoami:80
+    }
+    {{ end }}
+
+    http://{{ .Domains.Tinyauth }} {
+        reverse_proxy tinyauth:3000
+    }
+{{ end }}
