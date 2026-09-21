@@ -6,23 +6,11 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ApplicationSet is a list of Application resources
-type ApplicationSet struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ListMeta `json:"metadata,omitempty"`
-
-	Items []Application `json:"items"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // Application is a set of access control rules that can be applied to a
 // specific domain. It is an alternative to environment variable or config-based
 // access controls.
 type Application struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
+	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec ApplicationSpec `json:"spec,omitempty"`

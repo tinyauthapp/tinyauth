@@ -3,15 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/apis/tinyauth/v1alpha1"
 	"go.uber.org/dig"
 	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,10 +30,25 @@ func (w watchedResource) pretty() string {
 	return w.gvr.Group + "/" + w.gvr.Version + "/" + w.gvr.Resource
 }
 
+func ensureResourceMeta(meta *ResourceMeta) bool {
+	return meta.Name != "" && meta.Namespace != ""
+}
+
+type ResourceMeta struct {
+	Name      string
+	Namespace string
+}
+
+type ExtractionResult struct {
+	Meta *ResourceMeta
+	Apps *map[string]model.App
+}
+
 type ResourceType string
 
 const (
 	ResourceTypeIngress ResourceType = "ingress"
+	ResourceTypeCRD     ResourceType = "crd"
 )
 
 var supportedResources = []watchedResource{
@@ -49,34 +62,10 @@ var supportedResources = []watchedResource{
 	},
 }
 
-func hostMatchesHostname(host string, hostname string) bool {
-	host = normalizeDomain(host)
-	hostname = normalizeDomain(hostname)
-	if suffix, ok := strings.CutPrefix(host, "*."); ok {
-		return strings.HasSuffix(hostname, "."+suffix)
-	}
-	return host == hostname
-}
-
-func hostCoversName(host string, name string) bool {
-	host = strings.ToLower(host)
-	if strings.HasPrefix(host, "*.") {
-		return true
-	}
-	return strings.HasPrefix(host, strings.ToLower(name+"."))
-}
-
-type ExtractionResult struct {
-	typ         ResourceType
-	name        string
-	namespace   string
-	hosts       []string
-	annotations map[string]string
-}
-
 type typedItem struct {
 	typ     ResourceType
 	ingress *networking.Ingress
+	crd     *v1alpha1.Application
 }
 
 func convertFromUnstructured[T any](obj *unstructured.Unstructured) (*T, error) {
@@ -105,33 +94,13 @@ func (ti *typedItem) fromUnstructured(typ ResourceType, obj *unstructured.Unstru
 	}
 }
 
-type resourceEntry struct {
-	name string
-	app  model.App
-}
-
-type routedApps struct {
-	hosts   []string
-	entries []resourceEntry
-}
-
-type resourceKey struct {
-	typ       ResourceType
-	namespace string
-	name      string
-}
-
 type KubernetesService struct {
 	log *logger.Logger
 
-	apps      map[resourceKey]routedApps
+	apps      map[ResourceMeta]map[string]model.App
 	client    dynamic.Interface
 	mu        sync.RWMutex
 	connected bool
-
-	extractors struct {
-		ingress *KubernetesIngressExtractor
-	}
 }
 
 type KubernetesServiceInput struct {
@@ -156,12 +125,8 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	service := &KubernetesService{
 		log:    i.Log,
 		client: client,
-		apps:   make(map[resourceKey]routedApps),
+		apps:   make(map[ResourceMeta]map[string]model.App),
 	}
-
-	service.extractors.ingress = NewKubernetesIngressExtractor(KubernetesIngressExtractorInput{
-		Log: i.Log,
-	})
 
 	watchedGVRs := make(map[string]bool)
 
@@ -171,8 +136,7 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 		cancel()
 
 		if err != nil {
-			// The Gateway API CRDs are not installed on every cluster, so a
-			// single unreachable resource is not fatal
+			// The CRD may not be available yet, so we'll fall back to ingress
 			i.Log.App.Warn().Err(err).Str("res", res.pretty()).Msg("Failed to access resource, skipping watcher")
 			continue
 		}
@@ -196,39 +160,25 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	return service, nil
 }
 
-func (k *KubernetesService) addResourceEntries(key resourceKey, hosts []string, entries []resourceEntry) {
+func (k *KubernetesService) addResource(result ExtractionResult) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	k.apps[key] = routedApps{
-		hosts:   hosts,
-		entries: entries,
-	}
+	k.apps[*result.Meta] = *result.Apps
 }
 
-func (k *KubernetesService) removeResource(key resourceKey) {
+func (k *KubernetesService) removeResource(meta ResourceMeta) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	delete(k.apps, key)
+	delete(k.apps, meta)
 }
 
-func (k *KubernetesService) getEntry(domain string, locator func(name string, app *model.App) bool) {
-	if !ensureAscii(domain) {
-		k.log.App.Debug().Str("domain", domain).Msg("Domain is invalid, skipping lookup")
-		return
-	}
-
+func (k *KubernetesService) getEntry(locator func(name string, app *model.App) bool) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
-	// O(n^2) is not great but the number of resource entries is expected to be small
-	for _, app := range k.apps {
-		if !slices.ContainsFunc(app.hosts, func(host string) bool {
-			return hostMatchesHostname(host, domain)
-		}) {
-			continue
-		}
-		for _, entry := range app.entries {
-			if ok := locator(entry.name, &entry.app); ok {
+	for _, apps := range k.apps {
+		for name, app := range apps {
+			if ok := locator(name, &app); ok {
 				return
 			}
 		}
@@ -236,12 +186,12 @@ func (k *KubernetesService) getEntry(domain string, locator func(name string, ap
 }
 
 func (k *KubernetesService) updateFromItem(res watchedResource, typedItem *typedItem) {
-	var result *ExtractionResult
-
 	if typedItem == nil {
 		k.log.App.Warn().Str("res", res.pretty()).Msg("Resource is nil, skipping")
 		return
 	}
+
+	var result ExtractionResult
 
 	switch typedItem.typ {
 	case ResourceTypeIngress:
@@ -249,68 +199,30 @@ func (k *KubernetesService) updateFromItem(res watchedResource, typedItem *typed
 			k.log.App.Warn().Str("res", res.pretty()).Msg("Ingress is nil, skipping")
 			return
 		}
-		result = k.extractors.ingress.Extract(typedItem.ingress)
+		extractor := NewKubernetesIngressExtractor(KubernetesIngressExtractorInput{
+			Log: k.log,
+		})
+		result = extractor.Extract(typedItem.ingress)
+	case ResourceTypeCRD:
+		if typedItem.crd == nil {
+			k.log.App.Warn().Str("res", res.pretty()).Msg("CRD is nil, skipping")
+			return
+		}
+		extractor := NewKubernetesCRDExtractor(KubernetesCRDInput{
+			Log: k.log,
+		})
+		result = extractor.Extract(typedItem.crd)
 	}
 
-	if result == nil {
+	if result.Apps == nil {
 		k.log.App.Warn().Str("res", res.pretty()).Msg("Failed to extract resource, skipping")
-		return
-	}
-
-	key := resourceKey{
-		typ:       res.typ,
-		namespace: result.namespace,
-		name:      result.name,
-	}
-
-	if len(result.hosts) == 0 {
-		k.log.App.Warn().Str("res", res.pretty()).Str("namespace", key.namespace).Str("name", key.name).Msg("No hosts found in resource, skipping")
-		k.removeResource(key)
-		return
-	}
-
-	labels, err := decoders.DecodeLabels[model.Apps](result.annotations, "apps")
-	if err != nil {
-		k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Msg("Failed to decode resource labels, skipping")
-		k.removeResource(key)
-		return
-	}
-
-	var entries []resourceEntry
-
-	for name, config := range labels.Apps {
-		if config.Config.Domain != "" {
-			if !ensureAscii(config.Config.Domain) {
-				k.log.App.Warn().Err(err).Str("namespace", key.namespace).Str("name", key.name).Str("domain", config.Config.Domain).Msg("Domain is invalid, matching will rely on app name")
-			} else {
-				if slices.ContainsFunc(result.hosts, func(host string) bool {
-					return hostMatchesHostname(host, config.Config.Domain)
-				}) {
-					entries = append(entries, resourceEntry{
-						name: name,
-						app:  config,
-					})
-					continue
-				}
-			}
+		if result.Meta != nil {
+			k.removeResource(*result.Meta)
 		}
-
-		if slices.ContainsFunc(result.hosts, func(host string) bool {
-			return hostCoversName(host, name)
-		}) {
-			entries = append(entries, resourceEntry{
-				name: name,
-				app:  config,
-			})
-		}
-	}
-
-	if len(entries) == 0 {
-		k.removeResource(key)
 		return
 	}
 
-	k.addResourceEntries(key, result.hosts, entries)
+	k.addResource(result)
 }
 
 func (k *KubernetesService) resyncGVR(res watchedResource, ctx context.Context) error {
@@ -358,14 +270,8 @@ func (k *KubernetesService) runWatcher(res watchedResource, w watch.Interface, r
 				continue
 			}
 			switch event.Type {
-			case watch.Added, watch.Modified:
+			case watch.Added, watch.Modified, watch.Deleted:
 				k.updateFromItem(res, newTypedItem)
-			case watch.Deleted:
-				k.removeResource(resourceKey{
-					typ:       res.typ,
-					namespace: item.GetNamespace(),
-					name:      item.GetName(),
-				})
 			}
 		case <-resyncTicker.C:
 			if err := k.resyncGVR(res, ctx); err != nil {
@@ -412,13 +318,13 @@ func (k *KubernetesService) watchGVR(res watchedResource, ctx context.Context) {
 	}
 }
 
-func (k *KubernetesService) Lookup(domain string, locator func(name string, app *model.App) bool) error {
+func (k *KubernetesService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !k.connected {
 		k.log.App.Debug().Msg("Kubernetes label provider not started, skipping")
 		return nil
 	}
 
-	k.getEntry(domain, locator)
+	k.getEntry(locator)
 
 	return nil
 }

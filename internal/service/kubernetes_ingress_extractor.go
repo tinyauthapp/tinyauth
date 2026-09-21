@@ -2,10 +2,30 @@ package service
 
 import (
 	"slices"
+	"strings"
 
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils/decoders"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	networking "k8s.io/api/networking/v1"
 )
+
+func hostMatchesHostname(host string, hostname string) bool {
+	host = normalizeDomain(host)
+	hostname = normalizeDomain(hostname)
+	if suffix, ok := strings.CutPrefix(host, "*."); ok {
+		return strings.HasSuffix(hostname, "."+suffix)
+	}
+	return host == hostname
+}
+
+func hostCoversName(host string, name string) bool {
+	host = strings.ToLower(host)
+	if strings.HasPrefix(host, "*.") {
+		return true
+	}
+	return strings.HasPrefix(host, strings.ToLower(name+"."))
+}
 
 type KubernetesIngressExtractor struct {
 	log *logger.Logger
@@ -54,15 +74,60 @@ func (k *KubernetesIngressExtractor) getHosts(rules []networking.IngressRule) []
 	return hosts
 }
 
-func (k *KubernetesIngressExtractor) Extract(ingress *networking.Ingress) *ExtractionResult {
+func (k *KubernetesIngressExtractor) Extract(ingress *networking.Ingress) ExtractionResult {
+	meta := &ResourceMeta{
+		Name:      ingress.GetName(),
+		Namespace: ingress.GetNamespace(),
+	}
+
+	if !ensureResourceMeta(meta) {
+		k.log.App.Warn().Str("namespace", meta.Namespace).Str("name", meta.Name).Msg("Resource has no namespace or name, skipping")
+		return ExtractionResult{}
+	}
+
 	annotations := ingress.GetAnnotations()
 	hosts := k.getHosts(ingress.Spec.Rules)
 
-	return &ExtractionResult{
-		typ:         ResourceTypeIngress,
-		name:        ingress.GetName(),
-		namespace:   ingress.GetNamespace(),
-		hosts:       hosts,
-		annotations: annotations,
+	if len(hosts) == 0 {
+		k.log.App.Warn().Str("namespace", meta.Namespace).Str("name", meta.Name).Msg("No hosts found in resource, skipping")
+		return ExtractionResult{
+			Meta: meta,
+		}
+	}
+
+	labels, err := decoders.DecodeLabels[model.Apps](annotations, "apps")
+	if err != nil {
+		k.log.App.Warn().Err(err).Str("namespace", meta.Namespace).Str("name", meta.Name).Msg("Failed to decode resource labels, skipping")
+		return ExtractionResult{
+			Meta: meta,
+		}
+	}
+
+	apps := make(map[string]model.App)
+
+	for name, config := range labels.Apps {
+		if config.Config.Domain != "" {
+			if !ensureAscii(config.Config.Domain) {
+				k.log.App.Warn().Err(err).Str("namespace", meta.Namespace).Str("name", meta.Name).Str("domain", config.Config.Domain).Msg("Domain is invalid, matching will rely on app name")
+			} else {
+				if slices.ContainsFunc(hosts, func(host string) bool {
+					return hostMatchesHostname(host, config.Config.Domain)
+				}) {
+					apps[name] = config
+					continue
+				}
+			}
+		}
+
+		if slices.ContainsFunc(hosts, func(host string) bool {
+			return hostCoversName(host, name)
+		}) {
+			apps[name] = config
+		}
+	}
+
+	return ExtractionResult{
+		Meta: meta,
+		Apps: &apps,
 	}
 }
