@@ -57,9 +57,10 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			WarningsEnabled:       true,
 		},
 		LDAP: LDAPConfig{
-			Insecure:      false,
-			SearchFilter:  "(uid=%s)",
-			GroupCacheTTL: 900, // 15 minutes
+			Insecure:          false,
+			SearchFilter:      "(uid=%s)",
+			GroupSearchFilter: "(&(objectclass=groupOfUniqueNames)(uniquemember=%s))",
+			GroupCacheTTL:     900, // 15 minutes
 		},
 		Log: LogConfig{
 			Level: "info",
@@ -209,16 +210,17 @@ type UIConfig struct {
 }
 
 type LDAPConfig struct {
-	Address          string `description:"LDAP server address." yaml:"address,omitempty"`
-	BindDN           string `description:"Bind DN for LDAP authentication." yaml:"bindDn,omitempty"`
-	BindPassword     string `description:"Bind password for LDAP authentication." yaml:"bindPassword,omitempty"`
-	BindPasswordFile string `description:"Path to the Bind password." yaml:"bindPasswordFile,omitempty"`
-	BaseDN           string `description:"Base DN for LDAP searches." yaml:"baseDn,omitempty"`
-	Insecure         bool   `description:"Allow insecure LDAP connections." yaml:"insecure,omitempty"`
-	SearchFilter     string `description:"LDAP search filter." yaml:"searchFilter,omitempty"`
-	AuthCert         string `description:"Certificate for mTLS authentication." yaml:"authCert,omitempty"`
-	AuthKey          string `description:"Certificate key for mTLS authentication." yaml:"authKey,omitempty"`
-	GroupCacheTTL    int    `description:"Cache duration for LDAP group membership in seconds." yaml:"groupCacheTTL,omitempty"`
+	Address           string `description:"LDAP server address." yaml:"address,omitempty"`
+	BindDN            string `description:"Bind DN for LDAP authentication." yaml:"bindDn,omitempty"`
+	BindPassword      string `description:"Bind password for LDAP authentication." yaml:"bindPassword,omitempty"`
+	BindPasswordFile  string `description:"Path to the Bind password." yaml:"bindPasswordFile,omitempty"`
+	BaseDN            string `description:"Base DN for LDAP searches." yaml:"baseDn,omitempty"`
+	Insecure          bool   `description:"Allow insecure LDAP connections." yaml:"insecure,omitempty"`
+	SearchFilter      string `description:"LDAP user search filter. Use %s as the username placeholder." yaml:"searchFilter,omitempty"`
+	GroupSearchFilter string `description:"LDAP group search filter. Use %s as the user DN placeholder." yaml:"groupSearchFilter,omitempty"`
+	AuthCert          string `description:"Certificate for mTLS authentication." yaml:"authCert,omitempty"`
+	AuthKey           string `description:"Certificate key for mTLS authentication." yaml:"authKey,omitempty"`
+	GroupCacheTTL     int    `description:"Cache duration for LDAP group membership in seconds." yaml:"groupCacheTTL,omitempty"`
 }
 
 type LogConfig struct {

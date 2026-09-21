@@ -200,7 +200,7 @@ func (ldap *LdapService) GetUserGroups(userDN string) ([]string, error) {
 	searchRequest := ldapgo.NewSearchRequest(
 		ldap.config.LDAP.BaseDN,
 		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf("(&(objectclass=groupOfUniqueNames)(uniquemember=%s))", escapedUserDN),
+		fmt.Sprintf(ldap.config.LDAP.GroupSearchFilter, escapedUserDN),
 		[]string{"dn"},
 		nil,
 	)
