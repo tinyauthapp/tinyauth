@@ -28,6 +28,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/tools v0.49.0
 	gopkg.in/yaml.v3 v3.0.1
+	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
 	modernc.org/sqlite v1.58.0
@@ -81,6 +82,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
+	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

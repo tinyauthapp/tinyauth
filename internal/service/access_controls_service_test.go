@@ -20,7 +20,7 @@ func newMockProvider(acls map[string]model.App, shouldError bool) *mockProvider 
 	return &mockProvider{acls: acls, shouldError: shouldError}
 }
 
-func (m *mockProvider) Lookup(locator func(name string, app *model.App) bool) error {
+func (m *mockProvider) Lookup(_ string, locator func(name string, app *model.App) bool) error {
 	if m.shouldError {
 		return errors.New("mock error")
 	}
@@ -153,7 +153,9 @@ func TestAccessControlsService(t *testing.T) {
 				Config:        &model.Config{},
 				LabelProvider: mock,
 			})
-			app, err := acls.getACLs(test.domain, mock.Lookup)
+			app, err := acls.getACLs(test.domain, func(locator func(name string, app *model.App) bool) error {
+				return mock.Lookup(test.domain, locator)
+			})
 			if test.errorFunc != nil {
 				test.errorFunc(t, err)
 				return
@@ -186,11 +188,14 @@ func TestAccessControlsService(t *testing.T) {
 	// get acls should return an error when the provider fails
 	mock := newMockProvider(map[string]model.App{}, true)
 	acls := NewAccessControlsService(AccessControlServiceInput{
-		Log:     log,
-		Runtime: &runtime,
-		Config:  &model.Config{},
+		Log:           log,
+		Runtime:       &runtime,
+		Config:        &model.Config{},
+		LabelProvider: mock,
 	})
-	_, err := acls.getACLs("example.com", mock.Lookup)
+	_, err := acls.getACLs("example.com", func(locator func(name string, app *model.App) bool) error {
+		return mock.Lookup("example.com", locator)
+	})
 	assert.Error(t, err)
 
 	// get acls should return an error when multiple apps with the same domain exist
