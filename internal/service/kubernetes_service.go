@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	gateway "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 type watchedResource struct {
@@ -36,9 +35,7 @@ func (w watchedResource) pretty() string {
 type ResourceType string
 
 const (
-	ResourceTypeIngress   ResourceType = "ingress"
-	ResourceTypeGRPCRoute ResourceType = "grpcroute"
-	ResourceTypeHTTPRoute ResourceType = "httproute"
+	ResourceTypeIngress ResourceType = "ingress"
 )
 
 var supportedResources = []watchedResource{
@@ -49,22 +46,6 @@ var supportedResources = []watchedResource{
 			Resource: "ingresses",
 		},
 		typ: ResourceTypeIngress,
-	},
-	{
-		gvr: schema.GroupVersionResource{
-			Group:    "gateway.networking.k8s.io",
-			Version:  "v1",
-			Resource: "httproutes",
-		},
-		typ: ResourceTypeHTTPRoute,
-	},
-	{
-		gvr: schema.GroupVersionResource{
-			Group:    "gateway.networking.k8s.io",
-			Version:  "v1",
-			Resource: "grpcroutes",
-		},
-		typ: ResourceTypeGRPCRoute,
 	},
 }
 
@@ -96,8 +77,6 @@ type ExtractionResult struct {
 type typedItem struct {
 	typ     ResourceType
 	ingress *networking.Ingress
-	route   *gateway.HTTPRoute
-	grpc    *gateway.GRPCRoute
 }
 
 func convertFromUnstructured[T any](obj *unstructured.Unstructured) (*T, error) {
@@ -120,24 +99,6 @@ func (ti *typedItem) fromUnstructured(typ ResourceType, obj *unstructured.Unstru
 		return &typedItem{
 			typ:     ResourceTypeIngress,
 			ingress: typed,
-		}, nil
-	case ResourceTypeHTTPRoute:
-		typed, err := convertFromUnstructured[gateway.HTTPRoute](obj)
-		if err != nil {
-			return nil, err
-		}
-		return &typedItem{
-			typ:   ResourceTypeHTTPRoute,
-			route: typed,
-		}, nil
-	case ResourceTypeGRPCRoute:
-		typed, err := convertFromUnstructured[gateway.GRPCRoute](obj)
-		if err != nil {
-			return nil, err
-		}
-		return &typedItem{
-			typ:  ResourceTypeGRPCRoute,
-			grpc: typed,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type %s", typ)
@@ -169,9 +130,7 @@ type KubernetesService struct {
 	connected bool
 
 	extractors struct {
-		ingress   *KubernetesIngressExtractor
-		httproute *KubernetesHTTPRouteExtractor
-		grpc      *KubernetesGRPCRouteExtractor
+		ingress *KubernetesIngressExtractor
 	}
 }
 
@@ -201,12 +160,6 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	}
 
 	service.extractors.ingress = NewKubernetesIngressExtractor(KubernetesIngressExtractorInput{
-		Log: i.Log,
-	})
-	service.extractors.httproute = NewKubernetesHTTPRouteExtractor(KubernetesHTTPRouteExtractorInput{
-		Log: i.Log,
-	})
-	service.extractors.grpc = NewKubernetesGRPCRouteExtractor(KubernetesGRPCRouteExtractorInput{
 		Log: i.Log,
 	})
 
@@ -297,18 +250,6 @@ func (k *KubernetesService) updateFromItem(res watchedResource, typedItem *typed
 			return
 		}
 		result = k.extractors.ingress.Extract(typedItem.ingress)
-	case ResourceTypeHTTPRoute:
-		if typedItem.route == nil {
-			k.log.App.Warn().Str("res", res.pretty()).Msg("HTTPRoute is nil, skipping")
-			return
-		}
-		result = k.extractors.httproute.Extract(typedItem.route)
-	case ResourceTypeGRPCRoute:
-		if typedItem.grpc == nil {
-			k.log.App.Warn().Str("res", res.pretty()).Msg("GRPCRoute is nil, skipping")
-			return
-		}
-		result = k.extractors.grpc.Extract(typedItem.grpc)
 	}
 
 	if result == nil {

@@ -11,7 +11,6 @@ import (
 	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	gateway "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 func watchedResourceForTest(t *testing.T, typ ResourceType) watchedResource {
@@ -31,8 +30,6 @@ func newKubernetesServiceForTest(log *logger.Logger) *KubernetesService {
 		log:  log,
 	}
 	service.extractors.ingress = NewKubernetesIngressExtractor(KubernetesIngressExtractorInput{Log: log})
-	service.extractors.httproute = NewKubernetesHTTPRouteExtractor(KubernetesHTTPRouteExtractorInput{Log: log})
-	service.extractors.grpc = NewKubernetesGRPCRouteExtractor(KubernetesGRPCRouteExtractorInput{Log: log})
 	return service
 }
 
@@ -46,34 +43,6 @@ func testIngress(name string, annotations map[string]string, hosts ...string) *t
 		ingress: &networking.Ingress{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Annotations: annotations},
 			Spec:       networking.IngressSpec{Rules: rules},
-		},
-	}
-}
-
-func testHTTPRoute(name string, annotations map[string]string, hosts ...string) *typedItem {
-	hostnames := make([]gateway.Hostname, 0, len(hosts))
-	for _, host := range hosts {
-		hostnames = append(hostnames, gateway.Hostname(host))
-	}
-	return &typedItem{
-		typ: ResourceTypeHTTPRoute,
-		route: &gateway.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Annotations: annotations},
-			Spec:       gateway.HTTPRouteSpec{Hostnames: hostnames, Rules: []gateway.HTTPRouteRule{{}}},
-		},
-	}
-}
-
-func testGRPCRoute(name string, annotations map[string]string, hosts ...string) *typedItem {
-	hostnames := make([]gateway.Hostname, 0, len(hosts))
-	for _, host := range hosts {
-		hostnames = append(hostnames, gateway.Hostname(host))
-	}
-	return &typedItem{
-		typ: ResourceTypeGRPCRoute,
-		grpc: &gateway.GRPCRoute{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Annotations: annotations},
-			Spec:       gateway.GRPCRouteSpec{Hostnames: hostnames},
 		},
 	}
 }
@@ -119,41 +88,6 @@ func TestKubernetesServiceUpdateFromItem(t *testing.T) {
 			}, "Dashboard.example.com"),
 			domain: "dashboard.example.com", allow: "alice",
 		},
-		{
-			name:     "HTTPRoute matches a configured domain",
-			resource: ResourceTypeHTTPRoute,
-			item: testHTTPRoute("http-route", map[string]string{
-				"tinyauth.apps.api.config.domain": "api.example.com",
-				"tinyauth.apps.api.users.allow":   "bob",
-			}, "api.example.com"),
-			domain: "api.example.com", wantConfigDomain: "api.example.com", allow: "bob",
-		},
-		{
-			name:     "HTTPRoute wildcard matches nested subdomains",
-			resource: ResourceTypeHTTPRoute,
-			item: testHTTPRoute("http-route", map[string]string{
-				"tinyauth.apps.api.config.domain": "deep.api.example.com",
-				"tinyauth.apps.api.users.allow":   "bob",
-			}, "*.example.com"),
-			domain: "deep.api.example.com", wantConfigDomain: "deep.api.example.com", allow: "bob",
-		},
-		{
-			name:     "GRPCRoute matches a configured domain",
-			resource: ResourceTypeGRPCRoute,
-			item: testGRPCRoute("grpc-route", map[string]string{
-				"tinyauth.apps.grpc.config.domain": "grpc.example.com",
-				"tinyauth.apps.grpc.users.allow":   "carol",
-			}, "grpc.example.com"),
-			domain: "grpc.example.com", wantConfigDomain: "grpc.example.com", allow: "carol",
-		},
-		{
-			name:     "GRPCRoute matches an app name through a wildcard",
-			resource: ResourceTypeGRPCRoute,
-			item: testGRPCRoute("grpc-route", map[string]string{
-				"tinyauth.apps.grpc.users.allow": "carol",
-			}, "*.example.com"),
-			domain: "grpc.example.com", allow: "carol",
-		},
 	}
 
 	for _, test := range tests {
@@ -180,13 +114,7 @@ func TestKubernetesServiceUpdateFromItemRemovesStaleEntries(t *testing.T) {
 	}{
 		{"Ingress without annotations", ResourceTypeIngress, testIngress("route", nil, "app.example.com")},
 		{"Ingress without hosts", ResourceTypeIngress, testIngress("route", map[string]string{"tinyauth.apps.app.users.allow": "alice"})},
-		{"HTTPRoute without annotations", ResourceTypeHTTPRoute, testHTTPRoute("route", nil, "app.example.com")},
-		{"HTTPRoute without hosts", ResourceTypeHTTPRoute, testHTTPRoute("route", map[string]string{"tinyauth.apps.app.users.allow": "alice"})},
-		{"GRPCRoute without annotations", ResourceTypeGRPCRoute, testGRPCRoute("route", nil, "app.example.com")},
-		{"GRPCRoute without hosts", ResourceTypeGRPCRoute, testGRPCRoute("route", map[string]string{"tinyauth.apps.app.users.allow": "alice"})},
 		{"Ingress with invalid annotations", ResourceTypeIngress, testIngress("route", map[string]string{"tinyauth.apps.app.users.break": "invalid"}, "app.example.com")},
-		{"HTTPRoute with invalid annotations", ResourceTypeHTTPRoute, testHTTPRoute("route", map[string]string{"tinyauth.apps.app.users.break": "invalid"}, "app.example.com")},
-		{"GRPCRoute with invalid annotations", ResourceTypeGRPCRoute, testGRPCRoute("route", map[string]string{"tinyauth.apps.app.users.break": "invalid"}, "app.example.com")},
 	}
 
 	for _, test := range tests {
@@ -221,30 +149,6 @@ func TestTypedItemFromUnstructured(t *testing.T) {
 			assert: func(t *testing.T, item *typedItem) {
 				require.NotNil(t, item.ingress)
 				assert.Equal(t, "app.example.com", item.ingress.Spec.Rules[0].Host)
-			},
-		},
-		{
-			name:     "HTTPRoute",
-			resource: ResourceTypeHTTPRoute,
-			item: unstructured.Unstructured{Object: map[string]any{
-				"metadata": map[string]any{"name": "http-route", "namespace": "default"},
-				"spec":     map[string]any{"hostnames": []any{"app.example.com"}},
-			}},
-			assert: func(t *testing.T, item *typedItem) {
-				require.NotNil(t, item.route)
-				assert.Equal(t, gateway.Hostname("app.example.com"), item.route.Spec.Hostnames[0])
-			},
-		},
-		{
-			name:     "GRPCRoute",
-			resource: ResourceTypeGRPCRoute,
-			item: unstructured.Unstructured{Object: map[string]any{
-				"metadata": map[string]any{"name": "grpc-route", "namespace": "default"},
-				"spec":     map[string]any{"hostnames": []any{"app.example.com"}},
-			}},
-			assert: func(t *testing.T, item *typedItem) {
-				require.NotNil(t, item.grpc)
-				assert.Equal(t, gateway.Hostname("app.example.com"), item.grpc.Spec.Hostnames[0])
 			},
 		},
 	}
@@ -305,8 +209,6 @@ func TestKubernetesServiceKeepsResourceTypesSeparate(t *testing.T) {
 		domain   string
 	}{
 		{ResourceTypeIngress, testIngress("shared", map[string]string{"tinyauth.apps.ingress.config.domain": "ingress.example.com"}, "ingress.example.com"), "ingress.example.com"},
-		{ResourceTypeHTTPRoute, testHTTPRoute("shared", map[string]string{"tinyauth.apps.http.config.domain": "http.example.com"}, "http.example.com"), "http.example.com"},
-		{ResourceTypeGRPCRoute, testGRPCRoute("shared", map[string]string{"tinyauth.apps.grpc.config.domain": "grpc.example.com"}, "grpc.example.com"), "grpc.example.com"},
 	}
 
 	for _, resource := range resources {
@@ -314,34 +216,6 @@ func TestKubernetesServiceKeepsResourceTypesSeparate(t *testing.T) {
 	}
 	for _, resource := range resources {
 		assert.NotNil(t, lookupApp(service, resource.domain))
-	}
-}
-
-func TestKubernetesHTTPRouteExtractorPaths(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-	extractor := NewKubernetesHTTPRouteExtractor(KubernetesHTTPRouteExtractorInput{Log: log})
-
-	prefix := gateway.PathMatchPathPrefix
-	exact := gateway.PathMatchExact
-	api := "/api"
-
-	tests := []struct {
-		name  string
-		rules []gateway.HTTPRouteRule
-		want  []string
-	}{
-		{"Rule without matches defaults to catch-all", []gateway.HTTPRouteRule{{}}, []string{"/"}},
-		{"Match without path defaults to catch-all", []gateway.HTTPRouteRule{{Matches: []gateway.HTTPRouteMatch{{}}}}, []string{"/"}},
-		{"Path defaults apply independently", []gateway.HTTPRouteRule{{Matches: []gateway.HTTPRouteMatch{{Path: &gateway.HTTPPathMatch{}}}}}, []string{"/"}},
-		{"Exact paths do not count as catch-all", []gateway.HTTPRouteRule{{Matches: []gateway.HTTPRouteMatch{{Path: &gateway.HTTPPathMatch{Type: &exact}}}}}, nil},
-		{"Prefix paths are retained", []gateway.HTTPRouteRule{{Matches: []gateway.HTTPRouteMatch{{Path: &gateway.HTTPPathMatch{Type: &prefix, Value: &api}}}}}, []string{"/api"}},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, extractor.getPaths(test.rules))
-		})
 	}
 }
 
