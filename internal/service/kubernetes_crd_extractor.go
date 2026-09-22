@@ -22,6 +22,7 @@ func NewKubernetesCRDExtractor(i KubernetesCRDInput) *KubernetesCRDExtractor {
 
 func (k *KubernetesCRDExtractor) Extract(app *v1alpha1.Application) ExtractionResult {
 	meta := &ResourceMeta{
+		Typ:       ResourceTypeCRD,
 		Name:      app.GetName(),
 		Namespace: app.GetNamespace(),
 	}
@@ -49,7 +50,7 @@ func (k *KubernetesCRDExtractor) Extract(app *v1alpha1.Application) ExtractionRe
 
 	return ExtractionResult{
 		Meta: meta,
-		Apps: &map[string]model.App{
+		Apps: map[string]model.App{
 			// Convert the CRD to the internal representation
 			meta.Name: app.Spec.ToInternalApp(),
 		},

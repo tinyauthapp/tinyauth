@@ -34,8 +34,6 @@ type ApplicationSpec struct {
 // AppConfig specifies configuration for the application
 type AppConfig struct {
 	// +required
-	Name string `json:"name,omitempty"`
-	// +required
 	Domain string `json:"domain,omitempty"`
 }
 

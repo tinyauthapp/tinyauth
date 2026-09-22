@@ -35,13 +35,14 @@ func ensureResourceMeta(meta *ResourceMeta) bool {
 }
 
 type ResourceMeta struct {
+	Typ       ResourceType
 	Name      string
 	Namespace string
 }
 
 type ExtractionResult struct {
 	Meta *ResourceMeta
-	Apps *map[string]model.App
+	Apps map[string]model.App
 }
 
 type ResourceType string
@@ -59,6 +60,13 @@ var supportedResources = []watchedResource{
 			Resource: "ingresses",
 		},
 		typ: ResourceTypeIngress,
+	},
+	{
+		gvr: schema.GroupVersionResource{
+			Group:    "tinyauth.app",
+			Version:  "v1alpha1",
+			Resource: "applications",
+		},
 	},
 }
 
@@ -88,6 +96,15 @@ func (ti *typedItem) fromUnstructured(typ ResourceType, obj *unstructured.Unstru
 		return &typedItem{
 			typ:     ResourceTypeIngress,
 			ingress: typed,
+		}, nil
+	case ResourceTypeCRD:
+		typed, err := convertFromUnstructured[v1alpha1.Application](obj)
+		if err != nil {
+			return nil, err
+		}
+		return &typedItem{
+			typ: ResourceTypeCRD,
+			crd: typed,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type %s", typ)
@@ -163,7 +180,7 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 func (k *KubernetesService) addResource(result ExtractionResult) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	k.apps[*result.Meta] = *result.Apps
+	k.apps[*result.Meta] = result.Apps
 }
 
 func (k *KubernetesService) removeResource(meta ResourceMeta) {
@@ -185,7 +202,7 @@ func (k *KubernetesService) getEntry(locator func(name string, app *model.App) b
 	}
 }
 
-func (k *KubernetesService) updateFromItem(res watchedResource, typedItem *typedItem) {
+func (k *KubernetesService) watchedItemChange(res watchedResource, typedItem *typedItem, event watch.EventType) {
 	if typedItem == nil {
 		k.log.App.Warn().Str("res", res.pretty()).Msg("Resource is nil, skipping")
 		return
@@ -214,6 +231,13 @@ func (k *KubernetesService) updateFromItem(res watchedResource, typedItem *typed
 		result = extractor.Extract(typedItem.crd)
 	}
 
+	if event == watch.Deleted {
+		if result.Meta != nil {
+			k.removeResource(*result.Meta)
+		}
+		return
+	}
+
 	if result.Apps == nil {
 		k.log.App.Warn().Str("res", res.pretty()).Msg("Failed to extract resource, skipping")
 		if result.Meta != nil {
@@ -240,7 +264,7 @@ func (k *KubernetesService) resyncGVR(res watchedResource, ctx context.Context) 
 			k.log.App.Warn().Err(err).Str("res", res.pretty()).Msg("Failed to decode resource, skipping")
 			continue
 		}
-		k.updateFromItem(res, newTypedItem)
+		k.watchedItemChange(res, newTypedItem, watch.Modified)
 	}
 	k.log.App.Debug().Str("res", res.pretty()).Int("count", len(list.Items)).Msg("Resync complete")
 	return nil
@@ -271,7 +295,7 @@ func (k *KubernetesService) runWatcher(res watchedResource, w watch.Interface, r
 			}
 			switch event.Type {
 			case watch.Added, watch.Modified, watch.Deleted:
-				k.updateFromItem(res, newTypedItem)
+				k.watchedItemChange(res, newTypedItem, event.Type)
 			}
 		case <-resyncTicker.C:
 			if err := k.resyncGVR(res, ctx); err != nil {

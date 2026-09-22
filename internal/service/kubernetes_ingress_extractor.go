@@ -76,6 +76,7 @@ func (k *KubernetesIngressExtractor) getHosts(rules []networking.IngressRule) []
 
 func (k *KubernetesIngressExtractor) Extract(ingress *networking.Ingress) ExtractionResult {
 	meta := &ResourceMeta{
+		Typ:       ResourceTypeIngress,
 		Name:      ingress.GetName(),
 		Namespace: ingress.GetNamespace(),
 	}
@@ -128,6 +129,6 @@ func (k *KubernetesIngressExtractor) Extract(ingress *networking.Ingress) Extrac
 
 	return ExtractionResult{
 		Meta: meta,
-		Apps: &apps,
+		Apps: apps,
 	}
 }
