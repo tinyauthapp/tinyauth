@@ -26,9 +26,7 @@ func (s *ApplicationSpec) ToInternalApp() model.App {
 		Response: model.AppResponse{
 			Headers: s.Response.Headers,
 			BasicAuth: model.AppBasicAuth{
-				Username:     s.Response.BasicAuth.Username,
-				Password:     s.Response.BasicAuth.Password,
-				PasswordFile: s.Response.BasicAuth.PasswordFile,
+				Username: s.Response.BasicAuth.Username,
 			},
 		},
 		Path: model.AppPath{

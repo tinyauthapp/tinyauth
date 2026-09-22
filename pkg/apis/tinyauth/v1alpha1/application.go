@@ -1,6 +1,9 @@
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 //go:generate controller-gen object paths=$GOFILE
 
@@ -81,9 +84,8 @@ type AppResponse struct {
 
 // AppBasicAuth specifies basic auth credentials
 type AppBasicAuth struct {
-	Username     string `json:"username,omitempty"`
-	Password     string `json:"password,omitempty"`
-	PasswordFile string `json:"passwordFile,omitempty"`
+	Username          string                    `json:"username,omitempty"`
+	PasswordSecretRef *corev1.SecretKeySelector `json:"passwordSecretRef,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true

@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -114,10 +115,11 @@ func (ti *typedItem) fromUnstructured(typ ResourceType, obj *unstructured.Unstru
 type KubernetesService struct {
 	log *logger.Logger
 
-	apps      map[ResourceMeta]map[string]model.App
-	client    dynamic.Interface
-	mu        sync.RWMutex
-	connected bool
+	apps        map[ResourceMeta]map[string]model.App
+	client      dynamic.Interface
+	typedClient kubernetes.Interface
+	mu          sync.RWMutex
+	connected   bool
 }
 
 type KubernetesServiceInput struct {
@@ -138,11 +140,16 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+	typedClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create typed kubernetes client: %w", err)
+	}
 
 	service := &KubernetesService{
-		log:    i.Log,
-		client: client,
-		apps:   make(map[ResourceMeta]map[string]model.App),
+		log:         i.Log,
+		client:      client,
+		typedClient: typedClient,
+		apps:        make(map[ResourceMeta]map[string]model.App),
 	}
 
 	watchedGVRs := make(map[string]bool)
@@ -226,7 +233,8 @@ func (k *KubernetesService) watchedItemChange(res watchedResource, typedItem *ty
 			return
 		}
 		extractor := NewKubernetesCRDExtractor(KubernetesCRDInput{
-			Log: k.log,
+			Log:    k.log,
+			Client: k.typedClient,
 		})
 		result = extractor.Extract(typedItem.crd)
 	}
