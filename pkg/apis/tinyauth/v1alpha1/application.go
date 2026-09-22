@@ -6,6 +6,7 @@ import (
 )
 
 //go:generate controller-gen object paths=$GOFILE
+//go:generate controller-gen rbac:roleName=tinyauth crd paths=./... output:crd:dir=./crds output:stdout
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
