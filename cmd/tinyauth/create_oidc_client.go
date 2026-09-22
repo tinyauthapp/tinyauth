@@ -26,10 +26,9 @@ func createOidcClientCmd() *cli.Command {
 
 			clientName := args[0]
 
-			match, err := regexp.MatchString("^[a-zA-Z0-9-]*$", clientName)
-
-			if !match || err != nil {
-				return errors.New("client name can only contain alphanumeric characters and hyphens")
+			// Only alphanumeric since the name will be turned into environment variable names
+			if !regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString(clientName) {
+				return errors.New("client name can only contain alphanumeric characters")
 			}
 
 			u := uuid.New()
@@ -89,7 +88,7 @@ func createOidcClientCmd() *cli.Command {
 			// yaml config
 			fmt.Fprintf(&buf, "YAML config:\n\n")
 
-			err = renderYamlToBuf(&buf, &model.OIDCConfig{
+			err := renderYamlToBuf(&buf, &model.OIDCConfig{
 				Clients: map[string]model.OIDCClientConfig{
 					lclientName: {
 						ClientID:     clientId,
