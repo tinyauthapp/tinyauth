@@ -31,8 +31,9 @@ type OAuthBrokerService struct {
 }
 
 var presets = map[string]func(config model.OAuthServiceConfig, ctx context.Context) *OAuthService{
-	"github": newGitHubOAuthService,
-	"google": newGoogleOAuthService,
+	"github":   newGitHubOAuthService,
+	"google":   newGoogleOAuthService,
+	"telegram": newTelegramOAuthService,
 }
 
 type OAuthBrokerServiceInput struct {
