@@ -56,6 +56,7 @@ type ACRUI struct {
 	Title                 string `json:"title"`
 	ForgotPasswordMessage string `json:"forgotPasswordMessage"`
 	BackgroundImage       string `json:"backgroundImage"`
+	BackgroundCSS         string `json:"backgroundCss"`
 	WarningsEnabled       bool   `json:"warningsEnabled"`
 }
 
@@ -161,6 +162,7 @@ func (controller *ContextController) appContextHandler(c *gin.Context) {
 			Title:                 controller.config.UI.Title,
 			ForgotPasswordMessage: controller.config.UI.ForgotPasswordMessage,
 			BackgroundImage:       controller.config.UI.BackgroundImage,
+			BackgroundCSS:         controller.config.UI.BackgroundCSS,
 			WarningsEnabled:       controller.config.UI.WarningsEnabled,
 		},
 		App: ACRApp{

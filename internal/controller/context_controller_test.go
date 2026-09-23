@@ -45,6 +45,7 @@ func TestContextController(t *testing.T) {
 						Title:                 cfg.UI.Title,
 						ForgotPasswordMessage: cfg.UI.ForgotPasswordMessage,
 						BackgroundImage:       cfg.UI.BackgroundImage,
+						BackgroundCSS:         cfg.UI.BackgroundCSS,
 						WarningsEnabled:       cfg.UI.WarningsEnabled,
 					},
 					App: ACRApp{
