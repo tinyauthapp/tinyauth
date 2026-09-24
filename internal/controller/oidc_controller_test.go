@@ -352,6 +352,29 @@ func TestOIDCController(t *testing.T) {
 			},
 		},
 		{
+			description: "Skip consent returns true for a trusted client without prior consent",
+			middlewares: []gin.HandlerFunc{authedUser},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				require.NoError(t, store.DeleteOIDCConsentByClientID(ctx, "trusted-client-id"))
+
+				ticket := oidcService.CreateAuthorizeRequestTicket(service.AuthorizeRequest{
+					Scope:        "openid profile",
+					ResponseType: "code",
+					ClientID:     "trusted-client-id",
+					RedirectURI:  "https://trusted.example.com/callback",
+				})
+
+				req := httptest.NewRequest("GET", "/api/oidc/skip-consent?oidc_ticket="+url.QueryEscape(ticket), nil)
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+
+				var res SkipConsentResponse
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				assert.True(t, res.SkipConsent)
+			},
+		},
+		{
 			description: "Skip consent returns false when a new scope is requested",
 			middlewares: []gin.HandlerFunc{authedUser},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
