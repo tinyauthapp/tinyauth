@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type watchedResource struct {
@@ -68,6 +69,7 @@ var supportedResources = []watchedResource{
 			Version:  "v1alpha1",
 			Resource: "applications",
 		},
+		typ: ResourceTypeCRD,
 	},
 }
 
@@ -82,7 +84,7 @@ func convertFromUnstructured[T any](obj *unstructured.Unstructured) (*T, error) 
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &typed)
 	if err != nil {
 		var zero *T
-		return zero, fmt.Errorf("failed to convert ingress to typed object: %w", err)
+		return zero, fmt.Errorf("failed to convert to typed object: %w", err)
 	}
 	return typed, nil
 }
@@ -131,26 +133,28 @@ type KubernetesServiceInput struct {
 }
 
 func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) {
-	cfg, err := rest.InClusterConfig()
+	service := &KubernetesService{
+		log:  i.Log,
+		apps: make(map[ResourceMeta]map[string]model.App),
+	}
+
+	cfg, err := service.getConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get in-cluster kubernetes config: %w", err)
+		return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
 	}
 
 	client, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+
 	typedClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create typed kubernetes client: %w", err)
 	}
 
-	service := &KubernetesService{
-		log:         i.Log,
-		client:      client,
-		typedClient: typedClient,
-		apps:        make(map[ResourceMeta]map[string]model.App),
-	}
+	service.client = client
+	service.typedClient = typedClient
 
 	watchedGVRs := make(map[string]bool)
 
@@ -182,6 +186,21 @@ func NewKubernetesService(i KubernetesServiceInput) (*KubernetesService, error) 
 	i.Log.App.Debug().Msg("Kubernetes label provider started successfully")
 
 	return service, nil
+}
+
+func (k *KubernetesService) getConfig() (*rest.Config, error) {
+	config, err := rest.InClusterConfig()
+
+	if err == nil {
+		return config, nil
+	}
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules,
+		&clientcmd.ConfigOverrides{},
+	).ClientConfig()
 }
 
 func (k *KubernetesService) addResource(result ExtractionResult) {
