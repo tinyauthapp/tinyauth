@@ -211,22 +211,12 @@ func (k *KubernetesService) removeResource(key resourceKey) {
 	delete(k.apps, key)
 }
 
-func (k *KubernetesService) getEntry(domain string, locator func(name string, app *model.App) bool) {
-	if !ensureAscii(domain) {
-		k.log.App.Debug().Str("domain", domain).Msg("Domain is invalid, skipping lookup")
-		return
-	}
-
+func (k *KubernetesService) getEntry(locator func(name string, app *model.App) bool) {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 
 	// O(n^2) is not great but the number of resource entries is expected to be small
 	for _, app := range k.apps {
-		if !slices.ContainsFunc(app.hosts, func(host string) bool {
-			return hostMatchesHostname(host, domain)
-		}) {
-			continue
-		}
 		for _, entry := range app.entries {
 			if ok := locator(entry.name, &entry.app); ok {
 				return
@@ -412,13 +402,13 @@ func (k *KubernetesService) watchGVR(res watchedResource, ctx context.Context) {
 	}
 }
 
-func (k *KubernetesService) Lookup(domain string, locator func(name string, app *model.App) bool) error {
+func (k *KubernetesService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !k.connected {
 		k.log.App.Debug().Msg("Kubernetes label provider not started, skipping")
 		return nil
 	}
 
-	k.getEntry(domain, locator)
+	k.getEntry(locator)
 
 	return nil
 }

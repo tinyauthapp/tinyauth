@@ -12,12 +12,8 @@ import (
 	"go.uber.org/dig"
 )
 
-// LabelProvider looks up the apps it knows about for the given domain. A
-// provider that knows which hosts its apps are served on MUST only yield the
-// ones that are actually served on domain, so that an unrelated app cannot
-// claim it by name.
 type LabelProvider interface {
-	Lookup(domain string, locator func(name string, app *model.App) bool) error
+	Lookup(locator func(name string, app *model.App) bool) error
 }
 
 type AccessControlsService struct {
@@ -149,9 +145,7 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 
 	// If we have a label provider configured, try to get ACLs from it
 	if service.labelProvider != nil {
-		return service.getACLs(domain, func(locator func(name string, app *model.App) bool) error {
-			return service.labelProvider.Lookup(domain, locator)
-		})
+		return service.getACLs(domain, service.labelProvider.Lookup)
 	}
 
 	// No labels

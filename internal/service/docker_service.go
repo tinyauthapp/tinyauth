@@ -119,10 +119,7 @@ func (docker *DockerService) inspectContainer(containerId string) (container.Ins
 	return docker.client.ContainerInspect(docker.context, containerId)
 }
 
-// Lookup yields every app labelled on a running container. Container labels
-// carry no routing information, so the domain cannot be used to narrow the
-// results down and the caller is left to match them.
-func (docker *DockerService) Lookup(_ string, locator func(name string, app *model.App) bool) error {
+func (docker *DockerService) Lookup(locator func(name string, app *model.App) bool) error {
 	if !docker.isConnected {
 		docker.log.App.Debug().Msg("Docker service not connected, returning empty labels")
 		return nil

@@ -49,7 +49,7 @@ func testIngress(name string, annotations map[string]string, hosts ...string) *t
 
 func lookupApp(service *KubernetesService, domain string) *model.App {
 	var app *model.App
-	service.getEntry(domain, func(name string, candidate *model.App) bool {
+	service.getEntry(func(name string, candidate *model.App) bool {
 		if candidate.Config.Domain == domain || strings.HasPrefix(domain, name+".") {
 			app = candidate
 			return true
@@ -175,7 +175,6 @@ func TestKubernetesServiceLookup(t *testing.T) {
 	}{
 		{"Returns a matching app when connected", true, "app.example.com", true},
 		{"Skips the cache before the service is connected", false, "app.example.com", false},
-		{"Skips an invalid domain", true, "app.example.com\xC3\xA9", false},
 	}
 
 	for _, test := range tests {
@@ -188,7 +187,7 @@ func TestKubernetesServiceLookup(t *testing.T) {
 			}})
 
 			var app *model.App
-			err := service.Lookup(test.domain, func(_ string, candidate *model.App) bool {
+			err := service.Lookup(func(_ string, candidate *model.App) bool {
 				app = candidate
 				return true
 			})
