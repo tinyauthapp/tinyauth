@@ -186,9 +186,10 @@ func TestAccessControlsService(t *testing.T) {
 	// get acls should return an error when the provider fails
 	mock := newMockProvider(map[string]model.App{}, true)
 	acls := NewAccessControlsService(AccessControlServiceInput{
-		Log:     log,
-		Runtime: &runtime,
-		Config:  &model.Config{},
+		Log:           log,
+		Runtime:       &runtime,
+		Config:        &model.Config{},
+		LabelProvider: mock,
 	})
 	_, err := acls.getACLs("example.com", mock.Lookup)
 	assert.Error(t, err)
