@@ -363,17 +363,18 @@ func (auth *AuthService) CreateSession(ctx context.Context, data repository.Sess
 	expiresAt := time.Now().Add(time.Duration(expiry) * time.Second)
 
 	session := repository.CreateSessionParams{
-		UUID:        u.String(),
-		Username:    data.Username,
-		Email:       data.Email,
-		Name:        data.Name,
-		Provider:    data.Provider,
-		TotpPending: data.TotpPending,
-		OAuthGroups: data.OAuthGroups,
-		Expiry:      expiresAt.Unix(),
-		CreatedAt:   time.Now().Unix(),
-		OAuthName:   data.OAuthName,
-		OAuthSub:    data.OAuthSub,
+		UUID:         u.String(),
+		Username:     data.Username,
+		Email:        data.Email,
+		Name:         data.Name,
+		Provider:     data.Provider,
+		TotpPending:  data.TotpPending,
+		OAuthGroups:  data.OAuthGroups,
+		Expiry:       expiresAt.Unix(),
+		CreatedAt:    time.Now().Unix(),
+		OAuthName:    data.OAuthName,
+		OAuthSub:     data.OAuthSub,
+		OAuthIDToken: data.OAuthIDToken,
 	}
 
 	_, err = auth.queries.CreateSession(ctx, session)
@@ -419,16 +420,17 @@ func (auth *AuthService) RefreshSession(ctx context.Context, uuid string) (*http
 	newExpiry := session.Expiry + refreshThreshold
 
 	_, err = auth.queries.UpdateSession(ctx, repository.UpdateSessionParams{
-		Username:    session.Username,
-		Email:       session.Email,
-		Name:        session.Name,
-		Provider:    session.Provider,
-		TotpPending: session.TotpPending,
-		OAuthGroups: session.OAuthGroups,
-		Expiry:      newExpiry,
-		OAuthName:   session.OAuthName,
-		OAuthSub:    session.OAuthSub,
-		UUID:        session.UUID,
+		Username:     session.Username,
+		Email:        session.Email,
+		Name:         session.Name,
+		Provider:     session.Provider,
+		TotpPending:  session.TotpPending,
+		OAuthGroups:  session.OAuthGroups,
+		Expiry:       newExpiry,
+		OAuthName:    session.OAuthName,
+		OAuthSub:     session.OAuthSub,
+		OAuthIDToken: session.OAuthIDToken,
+		UUID:         session.UUID,
 	})
 
 	if err != nil {

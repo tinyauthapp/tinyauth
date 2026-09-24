@@ -13,6 +13,8 @@ services:
     labels:
       traefik.enable: true
       traefik.http.routers.whoami.rule: Host(`whoami.127.0.0.1.sslip.io`)
+      traefik.http.routers.whoami.entrypoints: websecure
+      traefik.http.routers.whoami.tls: true
       traefik.http.routers.whoami.middlewares: tinyauth
 
   tinyauth-frontend:
