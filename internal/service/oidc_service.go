@@ -160,6 +160,11 @@ type UsedCodeEntry struct {
 	Sub string
 }
 
+type CompletedAuthorizeEntry struct {
+	Username    string
+	RedirectURI string
+}
+
 type OIDCService struct {
 	log     *logger.Logger
 	config  *model.Config
@@ -172,9 +177,10 @@ type OIDCService struct {
 	issuer     string
 
 	caches struct {
-		code      *cache.CacheStore[AuthorizeCodeEntry]
-		usedCode  *cache.CacheStore[UsedCodeEntry]
-		authorize *cache.CacheStore[AuthorizeRequest]
+		code               *cache.CacheStore[AuthorizeCodeEntry]
+		usedCode           *cache.CacheStore[UsedCodeEntry]
+		authorize          *cache.CacheStore[AuthorizeRequest]
+		completedAuthorize *cache.CacheStore[CompletedAuthorizeEntry]
 	}
 
 	mus struct {
@@ -365,10 +371,12 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 	codeCache := cache.NewCacheStore[AuthorizeCodeEntry](256)
 	usedCode := cache.NewCacheStore[UsedCodeEntry](256)
 	authorize := cache.NewCacheStore[AuthorizeRequest](256)
+	completedAuthorize := cache.NewCacheStore[CompletedAuthorizeEntry](256)
 
 	service.caches.code = codeCache
 	service.caches.usedCode = usedCode
 	service.caches.authorize = authorize
+	service.caches.completedAuthorize = completedAuthorize
 
 	// Start cache cleanup routine
 	i.Ding.Go(func(ctx context.Context) {
@@ -381,6 +389,7 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 				service.caches.code.Sweep()
 				service.caches.usedCode.Sweep()
 				service.caches.authorize.Sweep()
+				service.caches.completedAuthorize.Sweep()
 			case <-ctx.Done():
 				return
 			}
@@ -938,8 +947,42 @@ func (service *OIDCService) GetAuthorizeRequestByTicket(ticket string) (*Authori
 	return &entry, true
 }
 
+func (service *OIDCService) ClaimAuthorizeRequestTicket(ticket string) (*AuthorizeRequest, bool) {
+	var entry AuthorizeRequest
+	claimed := false
+
+	service.caches.authorize.WithLock(func(actions cache.CacheStoreActions[AuthorizeRequest]) {
+		entry, claimed = actions.Get(ticket)
+		if claimed {
+			actions.Delete(ticket)
+		}
+	})
+
+	if !claimed {
+		return nil, false
+	}
+
+	return &entry, true
+}
+
 func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
 	service.caches.authorize.Delete(ticket)
+}
+
+func (service *OIDCService) StoreCompletedAuthorizeRequest(ticket, username, redirectURI string) {
+	service.caches.completedAuthorize.Set(ticket, CompletedAuthorizeEntry{
+		Username:    username,
+		RedirectURI: redirectURI,
+	}, time.Minute)
+}
+
+func (service *OIDCService) GetCompletedAuthorizeRequest(ticket, username string) (string, bool) {
+	entry, ok := service.caches.completedAuthorize.Get(ticket)
+	if !ok || entry.Username != username {
+		return "", false
+	}
+
+	return entry.RedirectURI, true
 }
 
 // DecodeAuthorizeJWT TODO: support signed request objects in the future

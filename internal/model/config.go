@@ -282,6 +282,7 @@ type OIDCClientConfig struct {
 	ClientSecret        string   `description:"OIDC client secret." yaml:"clientSecret,omitempty"`
 	ClientSecretFile    string   `description:"Path to the file containing the OIDC client secret." yaml:"clientSecretFile,omitempty"`
 	TrustedRedirectURIs []string `description:"List of trusted redirect URIs." yaml:"trustedRedirectUris,omitempty"`
+	Trusted             bool     `description:"Skip the consent screen for this trusted OIDC client." yaml:"trusted,omitempty"`
 	Name                string   `description:"Client name in UI." yaml:"name,omitempty"`
 }
 
