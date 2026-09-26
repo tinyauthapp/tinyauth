@@ -1,3 +1,6 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
 issue_enrichment:
   auto_enrich:
     enabled: false
+reviews:
+  profile: chill

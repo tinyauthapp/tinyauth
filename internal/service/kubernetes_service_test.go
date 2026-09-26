@@ -1,6 +1,10 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -11,6 +15,8 @@ import (
 	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
 
 func watchedResourceForTest(t *testing.T, typ ResourceType) watchedResource {
@@ -88,6 +94,23 @@ func TestKubernetesServiceUpdateFromItem(t *testing.T) {
 			}, "Dashboard.example.com"),
 			domain: "dashboard.example.com", allow: "alice",
 		},
+		{
+			name:     "Hostless Ingress matches a configured domain",
+			resource: ResourceTypeIngress,
+			item: testIngress("ingress", map[string]string{
+				"tinyauth.apps.dashboard.config.domain": "dashboard.example.com",
+				"tinyauth.apps.dashboard.users.allow":   "alice",
+			}, ""),
+			domain: "dashboard.example.com", wantConfigDomain: "dashboard.example.com", allow: "alice",
+		},
+		{
+			name:     "Hostless Ingress matches an app name",
+			resource: ResourceTypeIngress,
+			item: testIngress("ingress", map[string]string{
+				"tinyauth.apps.dashboard.users.allow": "alice",
+			}, ""),
+			domain: "dashboard.example.com", allow: "alice",
+		},
 	}
 
 	for _, test := range tests {
@@ -99,6 +122,10 @@ func TestKubernetesServiceUpdateFromItem(t *testing.T) {
 			require.NotNil(t, app)
 			assert.Equal(t, test.allow, app.Users.Allow)
 			assert.Equal(t, test.wantConfigDomain, app.Config.Domain)
+			if test.item.ingress.Spec.Rules[0].Host == "" {
+				key := resourceKey{typ: test.resource, namespace: "default", name: "ingress"}
+				assert.Equal(t, []string{""}, service.apps[key].hosts)
+			}
 		})
 	}
 }
@@ -130,6 +157,68 @@ func TestKubernetesServiceUpdateFromItemRemovesStaleEntries(t *testing.T) {
 			assert.Nil(t, lookupApp(service, "app.example.com"))
 		})
 	}
+}
+
+func TestKubernetesServiceResyncRemovesMissingResources(t *testing.T) {
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+	service := newKubernetesServiceForTest(log)
+	res := watchedResourceForTest(t, ResourceTypeIngress)
+
+	live := testIngress("keep", map[string]string{
+		"tinyauth.apps.keep.config.domain": "keep.example.com",
+	}, "keep.example.com")
+	items := []networking.Ingress{*live.ingress}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(networking.IngressList{
+			TypeMeta: metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "IngressList"},
+			Items:    items,
+		}); err != nil {
+			t.Errorf("encode ingress list: %v", err)
+		}
+	}))
+	defer server.Close()
+	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
+	require.NoError(t, err)
+	service.client = client
+	stale := resourceKey{typ: res.typ, namespace: "default", name: "gone"}
+	otherNamespace := resourceKey{typ: res.typ, namespace: "other", name: "keep"}
+	otherType := resourceKey{typ: ResourceType("other"), namespace: "default", name: "gone"}
+	for _, key := range []resourceKey{stale, otherNamespace, otherType} {
+		service.addResourceEntries(key, nil, []resourceEntry{{name: "app"}})
+	}
+
+	require.NoError(t, service.resyncGVR(res, context.Background()))
+	assert.Contains(t, service.apps, resourceKey{typ: res.typ, namespace: "default", name: "keep"})
+	assert.NotContains(t, service.apps, stale)
+	assert.NotContains(t, service.apps, otherNamespace)
+	assert.Contains(t, service.apps, otherType)
+
+	items = nil
+	require.NoError(t, service.resyncGVR(res, context.Background()))
+	assert.NotContains(t, service.apps, resourceKey{typ: res.typ, namespace: "default", name: "keep"})
+	assert.Contains(t, service.apps, otherType)
+}
+
+func TestKubernetesServiceResyncKeepsResourcesOnListFailure(t *testing.T) {
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+	service := newKubernetesServiceForTest(log)
+	res := watchedResourceForTest(t, ResourceTypeIngress)
+	key := resourceKey{typ: res.typ, namespace: "default", name: "keep"}
+	service.addResourceEntries(key, nil, []resourceEntry{{name: "app"}})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "list failed", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
+	require.NoError(t, err)
+	service.client = client
+
+	require.Error(t, service.resyncGVR(res, context.Background()))
+	assert.Contains(t, service.apps, key)
 }
 
 func TestTypedItemFromUnstructured(t *testing.T) {
@@ -227,14 +316,37 @@ func TestKubernetesHostMatching(t *testing.T) {
 	}{
 		{"Exact host", "app.example.com", "app.example.com", true},
 		{"Case insensitive exact host", "App.Example.com", "app.example.com", true},
-		{"Wildcard host", "*.example.com", "deep.app.example.com", true},
+		{"Wildcard host", "*.example.com", "app.example.com", true},
+		{"Wildcard host is case insensitive", "*.Example.com", "App.example.com", true},
 		{"Wildcard does not match its apex", "*.example.com", "example.com", false},
+		{"Wildcard rejects empty label", "*.example.com", ".example.com", false},
+		{"Wildcard rejects multiple labels", "*.example.com", "deep.app.example.com", false},
+		{"Wildcard rejects other suffix", "*.example.com", "app.other.com", false},
 		{"Different host", "app.example.com", "other.example.com", false},
+		{"Empty host matches any hostname", "", "other.example.com", true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.want, hostMatchesHostname(test.host, test.domain))
 		})
+	}
+}
+
+func TestKubernetesHostCoversName(t *testing.T) {
+	tests := []struct {
+		host string
+		name string
+		want bool
+	}{
+		{"", "dashboard", true},
+		{"dashboard.example.com", "dashboard", true},
+		{"Dashboard.example.com", "dashboard", true},
+		{"*.example.com", "dashboard", true},
+		{"other.example.com", "dashboard", false},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.want, hostCoversName(test.host, test.name))
 	}
 }

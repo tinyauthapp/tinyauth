@@ -50,15 +50,22 @@ var supportedResources = []watchedResource{
 }
 
 func hostMatchesHostname(host string, hostname string) bool {
+	if host == "" {
+		return true
+	}
 	host = normalizeDomain(host)
 	hostname = normalizeDomain(hostname)
 	if suffix, ok := strings.CutPrefix(host, "*."); ok {
-		return strings.HasSuffix(hostname, "."+suffix)
+		prefix, matches := strings.CutSuffix(hostname, "."+suffix)
+		return matches && prefix != "" && !strings.Contains(prefix, ".")
 	}
 	return host == hostname
 }
 
 func hostCoversName(host string, name string) bool {
+	if host == "" {
+		return true
+	}
 	host = strings.ToLower(host)
 	if strings.HasPrefix(host, "*.") {
 		return true
@@ -312,7 +319,9 @@ func (k *KubernetesService) resyncGVR(res watchedResource, ctx context.Context) 
 		k.log.App.Warn().Err(err).Str("res", res.pretty()).Msg("Failed to list resources for resync")
 		return err
 	}
+	seen := make(map[resourceKey]struct{}, len(list.Items))
 	for _, item := range list.Items {
+		seen[resourceKey{typ: res.typ, namespace: item.GetNamespace(), name: item.GetName()}] = struct{}{}
 		newTypedItem, err := new(typedItem).fromUnstructured(res.typ, &item)
 		if err != nil {
 			k.log.App.Warn().Err(err).Str("res", res.pretty()).Msg("Failed to decode resource, skipping")
@@ -320,6 +329,16 @@ func (k *KubernetesService) resyncGVR(res watchedResource, ctx context.Context) 
 		}
 		k.updateFromItem(res, newTypedItem)
 	}
+	k.mu.Lock()
+	for key := range k.apps {
+		if key.typ != res.typ {
+			continue
+		}
+		if _, ok := seen[key]; !ok {
+			delete(k.apps, key)
+		}
+	}
+	k.mu.Unlock()
 	k.log.App.Debug().Str("res", res.pretty()).Int("count", len(list.Items)).Msg("Resync complete")
 	return nil
 }
