@@ -33,6 +33,9 @@ jobs:
         with:
           sqlc-version: "1.31.1"
 
+      - name: Setup controller-gen
+        run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0
+
       - name: Check codegen is up to date
         run: |
           sqlc generate

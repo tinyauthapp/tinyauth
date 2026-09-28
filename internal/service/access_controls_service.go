@@ -145,7 +145,9 @@ func (service *AccessControlsService) GetAccessControls(domain string) (*model.A
 
 	// If we have a label provider configured, try to get ACLs from it
 	if service.labelProvider != nil {
-		return service.getACLs(domain, service.labelProvider.Lookup)
+		return service.getACLs(domain, func(locator func(name string, app *model.App) bool) error {
+			return service.labelProvider.Lookup(locator)
+		})
 	}
 
 	// No labels

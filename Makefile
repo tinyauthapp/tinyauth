@@ -19,7 +19,12 @@ PROD_COMPOSE := $(shell test -f "docker-compose.test.prod.yml" && echo "docker-c
 
 .DEFAULT_GOAL := binary
 
-.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless
+.PHONY: deps clean-data clean-webui webui binary binary-linux-amd64 binary-linux-arm64 test vet test-race dev dev-infisical prod prod-infisical sql generate docker docker-distroless tools
+
+# Tools
+tools:
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 # Deps
 deps:

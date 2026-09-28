@@ -1,0 +1,142 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: applications.tinyauth.app
+spec:
+  group: tinyauth.app
+  names:
+    kind: Application
+    listKind: ApplicationList
+    plural: applications
+    singular: application
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          Application is a set of access control rules that can be applied to a
+          specific domain. It is an alternative to environment variable or config-based
+          access controls.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ApplicationSpec describes the application to which this rule
+              applies to
+            properties:
+              config:
+                description: AppConfig specifies configuration for the application
+                properties:
+                  domain:
+                    type: string
+                required:
+                - domain
+                type: object
+              ip:
+                description: AppIP specifies IP access control rules
+                properties:
+                  allow:
+                    items:
+                      type: string
+                    type: array
+                  block:
+                    items:
+                      type: string
+                    type: array
+                  bypass:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              ldap:
+                description: AppLDAP specifies LDAP access control rules
+                properties:
+                  groups:
+                    type: string
+                type: object
+              oauth:
+                description: AppOAuth specifies OAuth access control rules
+                properties:
+                  groups:
+                    type: string
+                  whitelist:
+                    type: string
+                type: object
+              path:
+                description: AppPath specifies path-based access control rules
+                properties:
+                  allow:
+                    type: string
+                  block:
+                    type: string
+                type: object
+              response:
+                description: AppResponse specifies response headers and basic auth
+                  credentials
+                properties:
+                  basicAuth:
+                    description: AppBasicAuth specifies basic auth credentials
+                    properties:
+                      passwordSecretRef:
+                        description: SecretKeySelector selects a key of a Secret.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      username:
+                        type: string
+                    type: object
+                  headers:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              users:
+                description: AppUsers specifies user access control rules
+                properties:
+                  allow:
+                    type: string
+                  block:
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
