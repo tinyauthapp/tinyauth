@@ -37,6 +37,7 @@ type Scope = {
 
 const skipConsentResponseSchema = z.object({
   skipConsent: z.boolean(),
+  redirectUri: z.string().url().optional(),
 })
 
 const scopeMapIconProps = {
@@ -138,6 +139,10 @@ export const AuthorizePage = () => {
         const parsed = skipConsentResponseSchema.safeParse(await res.json());
         if (!active || !parsed.success || !parsed.data.skipConsent) return;
         setAutoAuthorize(true);
+        if (parsed.data.redirectUri) {
+          window.location.replace(parsed.data.redirectUri);
+          return;
+        }
         authorizeMutate();
       } catch {
         // Fall back to manual consent on any failure (including abort).
