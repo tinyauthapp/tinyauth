@@ -10,9 +10,10 @@ INSERT INTO "sessions" (
     "expiry",
     "created_at",
     "oauth_name",
-    "oauth_sub"
+    "oauth_sub",
+    "oauth_id_token"
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -34,7 +35,8 @@ UPDATE "sessions" SET
     "oauth_groups" = ?,
     "expiry" = ?,
     "oauth_name" = ?,
-    "oauth_sub" = ?
+    "oauth_sub" = ?,
+    "oauth_id_token" = ?
 WHERE "uuid" = ?
 RETURNING *;
 

@@ -10,9 +10,10 @@ INSERT INTO "sessions" (
     "expiry",
     "created_at",
     "oauth_name",
-    "oauth_sub"
+    "oauth_sub",
+    "oauth_id_token"
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
 RETURNING *;
 
@@ -34,8 +35,9 @@ UPDATE "sessions" SET
     "oauth_groups" = $6,
     "expiry"       = $7,
     "oauth_name"   = $8,
-    "oauth_sub"    = $9
-WHERE "uuid" = $10
+    "oauth_sub"    = $9,
+    "oauth_id_token" = $10
+WHERE "uuid" = $11
 RETURNING *;
 
 -- name: DeleteExpiredSessions :exec

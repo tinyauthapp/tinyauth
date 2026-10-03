@@ -40,6 +40,7 @@ func (s *Store) UpdateSession(_ context.Context, arg repository.UpdateSessionPar
 	sess.Expiry = arg.Expiry
 	sess.OAuthName = arg.OAuthName
 	sess.OAuthSub = arg.OAuthSub
+	sess.OAuthIDToken = arg.OAuthIDToken
 	s.sessions[arg.UUID] = sess
 	return sess, nil
 }

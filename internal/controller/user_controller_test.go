@@ -577,6 +577,7 @@ func TestUserController(t *testing.T) {
 
 			NewUserController(UserControllerInput{
 				Log:           log,
+				StaticConfig:  &cfg,
 				RuntimeConfig: &runtime,
 				RouterGroup:   group,
 				AuthService:   authService,
