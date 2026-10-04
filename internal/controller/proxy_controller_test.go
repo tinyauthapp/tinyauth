@@ -903,6 +903,16 @@ func TestProxyController(t *testing.T) {
 				assert.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
+		{
+			description: "Ext authz path should not be treated as a query parameter",
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/admin?;&path=/allowed", nil)
+				req.Host = "path-allow.example.com"
+				req.Header.Set("x-forwarded-proto", "https")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
 	}
 
 	store := memory.New()

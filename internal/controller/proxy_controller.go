@@ -465,8 +465,8 @@ func (controller *ProxyController) getExtAuthzContext(c *gin.Context) (ProxyCont
 		return ProxyContext{}, errors.New("host not found")
 	}
 
-	// We get the path from the query string
-	path := c.Query("path")
+	// The path is attached to the end of the /api/auth/envoy?path= string so we just strip it out
+	path := strings.TrimPrefix(c.Request.RequestURI, "/api/auth/envoy?path=")
 
 	if strings.TrimSpace(path) == "" {
 		return ProxyContext{}, errors.New("path not found")
