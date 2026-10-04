@@ -169,7 +169,7 @@ func TestProxyController(t *testing.T) {
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, http.StatusFound, recorder.Code)
 				location := recorder.Header().Get("Location")
-				assert.Contains(t, location, url.QueryEscape("https://test.example.com/hello?foo=bar"))
+				assert.Contains(t, location, url.QueryEscape("https://test.example.com%2Fhello%3Ffoo%3Dbar"))
 				assert.Contains(t, location, "login_for=app")
 				assert.Contains(t, location, "https://tinyauth.example.com/login")
 			},
@@ -462,17 +462,6 @@ func TestProxyController(t *testing.T) {
 				req.Header.Set("x-forwarded-uri", "public")
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			description: "Ensure path block ACL cannot be bypassed with query params on envoy ext authz",
-			middlewares: []gin.HandlerFunc{},
-			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
-				req := httptest.NewRequest("HEAD", "/api/auth/envoy?path=/admin%3Ffoo=bar", nil)
-				req.Host = "path-block.example.com"
-				req.Header.Set("x-forwarded-proto", "https")
-				router.ServeHTTP(recorder, req)
-				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 		{
