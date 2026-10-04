@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine3.23
+FROM golang:1.27-alpine3.23
 
 WORKDIR /tinyauth
 
