@@ -540,7 +540,7 @@ func (controller *ProxyController) compareProxyContext(ctx1, ctx2 ProxyContext) 
 	return ctx1.Host == ctx2.Host && ctx1.Proto == ctx2.Proto && ctx1.PathRaw == ctx2.PathRaw && ctx1.Method == ctx2.Method
 }
 
-func (controller *ProxyController) includedAuthModules(c *gin.Context) []AuthModuleType {
+func (controller *ProxyController) includedAuthModules(c *gin.Context, discoveredModules []AuthModuleType) []AuthModuleType {
 	var modules []AuthModuleType
 
 	if strings.HasPrefix(c.Request.RequestURI, envoyAuthPath) &&
@@ -561,7 +561,9 @@ func (controller *ProxyController) includedAuthModules(c *gin.Context) []AuthMod
 		modules = append(modules, AuthRequest)
 	}
 
-	return modules
+	return utils.Filter(modules, func(module AuthModuleType) bool {
+		return slices.Contains(discoveredModules, module)
+	})
 }
 
 func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext, error) {
@@ -603,7 +605,7 @@ func (controller *ProxyController) getProxyContext(c *gin.Context) (ProxyContext
 		return ProxyContext{}, fmt.Errorf("failed to get context from any auth module")
 	}
 
-	includedAuthModules := controller.includedAuthModules(c)
+	includedAuthModules := controller.includedAuthModules(c, authModules)
 
 	if len(extracted) != len(includedAuthModules) {
 		controller.log.App.Warn().

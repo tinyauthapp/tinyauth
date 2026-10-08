@@ -943,6 +943,18 @@ func TestProxyController(t *testing.T) {
 				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
+		{
+			description: "Unrelated auth modules for proxy don't fail request",
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "path-allow.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-original-url", "https://foobar.example.com/foo")
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
 	}
 
 	store := memory.New()
