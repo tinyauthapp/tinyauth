@@ -137,7 +137,7 @@ type ResourcesConfig struct {
 type ServerConfig struct {
 	Port       int    `description:"The port on which the server listens." yaml:"port,omitempty"`
 	Address    string `description:"The address on which the server listens." yaml:"address,omitempty"`
-	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath,omitempty"`
+	SocketPath string `description:"Path of the Unix socket to listen on instead of TCP. An existing socket at this path is replaced, any other file is left untouched." yaml:"socketPath,omitempty"`
 }
 
 type AuthConfig struct {
