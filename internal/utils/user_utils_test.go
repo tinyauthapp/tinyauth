@@ -2,6 +2,7 @@ package utils_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,49 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
+
+func TestGetUsersRejectsInvalidHash(t *testing.T) {
+	hash := "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"
+	noAttrs := map[string]model.UserAttributes{}
+
+	// A plaintext (non-bcrypt) password is rejected at load with the username named
+	_, err := utils.GetUsers([]string{"alice:not-a-hash"}, "", noAttrs)
+	assert.ErrorContains(t, err, `invalid password hash for user "alice"`)
+
+	// A 60-char value with the right prefix/cost but a malformed base64 body is rejected
+	badHash := "$2a$10$" + strings.Repeat("!", 53)
+	require.Len(t, badHash, 60)
+	_, err = utils.GetUsers([]string{"bob:" + badHash}, "", noAttrs)
+	assert.ErrorContains(t, err, `invalid password hash for user "bob"`)
+
+	// bcrypt ignores trailing bytes, so a valid hash with extra bytes is rejected too
+	_, err = utils.GetUsers([]string{"carol:" + hash + "extra"}, "", noAttrs)
+	assert.ErrorContains(t, err, `invalid password hash for user "carol"`)
+
+	// A valid hash (with a TOTP secret) still loads
+	users, err := utils.GetUsers([]string{"dave:" + hash + ":JBSWY3DPEHPK3PXP"}, "", noAttrs)
+	assert.NoError(t, err)
+	assert.Len(t, *users, 1)
+	assert.Equal(t, "dave", (*users)[0].Username)
+
+	// Every valid bcrypt minor version is accepted (the body is identical, only the tag differs)
+	for _, v := range []string{"$2a$", "$2b$", "$2y$"} {
+		_, err := utils.GetUsers([]string{"eve:" + v + hash[4:]}, "", noAttrs)
+		assert.NoError(t, err, "version %s should be accepted", v)
+	}
+
+	// Values bcrypt would re-encode differently (so the original password could never match) are rejected:
+	// a wrong cost delimiter, and non-canonical final salt/checksum base64 characters.
+	mutate := func(i int, c byte) string { b := []byte(hash); b[i] = c; return string(b) }
+	for name, bad := range map[string]string{
+		"wrong delimiter":            mutate(6, 'X'),
+		"noncanonical checksum tail": mutate(59, 'H'), // canonical final char here is 'G'
+		"noncanonical salt tail":     mutate(28, 'f'), // canonical final salt char here is 'e'
+	} {
+		_, err := utils.GetUsers([]string{"frank:" + bad}, "", noAttrs)
+		assert.ErrorContains(t, err, `invalid password hash for user "frank"`, name)
+	}
+}
 
 func TestGetUsers(t *testing.T) {
 	tmpDir := t.TempDir()
