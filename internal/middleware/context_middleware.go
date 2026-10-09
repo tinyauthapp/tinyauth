@@ -89,14 +89,26 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				c.Set("context", userContext)
 				c.Next()
 				return
-			} else {
-				m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 			}
+
+			m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
 		}
 
-		username, password, ok := c.Request.BasicAuth()
+		authHeader := c.GetHeader("x-tinyauth-authorization")
 
-		if ok {
+		if authHeader == "" {
+			authHeader = c.GetHeader("Authorization")
+		}
+
+		if authHeader != "" {
+			username, password, ok := utils.ParseBasicAuth(authHeader)
+
+			if !ok {
+				m.log.App.Debug().Msg("Error authenticating with basic auth")
+				c.Next()
+				return
+			}
+
 			userContext, headers, err := m.basicAuth(username, password)
 
 			if err != nil {
@@ -237,6 +249,8 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 	return userContext, cookie, nil
 }
 
+// basicAuth authenticates a local user and returns the user context with
+// any response headers to set.
 func (m *ContextMiddleware) basicAuth(username string, password string) (*model.UserContext, map[string]string, error) {
 	headers := make(map[string]string)
 	userContext := new(model.UserContext)
