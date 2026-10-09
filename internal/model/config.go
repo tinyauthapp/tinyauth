@@ -262,6 +262,7 @@ type OAuthServiceConfig struct {
 	WhitelistFile    string                `description:"Path to the OAuth whitelist file for this provider." yaml:"whitelistFile,omitempty"`
 	Scopes           []string              `description:"OAuth scopes." yaml:"scopes,omitempty"`
 	RedirectURL      string                `description:"OAuth redirect URL." yaml:"redirectUrl,omitempty"`
+	Issuer           string                `description:"OIDC issuer URL. When set, any OAuth endpoint left empty is filled from its /.well-known/openid-configuration document at startup. The issuer must be HTTPS and must match the issuer in the document; a non-HTTPS issuer and certificate verification both require this provider's 'insecure' option." yaml:"issuer,omitempty"`
 	AuthURL          string                `description:"OAuth authorization URL." yaml:"authUrl,omitempty"`
 	TokenURL         string                `description:"OAuth token URL." yaml:"tokenUrl,omitempty"`
 	UserinfoURL      string                `description:"OAuth userinfo URL." yaml:"userinfoUrl,omitempty"`
