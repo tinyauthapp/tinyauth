@@ -154,11 +154,6 @@ func (app *BootstrapApp) Setup() error {
 		app.runtime.OAuthProviders[id] = provider
 	}
 
-	// cookie domain
-	if !app.config.Auth.SubdomainsEnabled {
-		app.log.App.Warn().Msg("Subdomains are disabled, cookies will be set for the current domain only")
-	}
-
 	cookieDomain, err := utils.GetCookieDomain(app.runtime.AppURL, app.config.Auth.SubdomainsEnabled)
 
 	if err != nil {
