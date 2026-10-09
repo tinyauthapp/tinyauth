@@ -11,6 +11,7 @@ import (
 
 func ParseUsers(usersStr []string, userAttributes map[string]model.UserAttributes) (*[]model.LocalUser, error) {
 	var users []model.LocalUser
+	seen := make(map[string]struct{})
 
 	if len(usersStr) == 0 {
 		return nil, nil
@@ -24,6 +25,10 @@ func ParseUsers(usersStr []string, userAttributes map[string]model.UserAttribute
 		if err != nil {
 			return nil, err
 		}
+		if _, dup := seen[parsed.Username]; dup {
+			return nil, fmt.Errorf("duplicate user %q, each username must be configured only once", parsed.Username)
+		}
+		seen[parsed.Username] = struct{}{}
 		if attrs, ok := userAttributes[parsed.Username]; ok {
 			parsed.Attributes = attrs
 		}
