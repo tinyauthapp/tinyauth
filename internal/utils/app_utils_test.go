@@ -232,3 +232,18 @@ func TestFilter(t *testing.T) {
 	resultStr := utils.Filter(sliceStr, testFuncStr)
 	assert.Equal(t, expectedStr, resultStr)
 }
+
+func TestJoinHostPort(t *testing.T) {
+	assert.Equal(t, "0.0.0.0:3000", utils.JoinHostPort("0.0.0.0", "3000"))
+	assert.Equal(t, "[::]:3000", utils.JoinHostPort("::", "3000"))
+	assert.Equal(t, "[::]:3000", utils.JoinHostPort("[::]", "3000"))
+	assert.Equal(t, "[::1]:3000", utils.JoinHostPort("::1", "3000"))
+	assert.Equal(t, "[fe80::1%eth0]:3000", utils.JoinHostPort("fe80::1%eth0", "3000"))
+	assert.Equal(t, "localhost:3000", utils.JoinHostPort("localhost", "3000"))
+	assert.Equal(t, ":3000", utils.JoinHostPort("", "3000"))
+
+	// Unbalanced brackets are not stripped, so listening on them still fails
+	assert.Equal(t, "[::]]:3000", utils.JoinHostPort("::]", "3000"))
+	assert.Equal(t, "[[::]:3000", utils.JoinHostPort("[::", "3000"))
+	assert.Equal(t, "[127.0.0.1:3000", utils.JoinHostPort("[127.0.0.1", "3000"))
+}
