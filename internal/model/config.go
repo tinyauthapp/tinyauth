@@ -138,6 +138,7 @@ type ServerConfig struct {
 	Port       int    `description:"The port on which the server listens." yaml:"port,omitempty"`
 	Address    string `description:"The address on which the server listens." yaml:"address,omitempty"`
 	SocketPath string `description:"The path to the Unix socket." yaml:"socketPath,omitempty"`
+	SocketMode string `description:"Octal permission mode for the Unix socket (e.g. 0660). Left unset, the socket keeps the process umask's default." yaml:"socketMode,omitempty"`
 }
 
 type AuthConfig struct {
