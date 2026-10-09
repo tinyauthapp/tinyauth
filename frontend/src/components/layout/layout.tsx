@@ -15,11 +15,15 @@ const BaseLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div
       className="flex flex-col justify-center items-center min-h-svh px-4"
-      style={{
-        backgroundImage: `url(${ui.backgroundImage})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
+      style={
+        ui.backgroundCss
+          ? { background: ui.backgroundCss }
+          : {
+              backgroundImage: `url(${ui.backgroundImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+      }
     >
       <div className="absolute top-4 right-4">
         <QuickActions />

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -115,4 +116,12 @@ func GenerateString(length int) string {
 	src := make([]byte, length)
 	rand.Read(src)
 	return base64.RawURLEncoding.EncodeToString(src)[:length]
+}
+
+func ParseBasicAuth(auth string) (username, password string, ok bool) {
+	req := &http.Request{
+		Header: make(http.Header),
+	}
+	req.Header.Set("Authorization", auth)
+	return req.BasicAuth()
 }

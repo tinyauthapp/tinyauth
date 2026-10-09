@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -15,6 +16,17 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"go.uber.org/dig"
 )
+
+var (
+	ErrLDAPNoUsers       = errors.New("no users found")
+	ErrLDAPMultipleUsers = errors.New("multiple users found")
+)
+
+type UserInfoResult struct {
+	DN    string
+	CN    string
+	Email string
+}
 
 type LdapService struct {
 	log    *logger.Logger
@@ -146,7 +158,7 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 	return ldap.conn, nil
 }
 
-func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, cn string, err error) {
+func (ldap *LdapService) GetUserInfo(username string) (*UserInfoResult, error) {
 	escapedUsername := ldapgo.EscapeFilter(username)
 	filter := fmt.Sprintf(ldap.config.LDAP.SearchFilter, escapedUsername)
 
@@ -163,15 +175,22 @@ func (ldap *LdapService) GetUserInfo(username string) (dn string, email string, 
 
 	searchResult, err := ldap.conn.Search(searchRequest)
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
 
 	if len(searchResult.Entries) != 1 {
-		return "", "", "", fmt.Errorf("multiple or no entries found for user %s", username)
+		if len(searchResult.Entries) == 0 {
+			return nil, ErrLDAPNoUsers
+		}
+		return nil, ErrLDAPMultipleUsers
 	}
 
 	entry := searchResult.Entries[0]
-	return entry.DN, entry.GetAttributeValue("mail"), entry.GetAttributeValue("cn"), nil
+	return &UserInfoResult{
+		DN:    entry.DN,
+		CN:    entry.GetAttributeValue("cn"),
+		Email: entry.GetAttributeValue("mail"),
+	}, nil
 }
 
 func (ldap *LdapService) GetUserCount() (int, error) {

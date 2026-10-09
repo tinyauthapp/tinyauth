@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,7 +16,9 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestContextMiddleware(t *testing.T) {
@@ -26,9 +27,12 @@ func TestContextMiddleware(t *testing.T) {
 
 	cfg, runtime := test.CreateTestConfigs(t)
 
-	basicAuthHeader := func(username, password string) string {
-		return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
-	}
+	colonPasswd, err := bcrypt.GenerateFromPassword([]byte("pa:ss"), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	runtime.LocalUsers = append(runtime.LocalUsers, model.LocalUser{
+		Username: "colonuser",
+		Password: string(colonPasswd),
+	})
 
 	seedSession := func(t *testing.T, queries repository.Store, params repository.CreateSessionParams) {
 		t.Helper()
@@ -51,7 +55,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Skip path bypasses auth processing",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/healthz", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -165,7 +169,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Valid basic auth sets authenticated local context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -178,7 +182,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Invalid basic auth password yields no context",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -188,7 +192,7 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Basic auth is rejected for users with totp",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("totpuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("totpuser", "password"))
 				userCtx, _ := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -199,12 +203,12 @@ func TestContextMiddleware(t *testing.T) {
 			run: func(t *testing.T, args runArgs) {
 				for range 3 {
 					req := httptest.NewRequest("GET", "/api/test", nil)
-					req.Header.Set("Authorization", basicAuthHeader("testuser", "wrongpassword"))
+					req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
 					args.do(req)
 				}
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, recorder := args.do(req)
 
 				assert.Nil(t, userCtx)
@@ -226,7 +230,7 @@ func TestContextMiddleware(t *testing.T) {
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
 				req.AddCookie(&http.Cookie{Name: "tinyauth-session", Value: uuid})
-				req.Header.Set("Authorization", basicAuthHeader("totpuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("totpuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
@@ -238,12 +242,49 @@ func TestContextMiddleware(t *testing.T) {
 			description: "Ensure fallback to basic auth when cookie is missing",
 			run: func(t *testing.T, args runArgs) {
 				req := httptest.NewRequest("GET", "/api/test", nil)
-				req.Header.Set("Authorization", basicAuthHeader("testuser", "password"))
+				req.Header.Set("Authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
 				userCtx, _ := args.do(req)
 
 				require.NotNil(t, userCtx)
 				assert.Equal(t, "testuser", userCtx.GetUsername())
 				assert.True(t, userCtx.Authenticated)
+			},
+		},
+		{
+			description: "Valid x-tinyauth-Authorization sets authenticated local context",
+			run: func(t *testing.T, args runArgs) {
+				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
+				req.SetBasicAuth("testuser", "password")
+				userCtx, _ := args.do(req)
+
+				require.NotNil(t, userCtx)
+				assert.Equal(t, model.ProviderLocal, userCtx.Provider)
+				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.True(t, userCtx.Authenticated)
+			},
+		},
+		{
+			description: "x-tinyauth-authorization takes priority over authorization",
+			run: func(t *testing.T, args runArgs) {
+				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "password"))
+				req.Header.Set("authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
+				userCtx, _ := args.do(req)
+
+				require.NotNil(t, userCtx)
+				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.True(t, userCtx.Authenticated)
+			},
+		},
+		{
+			description: "x-tinyauth-authorization header being invalid doesn't fail the request",
+			run: func(t *testing.T, args runArgs) {
+				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.Header.Set("x-tinyauth-authorization", "Basic "+utils.EncodeBasicAuth("testuser", "wrongpassword"))
+				userCtx, _ := args.do(req)
+
+				assert.Nil(t, userCtx)
 			},
 		},
 	}

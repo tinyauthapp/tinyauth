@@ -69,3 +69,11 @@ make binary
 > [!NOTE]
 > Copying the example `docker-compose.dev.yml` file to `docker-compose.test.yml`
   is recommended to prevent accidental commits of sensitive information. The make recipe will automatically use `docker-compose.test.yml` as well as `docker-compose.test.prod.yml` (for the `make prod` recipe) if it exists.
+
+## Enabling Git hooks
+
+We recommend enabling Git hooks to ensure that any commits made are tested and vetted before being pushed. You can enable them by setting the Git hooks path to `.githooks`:
+
+```shell
+git config core.hooksPath .githooks
+```
