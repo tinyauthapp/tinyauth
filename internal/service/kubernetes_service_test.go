@@ -2,351 +2,295 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/apis/tinyauth/v1alpha1"
 	networking "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	clientfake "k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 )
 
-func watchedResourceForTest(t *testing.T, typ ResourceType) watchedResource {
-	t.Helper()
-	for _, resource := range supportedResources {
-		if resource.typ == typ {
-			return resource
-		}
-	}
-	t.Fatalf("unsupported resource type %q", typ)
-	return watchedResource{}
+func kubernetesTestLogger() *logger.Logger {
+	log := logger.NewLogger().WithTestConfig()
+	log.Init()
+	return log
 }
 
-func newKubernetesServiceForTest(log *logger.Logger) *KubernetesService {
-	service := &KubernetesService{
-		apps: make(map[resourceKey]routedApps),
-		log:  log,
+func newKubernetesServiceForTest() *KubernetesService {
+	return &KubernetesService{
+		apps:        make(map[ResourceMeta]map[string]model.App),
+		log:         kubernetesTestLogger(),
+		typedClient: clientfake.NewClientset(),
 	}
-	service.extractors.ingress = NewKubernetesIngressExtractor(KubernetesIngressExtractorInput{Log: log})
-	return service
 }
 
-func testIngress(name string, annotations map[string]string, hosts ...string) *typedItem {
+func testIngress(name string, annotations map[string]string, hosts ...string) *networking.Ingress {
 	rules := make([]networking.IngressRule, 0, len(hosts))
 	for _, host := range hosts {
 		rules = append(rules, networking.IngressRule{Host: host})
 	}
-	return &typedItem{
-		typ: ResourceTypeIngress,
-		ingress: &networking.Ingress{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Annotations: annotations},
-			Spec:       networking.IngressSpec{Rules: rules},
-		},
+	return &networking.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", Annotations: annotations},
+		Spec:       networking.IngressSpec{Rules: rules},
 	}
 }
 
-func lookupApp(service *KubernetesService, domain string) *model.App {
-	var app *model.App
-	service.getEntry(func(name string, candidate *model.App) bool {
-		if candidate.Config.Domain == domain || strings.HasPrefix(domain, name+".") {
-			app = candidate
-			return true
-		}
-		return false
-	})
-	return app
+func testApplication(name, domain string) *v1alpha1.Application {
+	return &v1alpha1.Application{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		Spec:       v1alpha1.ApplicationSpec{Config: v1alpha1.AppConfig{Domain: domain}},
+	}
 }
 
-func TestKubernetesServiceUpdateFromItem(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
+func testResource(typ ResourceType) watchedResource {
+	for _, res := range supportedResources {
+		if res.typ == typ {
+			return res
+		}
+	}
+	panic("unsupported test resource")
+}
 
+func TestTypedItemFromUnstructured(t *testing.T) {
 	tests := []struct {
-		name             string
-		resource         ResourceType
-		item             *typedItem
-		domain           string
-		wantConfigDomain string
-		allow            string
+		name    string
+		typ     ResourceType
+		object  map[string]any
+		wantErr bool
+		check   func(*testing.T, *typedItem)
 	}{
 		{
-			name:     "Ingress matches a configured domain",
-			resource: ResourceTypeIngress,
-			item: testIngress("ingress", map[string]string{
-				"tinyauth.apps.dashboard.config.domain": "dashboard.example.com",
-				"tinyauth.apps.dashboard.users.allow":   "alice",
-			}, "dashboard.example.com"),
-			domain: "dashboard.example.com", wantConfigDomain: "dashboard.example.com", allow: "alice",
+			name: "ingress", typ: ResourceTypeIngress,
+			object: map[string]any{
+				"metadata": map[string]any{"name": "route", "namespace": "default"},
+				"spec":     map[string]any{"rules": []any{map[string]any{"host": "app.example.com"}}},
+			},
+			check: func(t *testing.T, item *typedItem) {
+				require.NotNil(t, item.ingress)
+				assert.Equal(t, "app.example.com", item.ingress.Spec.Rules[0].Host)
+			},
 		},
 		{
-			name:     "Ingress matches an app name case insensitively",
-			resource: ResourceTypeIngress,
-			item: testIngress("ingress", map[string]string{
-				"tinyauth.apps.dashboard.users.allow": "alice",
-			}, "Dashboard.example.com"),
-			domain: "dashboard.example.com", allow: "alice",
+			name: "application", typ: ResourceTypeCRD,
+			object: map[string]any{
+				"metadata": map[string]any{"name": "app", "namespace": "default"},
+				"spec":     map[string]any{"config": map[string]any{"domain": "app.example.com"}},
+			},
+			check: func(t *testing.T, item *typedItem) {
+				require.NotNil(t, item.crd)
+				assert.Equal(t, "app.example.com", item.crd.Spec.Config.Domain)
+			},
 		},
-		{
-			name:     "Hostless Ingress matches a configured domain",
-			resource: ResourceTypeIngress,
-			item: testIngress("ingress", map[string]string{
-				"tinyauth.apps.dashboard.config.domain": "dashboard.example.com",
-				"tinyauth.apps.dashboard.users.allow":   "alice",
-			}, ""),
-			domain: "dashboard.example.com", wantConfigDomain: "dashboard.example.com", allow: "alice",
-		},
-		{
-			name:     "Hostless Ingress matches an app name",
-			resource: ResourceTypeIngress,
-			item: testIngress("ingress", map[string]string{
-				"tinyauth.apps.dashboard.users.allow": "alice",
-			}, ""),
-			domain: "dashboard.example.com", allow: "alice",
-		},
+		{name: "malformed ingress", typ: ResourceTypeIngress, object: map[string]any{"spec": "invalid"}, wantErr: true},
+		{name: "malformed application", typ: ResourceTypeCRD, object: map[string]any{"spec": "invalid"}, wantErr: true},
+		{name: "unknown resource", typ: "unknown", object: map[string]any{}, wantErr: true},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item, err := new(typedItem).fromUnstructured(tt.typ, &unstructured.Unstructured{Object: tt.object})
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, item)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.typ, item.typ)
+			tt.check(t, item)
+		})
+	}
+}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			service := newKubernetesServiceForTest(log)
-			service.updateFromItem(watchedResourceForTest(t, test.resource), test.item)
-
-			app := lookupApp(service, test.domain)
-			require.NotNil(t, app)
-			assert.Equal(t, test.allow, app.Users.Allow)
-			assert.Equal(t, test.wantConfigDomain, app.Config.Domain)
-			if test.item.ingress.Spec.Rules[0].Host == "" {
-				key := resourceKey{typ: test.resource, namespace: "default", name: "ingress"}
-				assert.Equal(t, []string{""}, service.apps[key].hosts)
+func TestKubernetesServiceWatchedItemChange(t *testing.T) {
+	ingress := testIngress("shared", map[string]string{"tinyauth.apps.app.users.allow": "alice"}, "app.example.com")
+	crd := testApplication("shared", "app.example.com")
+	crd.Spec.Users.Allow = "bob"
+	key := ResourceMeta{Typ: ResourceTypeIngress, Name: "shared", Namespace: "default"}
+	crdKey := ResourceMeta{Typ: ResourceTypeCRD, Name: "shared", Namespace: "default"}
+	tests := []struct {
+		name    string
+		res     watchedResource
+		item    *typedItem
+		event   watch.EventType
+		initial map[ResourceMeta]map[string]model.App
+		want    map[ResourceMeta]map[string]model.App
+	}{
+		{"add ingress", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress, ingress: ingress}, watch.Added, nil,
+			map[ResourceMeta]map[string]model.App{key: {"app": {Users: model.AppUsers{Allow: "alice"}}}}},
+		{"modify ingress", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress, ingress: testIngress("shared", map[string]string{"tinyauth.apps.app.users.allow": "carol"}, "app.example.com")}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{key: {"old": {}}}, map[ResourceMeta]map[string]model.App{key: {"app": {Users: model.AppUsers{Allow: "carol"}}}}},
+		{"delete ingress", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress, ingress: ingress}, watch.Deleted,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, nil},
+		{"update without annotations replaces stale apps", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress, ingress: testIngress("shared", nil, "app.example.com")}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, map[ResourceMeta]map[string]model.App{key: {}}},
+		{"invalid annotations remove stale entry", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress, ingress: testIngress("shared", map[string]string{"tinyauth.apps.app.users.invalid": "alice"}, "app.example.com")}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, nil},
+		{"nil item leaves cache untouched", testResource(ResourceTypeIngress), nil, watch.Added,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, map[ResourceMeta]map[string]model.App{key: {"app": {}}}},
+		{"nil ingress leaves cache untouched", testResource(ResourceTypeIngress), &typedItem{typ: ResourceTypeIngress}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, map[ResourceMeta]map[string]model.App{key: {"app": {}}}},
+		{"nil CRD leaves cache untouched", testResource(ResourceTypeCRD), &typedItem{typ: ResourceTypeCRD}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{crdKey: {"shared": {}}}, map[ResourceMeta]map[string]model.App{crdKey: {"shared": {}}}},
+		{"add CRD alongside ingress", testResource(ResourceTypeCRD), &typedItem{typ: ResourceTypeCRD, crd: crd}, watch.Added,
+			map[ResourceMeta]map[string]model.App{key: {"app": {}}}, map[ResourceMeta]map[string]model.App{key: {"app": {}}, crdKey: {"shared": {Config: model.AppConfig{Domain: "app.example.com"}, Users: model.AppUsers{Allow: "bob"}}}}},
+		{"invalid CRD removes stale entry", testResource(ResourceTypeCRD), &typedItem{typ: ResourceTypeCRD, crd: testApplication("shared", "")}, watch.Modified,
+			map[ResourceMeta]map[string]model.App{crdKey: {"shared": {}}}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newKubernetesServiceForTest()
+			for meta, apps := range tt.initial {
+				service.addResource(ExtractionResult{Meta: &meta, Apps: apps})
+			}
+			service.watchedItemChange(tt.res, tt.item, tt.event)
+			if tt.want == nil {
+				assert.Empty(t, service.apps)
+			} else {
+				assert.Equal(t, tt.want, service.apps)
 			}
 		})
 	}
 }
 
-func TestKubernetesServiceUpdateFromItemRemovesStaleEntries(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
+func TestKubernetesServiceResyncGVR(t *testing.T) {
+	for _, typ := range []ResourceType{ResourceTypeIngress, ResourceTypeCRD} {
+		t.Run(string(typ), func(t *testing.T) {
+			service := newKubernetesServiceForTest()
+			res := testResource(typ)
+			var obj *unstructured.Unstructured
+			if typ == ResourceTypeIngress {
+				obj = &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "networking.k8s.io/v1", "kind": "Ingress",
+					"metadata": map[string]any{"name": "keep", "namespace": "default", "annotations": map[string]any{"tinyauth.apps.app.users.allow": "alice"}},
+					"spec":     map[string]any{"rules": []any{map[string]any{"host": "app.example.com"}}},
+				}}
+			} else {
+				obj = &unstructured.Unstructured{Object: map[string]any{
+					"apiVersion": "tinyauth.app/v1alpha1", "kind": "Application",
+					"metadata": map[string]any{"name": "keep", "namespace": "default"},
+					"spec":     map[string]any{"config": map[string]any{"domain": "app.example.com"}},
+				}}
+			}
+			client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{res.gvr: obj.GetKind() + "List"}, obj)
+			service.client = client
+			keep := ResourceMeta{Typ: typ, Name: "keep", Namespace: "default"}
+			stale := ResourceMeta{Typ: typ, Name: "gone", Namespace: "default"}
+			other := ResourceMeta{Typ: ResourceTypeIngress, Name: "other", Namespace: "default"}
+			if typ == ResourceTypeIngress {
+				other.Typ = ResourceTypeCRD
+			}
+			service.addResource(ExtractionResult{Meta: &stale, Apps: map[string]model.App{"old": {}}})
+			service.addResource(ExtractionResult{Meta: &other, Apps: map[string]model.App{"unrelated": {}}})
+			require.NoError(t, service.resyncGVR(res, context.Background()))
+			assert.Contains(t, service.apps, keep)
+			assert.NotContains(t, service.apps, stale)
+			assert.Contains(t, service.apps, other)
 
-	tests := []struct {
-		name     string
-		resource ResourceType
-		item     *typedItem
-	}{
-		{"Ingress without annotations", ResourceTypeIngress, testIngress("route", nil, "app.example.com")},
-		{"Ingress without hosts", ResourceTypeIngress, testIngress("route", map[string]string{"tinyauth.apps.app.users.allow": "alice"})},
-		{"Ingress with invalid annotations", ResourceTypeIngress, testIngress("route", map[string]string{"tinyauth.apps.app.users.break": "invalid"}, "app.example.com")},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			service := newKubernetesServiceForTest(log)
-			key := resourceKey{typ: test.resource, namespace: "default", name: "route"}
-			service.addResourceEntries(key, []string{"app.example.com"}, []resourceEntry{{
-				name: "app",
-				app:  model.App{Config: model.AppConfig{Domain: "app.example.com"}},
-			}})
-
-			service.updateFromItem(watchedResourceForTest(t, test.resource), test.item)
-			assert.Nil(t, lookupApp(service, "app.example.com"))
+			require.NoError(t, client.Resource(res.gvr).Namespace("default").Delete(context.Background(), "keep", metav1.DeleteOptions{}))
+			require.NoError(t, service.resyncGVR(res, context.Background()))
+			assert.NotContains(t, service.apps, keep)
+			assert.Contains(t, service.apps, other)
 		})
 	}
 }
 
-func TestKubernetesServiceResyncRemovesMissingResources(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-	service := newKubernetesServiceForTest(log)
-	res := watchedResourceForTest(t, ResourceTypeIngress)
-
-	live := testIngress("keep", map[string]string{
-		"tinyauth.apps.keep.config.domain": "keep.example.com",
-	}, "keep.example.com")
-	items := []networking.Ingress{*live.ingress}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(networking.IngressList{
-			TypeMeta: metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "IngressList"},
-			Items:    items,
-		}); err != nil {
-			t.Errorf("encode ingress list: %v", err)
-		}
-	}))
-	defer server.Close()
-	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
-	require.NoError(t, err)
+func TestKubernetesServiceResyncGVRListFailure(t *testing.T) {
+	service := newKubernetesServiceForTest()
+	res := testResource(ResourceTypeIngress)
+	key := ResourceMeta{Typ: res.typ, Name: "keep", Namespace: "default"}
+	service.addResource(ExtractionResult{Meta: &key, Apps: map[string]model.App{"app": {}}})
+	client := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{res.gvr: "IngressList"})
+	client.PrependReactor("list", "ingresses", func(ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("list failed")
+	})
 	service.client = client
-	stale := resourceKey{typ: res.typ, namespace: "default", name: "gone"}
-	otherNamespace := resourceKey{typ: res.typ, namespace: "other", name: "keep"}
-	otherType := resourceKey{typ: ResourceType("other"), namespace: "default", name: "gone"}
-	for _, key := range []resourceKey{stale, otherNamespace, otherType} {
-		service.addResourceEntries(key, nil, []resourceEntry{{name: "app"}})
-	}
-
-	require.NoError(t, service.resyncGVR(res, context.Background()))
-	assert.Contains(t, service.apps, resourceKey{typ: res.typ, namespace: "default", name: "keep"})
-	assert.NotContains(t, service.apps, stale)
-	assert.NotContains(t, service.apps, otherNamespace)
-	assert.Contains(t, service.apps, otherType)
-
-	items = nil
-	require.NoError(t, service.resyncGVR(res, context.Background()))
-	assert.NotContains(t, service.apps, resourceKey{typ: res.typ, namespace: "default", name: "keep"})
-	assert.Contains(t, service.apps, otherType)
-}
-
-func TestKubernetesServiceResyncKeepsResourcesOnListFailure(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-	service := newKubernetesServiceForTest(log)
-	res := watchedResourceForTest(t, ResourceTypeIngress)
-	key := resourceKey{typ: res.typ, namespace: "default", name: "keep"}
-	service.addResourceEntries(key, nil, []resourceEntry{{name: "app"}})
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "list failed", http.StatusServiceUnavailable)
-	}))
-	defer server.Close()
-	client, err := dynamic.NewForConfig(&rest.Config{Host: server.URL})
-	require.NoError(t, err)
-	service.client = client
-
 	require.Error(t, service.resyncGVR(res, context.Background()))
 	assert.Contains(t, service.apps, key)
 }
 
-func TestTypedItemFromUnstructured(t *testing.T) {
-	tests := []struct {
-		name     string
-		resource ResourceType
-		item     unstructured.Unstructured
-		assert   func(t *testing.T, item *typedItem)
-	}{
-		{
-			name:     "Ingress",
-			resource: ResourceTypeIngress,
-			item: unstructured.Unstructured{Object: map[string]any{
-				"metadata": map[string]any{"name": "ingress", "namespace": "default"},
-				"spec":     map[string]any{"rules": []any{map[string]any{"host": "app.example.com"}}},
-			}},
-			assert: func(t *testing.T, item *typedItem) {
-				require.NotNil(t, item.ingress)
-				assert.Equal(t, "app.example.com", item.ingress.Spec.Rules[0].Host)
-			},
-		},
-	}
+func TestKubernetesServiceRunWatcher(t *testing.T) {
+	service := newKubernetesServiceForTest()
+	res := testResource(ResourceTypeIngress)
+	key := ResourceMeta{Typ: res.typ, Name: "route", Namespace: "default"}
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"metadata": map[string]any{"name": "route", "namespace": "default", "annotations": map[string]any{"tinyauth.apps.app.users.allow": "alice"}},
+		"spec":     map[string]any{"rules": []any{map[string]any{"host": "app.example.com"}}},
+	}}
+	w := watch.NewRaceFreeFake()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan bool, 1)
+	go func() { done <- service.runWatcher(res, w, ticker, ctx) }()
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			item, err := new(typedItem).fromUnstructured(test.resource, &test.item)
-			require.NoError(t, err)
-			assert.Equal(t, test.resource, item.typ)
-			test.assert(t, item)
-		})
+	w.Add(obj)
+	require.Eventually(t, func() bool {
+		service.mu.RLock()
+		defer service.mu.RUnlock()
+		return service.apps[key]["app"].Users.Allow == "alice"
+	}, time.Second, time.Millisecond)
+	w.Delete(obj)
+	require.Eventually(t, func() bool {
+		service.mu.RLock()
+		defer service.mu.RUnlock()
+		_, ok := service.apps[key]
+		return !ok
+	}, time.Second, time.Millisecond)
+	cancel()
+	select {
+	case restart := <-done:
+		assert.False(t, restart)
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not stop on cancellation")
 	}
 }
 
 func TestKubernetesServiceLookup(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-
-	tests := []struct {
+	for _, tt := range []struct {
 		name      string
 		connected bool
-		domain    string
-		wantApp   bool
+		wantCalls int
 	}{
-		{"Returns a matching app when connected", true, "app.example.com", true},
-		{"Skips the cache before the service is connected", false, "app.example.com", false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			service := newKubernetesServiceForTest(log)
-			service.connected = test.connected
-			service.addResourceEntries(resourceKey{typ: ResourceTypeIngress, namespace: "default", name: "route"}, []string{"app.example.com"}, []resourceEntry{{
-				name: "app",
-				app:  model.App{Config: model.AppConfig{Domain: "app.example.com"}},
-			}})
-
-			var app *model.App
-			err := service.Lookup(func(_ string, candidate *model.App) bool {
-				app = candidate
+		{"connected", true, 1},
+		{"disconnected", false, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newKubernetesServiceForTest()
+			service.connected = tt.connected
+			meta := ResourceMeta{Typ: ResourceTypeIngress, Name: "route", Namespace: "default"}
+			service.addResource(ExtractionResult{Meta: &meta, Apps: map[string]model.App{"app": {Config: model.AppConfig{Domain: "app.example.com"}}}})
+			calls := 0
+			err := service.Lookup(func(name string, app *model.App) bool {
+				calls++
+				assert.Equal(t, "app", name)
+				assert.Equal(t, "app.example.com", app.Config.Domain)
 				return true
 			})
 			require.NoError(t, err)
-			assert.Equal(t, test.wantApp, app != nil)
+			assert.Equal(t, tt.wantCalls, calls)
 		})
 	}
 }
 
-func TestKubernetesServiceKeepsResourceTypesSeparate(t *testing.T) {
-	log := logger.NewLogger().WithTestConfig()
-	log.Init()
-	service := newKubernetesServiceForTest(log)
-
-	resources := []struct {
-		resource ResourceType
-		item     *typedItem
-		domain   string
-	}{
-		{ResourceTypeIngress, testIngress("shared", map[string]string{"tinyauth.apps.ingress.config.domain": "ingress.example.com"}, "ingress.example.com"), "ingress.example.com"},
-	}
-
-	for _, resource := range resources {
-		service.updateFromItem(watchedResourceForTest(t, resource.resource), resource.item)
-	}
-	for _, resource := range resources {
-		assert.NotNil(t, lookupApp(service, resource.domain))
-	}
-}
-
-func TestKubernetesHostMatching(t *testing.T) {
-	tests := []struct {
-		name   string
-		host   string
-		domain string
-		want   bool
-	}{
-		{"Exact host", "app.example.com", "app.example.com", true},
-		{"Case insensitive exact host", "App.Example.com", "app.example.com", true},
-		{"Wildcard host", "*.example.com", "app.example.com", true},
-		{"Wildcard host is case insensitive", "*.Example.com", "App.example.com", true},
-		{"Wildcard does not match its apex", "*.example.com", "example.com", false},
-		{"Wildcard rejects empty label", "*.example.com", ".example.com", false},
-		{"Wildcard rejects multiple labels", "*.example.com", "deep.app.example.com", false},
-		{"Wildcard rejects other suffix", "*.example.com", "app.other.com", false},
-		{"Different host", "app.example.com", "other.example.com", false},
-		{"Empty host matches any hostname", "", "other.example.com", true},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, hostMatchesHostname(test.host, test.domain))
-		})
-	}
-}
-
-func TestKubernetesHostCoversName(t *testing.T) {
-	tests := []struct {
-		host string
-		name string
-		want bool
-	}{
-		{"", "dashboard", true},
-		{"dashboard.example.com", "dashboard", true},
-		{"Dashboard.example.com", "dashboard", true},
-		{"*.example.com", "dashboard", true},
-		{"other.example.com", "dashboard", false},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.want, hostCoversName(test.host, test.name))
-	}
+func TestKubernetesServiceGetEntryStopsOnMatch(t *testing.T) {
+	service := newKubernetesServiceForTest()
+	meta := ResourceMeta{Typ: ResourceTypeIngress, Name: "route", Namespace: "default"}
+	service.addResource(ExtractionResult{Meta: &meta, Apps: map[string]model.App{"app": {}}})
+	calls := 0
+	service.getEntry(func(_ string, _ *model.App) bool { calls++; return true })
+	assert.Equal(t, 1, calls)
+	service.removeResource(meta)
+	assert.Empty(t, service.apps)
 }
