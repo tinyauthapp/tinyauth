@@ -896,7 +896,7 @@ func (service *OIDCService) hashAndEncodePKCE(codeVerifier string) string {
 // We will just create a uuid out of the username and client name which remains stable,
 // but if username or client name changes then sub changes too.
 func (service *OIDCService) CreateSub(userContext model.UserContext, clientId string) string {
-	sub := fmt.Sprintf("%s:%s:%s", userContext.GetProviderID(), userContext.GetUsername(), clientId)
+	sub := fmt.Sprintf("%q:%q:%q", userContext.GetProviderID(), userContext.GetUsername(), clientId)
 
 	// The old sub created by the username and client ID is insecure
 	// because it allows subs from different providers to be the same
