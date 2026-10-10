@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -32,10 +31,13 @@ func main() {
 		Configuration: tConfig,
 		Resources:     loaders,
 		Run: func(_ []string) error {
-			// enable this on experimental features
-			if !reflect.DeepEqual(model.NewDefaultConfiguration(env).Experimental, tConfig.Experimental) {
-				colors := getColors()
-				fmt.Println(colors.yellow.Render("⚠") + " Experimental features are enabled, use with caution. Experimental features may change with each release.")
+			colors := getColors()
+			res := tConfig.Validate()
+			if len(res.Errors) > 0 {
+				return fmt.Errorf("invalid configuration: %s", strings.Join(res.Errors, ", "))
+			}
+			for _, warn := range res.Warnings {
+				fmt.Println(colors.yellow.Render("⚠") + " " + warn)
 			}
 			return runCmd(*tConfig)
 		},
