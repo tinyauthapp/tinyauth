@@ -75,6 +75,14 @@ type AppContextResponse struct {
 	App     ACRApp   `json:"app"`
 }
 
+// VR -> Version Response
+
+type VersionResponse struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+	Version string `json:"version"`
+}
+
 type ContextControllerInput struct {
 	dig.In
 
@@ -104,6 +112,10 @@ func NewContextController(i ContextControllerInput) *ContextController {
 	contextGroup := i.RouterGroup.Group("/context")
 	contextGroup.GET("/user", controller.userContextHandler)
 	contextGroup.GET("/app", controller.appContextHandler)
+
+	// Protected: the version is only returned to an authenticated user, so it is not exposed publicly.
+	// It is intentionally kept out of contextSkipPathsPrefix so the context middleware still runs.
+	i.RouterGroup.GET("/version", controller.versionHandler)
 
 	return controller
 }
@@ -146,6 +158,39 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	}
 
 	c.JSON(200, userContext)
+}
+
+// versionHandler returns the running Tinyauth version, but only to an authenticated user. An
+// unauthenticated request (no context, or a present-but-unauthenticated one such as a pending TOTP
+// or a Tailscale probe) receives the standard 401 body with no version, so the version is never
+// disclosed publicly and cannot be used to fingerprint the deployment for known vulnerabilities.
+func (controller *ContextController) versionHandler(c *gin.Context) {
+	context, err := new(model.UserContext).NewFromGin(c)
+
+	if err != nil {
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		}
+		c.JSON(200, VersionResponse{
+			Status:  401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	if !context.IsAuthenticated() {
+		c.JSON(200, VersionResponse{
+			Status:  401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, VersionResponse{
+		Status:  200,
+		Message: "Success",
+		Version: model.Version,
+	})
 }
 
 func (controller *ContextController) appContextHandler(c *gin.Context) {

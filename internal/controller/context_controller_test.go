@@ -108,6 +108,68 @@ func TestContextController(t *testing.T) {
 				return string(bytes)
 			}(),
 		},
+		{
+			description: "Ensure version returns 401 when unauthorized",
+			middlewares: []gin.HandlerFunc{},
+			path:        "/api/version",
+			expected: func() string {
+				expectedVersionResponse := VersionResponse{
+					Status:  401,
+					Message: "Unauthorized",
+				}
+				bytes, err := json.Marshal(expectedVersionResponse)
+				require.NoError(t, err)
+				return string(bytes)
+			}(),
+		},
+		{
+			description: "Ensure version returns 401 when context is unauthenticated",
+			middlewares: []gin.HandlerFunc{
+				func(c *gin.Context) {
+					c.Set("context", &model.UserContext{
+						Authenticated: false,
+						Provider:      model.ProviderTailscale,
+					})
+				},
+			},
+			path: "/api/version",
+			expected: func() string {
+				expectedVersionResponse := VersionResponse{
+					Status:  401,
+					Message: "Unauthorized",
+				}
+				bytes, err := json.Marshal(expectedVersionResponse)
+				require.NoError(t, err)
+				return string(bytes)
+			}(),
+		},
+		{
+			description: "Ensure version returns the build version when authorized",
+			middlewares: []gin.HandlerFunc{
+				func(c *gin.Context) {
+					c.Set("context", &model.UserContext{
+						Authenticated: true,
+						Provider:      model.ProviderLocal,
+						Local: &model.LocalContext{
+							BaseContext: model.BaseContext{
+								Username: "johndoe",
+							},
+						},
+					})
+				},
+			},
+			path: "/api/version",
+			expected: func() string {
+				expectedVersionResponse := VersionResponse{
+					Status:  200,
+					Message: "Success",
+					Version: model.Version,
+				}
+				bytes, err := json.Marshal(expectedVersionResponse)
+				require.NoError(t, err)
+				return string(bytes)
+			}(),
+		},
 	}
 
 	for _, test := range tests {
