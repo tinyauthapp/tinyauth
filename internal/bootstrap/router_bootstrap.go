@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/controller"
 	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -166,15 +166,16 @@ func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
 }
 
 func (app *BootstrapApp) serveUnix(ctx context.Context) error {
-	_, err := os.Stat(app.config.Server.SocketPath)
+	removed, inUse, err := utils.RemoveExistingSocket(app.config.Server.SocketPath)
 
-	if err == nil {
-		app.log.App.Info().Msgf("Removing existing socket file %s", app.config.Server.SocketPath)
-		err := os.Remove(app.config.Server.SocketPath)
+	if err != nil {
+		return fmt.Errorf("failed to remove existing socket file: %w", err)
+	}
 
-		if err != nil {
-			return fmt.Errorf("failed to remove existing socket file: %w", err)
-		}
+	if inUse {
+		app.log.App.Warn().Msgf("Replaced socket %s that was still in use by another process, the socket path is where Tinyauth listens and should not be shared with other services", app.config.Server.SocketPath)
+	} else if removed {
+		app.log.App.Info().Msgf("Removed existing socket file %s", app.config.Server.SocketPath)
 	}
 
 	app.log.App.Info().Msgf("Starting server on unix socket %s", app.config.Server.SocketPath)
