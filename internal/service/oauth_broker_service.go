@@ -55,7 +55,13 @@ func NewOAuthBrokerService(i OAuthBrokerServiceInput) *OAuthBrokerService {
 			service.services[name] = presetFunc(cfg, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from preset")
 		} else {
-			service.services[name] = NewOAuthService(cfg, name, i.Ctx)
+			resolved, err := resolveOIDCDiscovery(cfg, i.Ctx)
+
+			if err != nil {
+				service.log.App.Warn().Err(err).Str("service", name).Msg("Failed to resolve OIDC discovery document, using the configured endpoints")
+			}
+
+			service.services[name] = NewOAuthService(resolved, name, i.Ctx)
 			service.log.App.Debug().Str("service", name).Msg("Loaded OAuth service from custom config")
 		}
 	}
