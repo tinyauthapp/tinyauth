@@ -23,3 +23,13 @@ func newGitHubOAuthService(config model.OAuthServiceConfig, ctx context.Context)
 	config.TokenURL = endpoints.GitHub.TokenURL
 	return NewOAuthService(config, "github", ctx).WithUserinfoExtractor(githubExtractor)
 }
+
+func newTelegramOAuthService(config model.OAuthServiceConfig, ctx context.Context) *OAuthService {
+	config.Name = "Telegram"
+	// https://core.telegram.org/bots/telegram-login
+	// https://oauth.telegram.org/.well-known/openid-configuration
+	config.Scopes = []string{"openid", "profile"}
+	config.AuthURL = "https://oauth.telegram.org/auth"
+	config.TokenURL = "https://oauth.telegram.org/token"
+	return NewOAuthService(config, "telegram", ctx).WithUserinfoExtractor(telegramExtractor)
+}
