@@ -75,6 +75,16 @@ type AppContextResponse struct {
 	App     ACRApp   `json:"app"`
 }
 
+// VR -> Version Response
+
+type VersionResponse struct {
+	Status         int    `json:"status"`
+	Message        string `json:"message"`
+	Version        string `json:"version"`
+	CommitHash     string `json:"commitHash"`
+	BuildTimestamp string `json:"buildTimestamp"`
+}
+
 type ContextControllerInput struct {
 	dig.In
 
@@ -104,6 +114,8 @@ func NewContextController(i ContextControllerInput) *ContextController {
 	contextGroup := i.RouterGroup.Group("/context")
 	contextGroup.GET("/user", controller.userContextHandler)
 	contextGroup.GET("/app", controller.appContextHandler)
+
+	i.RouterGroup.GET("/version", controller.versionHandler)
 
 	return controller
 }
@@ -146,6 +158,37 @@ func (controller *ContextController) userContextHandler(c *gin.Context) {
 	}
 
 	c.JSON(200, userContext)
+}
+
+func (controller *ContextController) versionHandler(c *gin.Context) {
+	context, err := new(model.UserContext).NewFromGin(c)
+
+	if err != nil {
+		if !errors.Is(err, model.ErrUserContextNotFound) {
+			controller.log.App.Error().Err(err).Msg("Failed to create user context from request")
+		}
+		c.JSON(200, VersionResponse{
+			Status:  401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	if !context.IsAuthenticated() {
+		c.JSON(200, VersionResponse{
+			Status:  401,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, VersionResponse{
+		Status:         200,
+		Message:        "Success",
+		Version:        model.Version,
+		CommitHash:     model.CommitHash,
+		BuildTimestamp: model.BuildTimestamp,
+	})
 }
 
 func (controller *ContextController) appContextHandler(c *gin.Context) {
