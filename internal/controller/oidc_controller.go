@@ -327,6 +327,14 @@ func (controller *OIDCController) skipConsent(c *gin.Context) {
 		return
 	}
 
+	client, ok := controller.oidc.GetClient(authorizeReq.ClientID)
+	if ok && client.Trusted {
+		c.JSON(200, SkipConsentResponse{
+			SkipConsent: true,
+		})
+		return
+	}
+
 	consent, err := controller.oidc.GetOIDCConsent(c, userContext.GetUsername(), authorizeReq.ClientID)
 
 	if err != nil || consent == nil {

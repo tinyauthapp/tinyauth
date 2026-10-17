@@ -32,6 +32,13 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					TrustedRedirectURIs: []string{"https://test.example.com/callback"},
 					Name:                "Test Client",
 				},
+				"trusted-test": {
+					ClientID:            "trusted-client-id",
+					ClientSecret:        "trusted-client-secret",
+					TrustedRedirectURIs: []string{"https://trusted.example.com/callback"},
+					Trusted:             true,
+					Name:                "Trusted Test Client",
+				},
 			},
 			PrivateKeyPath: filepath.Join(tempDir, "key.pem"),
 			PublicKeyPath:  filepath.Join(tempDir, "key.pub"),
