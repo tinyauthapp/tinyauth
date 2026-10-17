@@ -267,12 +267,16 @@ func (auth *AuthService) GetLDAPUser(userDN string) (*model.LDAPUser, error) {
 	}, nil
 }
 
-func (auth *AuthService) IsAccountLocked(identifier string) (bool, int) {
-	if auth.config.Auth.LoginMaxRetries <= 0 || auth.config.Auth.LoginTimeout <= 0 {
+func (auth *AuthService) rateLimitEnabled() bool {
+	return auth.config.Auth.LoginMaxRetries > 0 && auth.config.Auth.LoginTimeout > 0
+}
+
+func (auth *AuthService) IsAccountLocked(identifier string, actions cache.CacheStoreActions[LoginAttempt]) (bool, int) {
+	if !auth.rateLimitEnabled() {
 		return false, 0
 	}
 
-	attempt, exists := auth.caches.login.Get(identifier)
+	attempt, exists := actions.Get(identifier)
 	if !exists {
 		return false, 0
 	}
@@ -285,46 +289,51 @@ func (auth *AuthService) IsAccountLocked(identifier string) (bool, int) {
 	return false, 0
 }
 
-func (auth *AuthService) RecordLoginAttempt(identifier string, success bool) {
-	if auth.config.Auth.LoginMaxRetries <= 0 || auth.config.Auth.LoginTimeout <= 0 {
+func (auth *AuthService) RecordLoginAttempt(identifier string, success bool, actions cache.CacheStoreActions[LoginAttempt]) {
+	if !auth.rateLimitEnabled() {
 		return
 	}
 
+	entry, ok := actions.Get(identifier)
+
+	if !ok {
+		attempt := LoginAttempt{
+			LastAttempt: time.Now(),
+		}
+		if !success {
+			attempt.FailedAttempts = 1
+			if attempt.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
+				attempt.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
+				auth.log.App.Warn().Str("identifier", identifier).Int("failed_attempts", attempt.FailedAttempts).Msg("Account locked due to too many failed login attempts")
+			}
+		}
+		actions.Set(identifier, attempt, time.Duration(auth.config.Auth.LoginTimeout)*time.Second)
+		return
+	}
+
+	entry.LastAttempt = time.Now()
+
+	if success {
+		entry.FailedAttempts = 0
+		entry.LockedUntil = time.Time{}
+	} else {
+		entry.FailedAttempts++
+
+		if entry.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
+			entry.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
+			auth.log.App.Warn().Str("identifier", identifier).Int("failed_attempts", entry.FailedAttempts).Msg("Account locked due to too many failed login attempts")
+		}
+	}
+
+	actions.Set(identifier, entry, time.Duration(auth.config.Auth.LoginTimeout)*time.Second)
+}
+
+func (auth *AuthService) WithLoginAttempt(f func(actions cache.CacheStoreActions[LoginAttempt]) error) error {
+	var err error
 	auth.caches.login.WithLock(func(actions cache.CacheStoreActions[LoginAttempt]) {
-		entry, ok := actions.Get(identifier)
-
-		if !ok {
-			attempt := LoginAttempt{
-				LastAttempt: time.Now(),
-			}
-			if !success {
-				attempt.FailedAttempts = 1
-				if attempt.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
-					attempt.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
-					auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", attempt.FailedAttempts).Msg("Account locked due to too many failed login attempts")
-				}
-			}
-			// match current tinyauth behavior which doesn't expire rate limits
-			actions.Set(identifier, attempt, 0)
-			return
-		}
-
-		entry.LastAttempt = time.Now()
-
-		if success {
-			entry.FailedAttempts = 0
-			entry.LockedUntil = time.Time{}
-		} else {
-			entry.FailedAttempts++
-
-			if entry.FailedAttempts >= auth.config.Auth.LoginMaxRetries {
-				entry.LockedUntil = time.Now().Add(time.Duration(auth.config.Auth.LoginTimeout) * time.Second)
-				auth.log.App.Warn().Str("identifier", identifier).Int("failedAttempts", entry.FailedAttempts).Msg("Account locked due to too many failed login attempts")
-			}
-		}
-
-		actions.Set(identifier, entry, 0)
+		err = f(actions)
 	})
+	return err
 }
 
 // We could also directly access the policyEngine.effectToAccess but
@@ -337,7 +346,7 @@ func (auth *AuthService) IsEmailWhitelisted(provider string, email string) bool 
 		}
 		match, err := utils.CheckFilter(strings.Join(whitelist, ","), email)
 		if err != nil {
-			if err == utils.ErrFilterEmpty {
+			if errors.Is(err, utils.ErrFilterEmpty) {
 				return EffectAbstain
 			}
 			auth.log.App.Error().Err(err).Str("email", email).Msg("Failed to evaluate email whitelist filter, defaulting to deny")

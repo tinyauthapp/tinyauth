@@ -11,6 +11,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -72,49 +73,59 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.App.Debug().Str("username", req.Username).Msg("Login attempt")
 
-	search, err := controller.auth.SearchUser(req.Username)
+	var search *model.UserSearch
 
-	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			controller.auth.DummyPasswordCheck(req.Password)
-			controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
-			controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
+	err = controller.auth.WithLoginAttempt(func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
+		search, err = controller.auth.SearchUser(req.Username)
+
+		if err != nil {
+			if errors.Is(err, service.ErrUserNotFound) {
+				controller.auth.DummyPasswordCheck(req.Password)
+				controller.log.App.Warn().Str("username", req.Username).Msg("User not found during login attempt")
+				controller.log.AuditLoginFailure(req.Username, "unknown", c.ClientIP(), "user not found")
+				c.JSON(401, gin.H{
+					"status":  401,
+					"message": "Unauthorized",
+				})
+				return fmt.Errorf("user not found")
+			}
+			controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error searching for user during login attempt")
+			c.JSON(500, gin.H{
+				"status":  500,
+				"message": "Internal Server Error",
+			})
+			return fmt.Errorf("error searching for user")
+		}
+
+		isLocked, remaining := controller.auth.IsAccountLocked(req.Username, actions)
+
+		if isLocked {
+			controller.log.App.Warn().Str("username", req.Username).Msg("Account is locked due to too many failed login attempts")
+			controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "account locked")
+			c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
+			c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
+			c.JSON(429, gin.H{
+				"status":  429,
+				"message": fmt.Sprintf("Too many failed login attempts. Try again in %d seconds", remaining),
+			})
+			return fmt.Errorf("account locked")
+		}
+
+		if err = controller.auth.CheckUserPassword(*search, req.Password); err != nil {
+			controller.log.App.Warn().Str("username", req.Username).Msg("Invalid password during login attempt")
+			controller.auth.RecordLoginAttempt(req.Username, false, actions)
+			controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "invalid password")
 			c.JSON(401, gin.H{
 				"status":  401,
 				"message": "Unauthorized",
 			})
-			return
+			return fmt.Errorf("invalid password")
 		}
-		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error searching for user during login attempt")
-		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Internal Server Error",
-		})
-		return
-	}
 
-	isLocked, remaining := controller.auth.IsAccountLocked(req.Username)
+		return nil
+	})
 
-	if isLocked {
-		controller.log.App.Warn().Str("username", req.Username).Msg("Account is locked due to too many failed login attempts")
-		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "account locked")
-		c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
-		c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
-		c.JSON(429, gin.H{
-			"status":  429,
-			"message": fmt.Sprintf("Too many failed login attempts. Try again in %d seconds", remaining),
-		})
-		return
-	}
-
-	if err := controller.auth.CheckUserPassword(*search, req.Password); err != nil {
-		controller.log.App.Warn().Str("username", req.Username).Msg("Invalid password during login attempt")
-		controller.auth.RecordLoginAttempt(req.Username, false)
-		controller.log.AuditLoginFailure(req.Username, search.Type.String(), c.ClientIP(), "invalid password")
-		c.JSON(401, gin.H{
-			"status":  401,
-			"message": "Unauthorized",
-		})
+	if err != nil {
 		return
 	}
 
@@ -216,7 +227,10 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.AuditLoginSuccess(req.Username, search.Type.String(), c.ClientIP())
 
-	controller.auth.RecordLoginAttempt(req.Username, true)
+	controller.auth.WithLoginAttempt(func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
+		controller.auth.RecordLoginAttempt(req.Username, true, actions)
+		return nil
+	})
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -317,56 +331,66 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 
 	controller.log.App.Debug().Str("username", context.GetUsername()).Msg("TOTP verification attempt")
 
-	isLocked, remaining := controller.auth.IsAccountLocked(context.GetUsername())
+	var user *model.LocalUser
 
-	if isLocked {
-		controller.log.App.Warn().Str("username", context.GetUsername()).Msg("Account is locked due to too many failed TOTP attempts")
-		controller.log.AuditLoginFailure(context.GetUsername(), "local", c.ClientIP(), "account locked")
-		c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
-		c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
-		c.JSON(429, gin.H{
-			"status":  429,
-			"message": fmt.Sprintf("Too many failed TOTP attempts. Try again in %d seconds", remaining),
-		})
-		return
-	}
+	err = controller.auth.WithLoginAttempt(func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
+		isLocked, remaining := controller.auth.IsAccountLocked(context.GetUsername(), actions)
 
-	user := controller.auth.GetLocalUser(context.GetUsername())
-
-	if user == nil {
-		controller.log.App.Error().Str("username", context.GetUsername()).Msg("Local user not found during TOTP verification")
-		c.JSON(401, gin.H{
-			"status":  401,
-			"message": "Unauthorized",
-		})
-		return
-	}
-
-	ok := totp.Validate(req.Code, user.TOTPSecret)
-
-	if !ok {
-		controller.log.App.Warn().Str("username", context.GetUsername()).Msg("Invalid TOTP code during verification attempt")
-		controller.auth.RecordLoginAttempt(context.GetUsername(), false)
-		controller.log.AuditLoginFailure(context.GetUsername(), "local", c.ClientIP(), "invalid TOTP code")
-		c.JSON(401, gin.H{
-			"status":  401,
-			"message": "Unauthorized",
-		})
-		return
-	}
-
-	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
-
-	if err == nil {
-		_, err = controller.auth.DeleteSession(c, uuid)
-		if err != nil {
-			controller.log.App.Error().Err(err).Msg("Failed to delete pending TOTP session after successful verification")
+		if isLocked {
+			controller.log.App.Warn().Str("username", context.GetUsername()).Msg("Account is locked due to too many failed TOTP attempts")
+			controller.log.AuditLoginFailure(context.GetUsername(), "local", c.ClientIP(), "account locked")
+			c.Writer.Header().Add("x-tinyauth-lock-locked", "true")
+			c.Writer.Header().Add("x-tinyauth-lock-reset", time.Now().Add(time.Duration(remaining)*time.Second).Format(time.RFC3339))
+			c.JSON(429, gin.H{
+				"status":  429,
+				"message": fmt.Sprintf("Too many failed TOTP attempts. Try again in %d seconds", remaining),
+			})
+			return fmt.Errorf("account locked")
 		}
-	} else {
-		controller.log.App.Warn().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session, cannot delete it")
-	}
 
-	controller.auth.RecordLoginAttempt(context.GetUsername(), true)
+		user = controller.auth.GetLocalUser(context.GetUsername())
+
+		if user == nil {
+			controller.log.App.Error().Str("username", context.GetUsername()).Msg("Local user not found during TOTP verification")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return fmt.Errorf("local user not found")
+		}
+
+		ok := totp.Validate(req.Code, user.TOTPSecret)
+
+		if !ok {
+			controller.log.App.Warn().Str("username", context.GetUsername()).Msg("Invalid TOTP code during verification attempt")
+			controller.auth.RecordLoginAttempt(context.GetUsername(), false, actions)
+			controller.log.AuditLoginFailure(context.GetUsername(), "local", c.ClientIP(), "invalid TOTP code")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return fmt.Errorf("invalid TOTP code")
+		}
+
+		uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+
+		if err == nil {
+			_, err = controller.auth.DeleteSession(c, uuid)
+			if err != nil {
+				controller.log.App.Error().Err(err).Msg("Failed to delete pending TOTP session after successful verification")
+			}
+		} else {
+			controller.log.App.Warn().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session, cannot delete it")
+		}
+
+		controller.auth.RecordLoginAttempt(context.GetUsername(), true, actions)
+
+		return nil
+	})
+
+	if err != nil {
+		return
+	}
 
 	sessionCookie := repository.Session{
 		Username: user.Username,

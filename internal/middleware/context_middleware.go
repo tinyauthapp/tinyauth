@@ -12,6 +12,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 
 	"github.com/gin-gonic/gin"
@@ -253,33 +254,49 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 // any response headers to set.
 func (m *ContextMiddleware) basicAuth(username string, password string) (*model.UserContext, map[string]string, error) {
 	headers := make(map[string]string)
+	errLocked := errors.New("account locked")
 	userContext := new(model.UserContext)
-	locked, remaining := m.auth.IsAccountLocked(username)
 
-	if locked {
-		m.log.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
-		headers["x-tinyauth-lock-locked"] = "true"
-		headers["x-tinyauth-lock-reset"] = time.Now().Add(time.Duration(remaining) * time.Second).Format(time.RFC3339)
-		return nil, headers, nil
-	}
+	var search *model.UserSearch
 
-	search, err := m.auth.SearchUser(username)
+	err := m.auth.WithLoginAttempt(func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
+		locked, remaining := m.auth.IsAccountLocked(username, actions)
 
-	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			m.auth.DummyPasswordCheck(password)
+		if locked {
+			m.log.App.Debug().Msgf("Account for user %s is locked for %d seconds, denying auth", username, remaining)
+			headers["x-tinyauth-lock-locked"] = "true"
+			headers["x-tinyauth-lock-reset"] = time.Now().Add(time.Duration(remaining) * time.Second).Format(time.RFC3339)
+			return errLocked
 		}
-		return nil, nil, fmt.Errorf("error searching for user: %w", err)
-	}
 
-	err = m.auth.CheckUserPassword(*search, password)
+		var err error
+		search, err = m.auth.SearchUser(username)
+
+		if err != nil {
+			if errors.Is(err, service.ErrUserNotFound) {
+				m.auth.DummyPasswordCheck(password)
+			}
+			return fmt.Errorf("error searching for user: %w", err)
+		}
+
+		err = m.auth.CheckUserPassword(*search, password)
+
+		if err != nil {
+			m.auth.RecordLoginAttempt(username, false, actions)
+			return fmt.Errorf("invalid password for basic auth user: %w", err)
+		}
+
+		m.auth.RecordLoginAttempt(username, true, actions)
+
+		return nil
+	})
 
 	if err != nil {
-		m.auth.RecordLoginAttempt(username, false)
-		return nil, nil, fmt.Errorf("invalid password for basic auth user: %w", err)
+		if errors.Is(err, errLocked) {
+			return nil, headers, nil
+		}
+		return nil, nil, err
 	}
-
-	m.auth.RecordLoginAttempt(username, true)
 
 	switch search.Type {
 	case model.UserLocal:
