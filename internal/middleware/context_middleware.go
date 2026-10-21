@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -79,7 +80,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		uuid, err := c.Cookie(m.runtime.SessionCookieName)
 
 		if err == nil {
-			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.ClientIP())
+			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.ClientIP(), c.RemoteIP())
 
 			if err == nil {
 				if cookie != nil {
@@ -129,10 +130,11 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		// Lastly check if we have a tailscale session to add
 		if m.tailscale != nil {
-			tailscaleContext, err := m.tailscaleWhois(c.ClientIP())
+			ip := tailscaleClientIP(c.ClientIP(), c.RemoteIP())
+			tailscaleContext, err := m.tailscaleWhois(ip)
 
 			if err != nil {
-				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", c.ClientIP(), err)
+				m.log.App.Error().Err(err).Msgf("Error performing tailscale whois for IP %s: %v", ip, err)
 			}
 
 			if tailscaleContext != nil {
@@ -148,7 +150,21 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 	}
 }
 
-func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip string) (*model.UserContext, *http.Cookie, error) {
+func tailscaleClientIP(clientIP, peerIP string) string {
+	parsedClientIP := net.ParseIP(clientIP)
+
+	if parsedClientIP == nil {
+		return ""
+	}
+
+	if parsedClientIP.Equal(net.ParseIP(peerIP)) {
+		return ""
+	}
+
+	return clientIP
+}
+
+func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid, clientIP, peerIP string) (*model.UserContext, *http.Cookie, error) {
 	session, err := m.auth.GetSession(ctx, uuid)
 
 	if err != nil {
@@ -184,6 +200,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
 	case model.ProviderTailscale:
+		ip := tailscaleClientIP(clientIP, peerIP)
 		tailscaleContext, err := m.tailscaleWhois(ip)
 
 		if err != nil {
@@ -363,7 +380,7 @@ func (m *ContextMiddleware) isIgnorePath(path string) bool {
 }
 
 func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, error) {
-	if m.tailscale == nil {
+	if m.tailscale == nil || ip == "" {
 		return nil, nil
 	}
 

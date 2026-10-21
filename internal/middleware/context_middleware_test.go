@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -71,7 +72,7 @@ func TestContextMiddleware(t *testing.T) {
 			},
 		},
 		{
-			description: "Valid session cookie sets authenticated local context",
+			description: "Valid local session cookie authenticates with unusable client addresses",
 			run: func(t *testing.T, args runArgs) {
 				uuid := "session-valid-local"
 				seedSession(t, args.queries, repository.CreateSessionParams{
@@ -83,6 +84,8 @@ func TestContextMiddleware(t *testing.T) {
 				})
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
+				req.RemoteAddr = "invalid"
+				req.Header.Set("X-Forwarded-For", "invalid")
 				req.AddCookie(&http.Cookie{Name: "tinyauth-session", Value: uuid})
 				userCtx, _ := args.do(req)
 
@@ -352,6 +355,47 @@ func TestContextMiddleware(t *testing.T) {
 			}
 
 			test.run(t, runArgs{do: do, queries: store})
+		})
+	}
+}
+
+func TestTailscaleClientIP(t *testing.T) {
+	tests := []struct {
+		description string
+		peer        string
+		proxies     []string
+		forwarded   string
+		unix        bool
+		expected    string
+	}{
+		{description: "Trusted forwarded client", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.2", expected: "100.101.0.2"},
+		{description: "No trusted proxies", peer: "100.101.0.1:1234", forwarded: "100.101.0.2"},
+		{description: "Mismatched trusted proxy", peer: "100.101.0.1:1234", proxies: []string{"192.0.2.1"}, forwarded: "100.101.0.2"},
+		{description: "Missing forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}},
+		{description: "Malformed forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "invalid"},
+		{description: "Mapped IPv4 peer equality", peer: "[::ffff:100.101.0.1]:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.1"},
+		{description: "Expanded IPv6 peer equality", peer: "[fd7a:115c:a1e0:0:0:0:0:1]:1234", proxies: []string{"fd7a:115c:a1e0::1"}, forwarded: "fd7a:115c:a1e0::1"},
+		{description: "Invalid address", peer: "invalid"},
+		{description: "Unix forwarded client", peer: "@", forwarded: "100.101.0.2", unix: true, expected: "100.101.0.2"},
+		{description: "Unix missing forwarding", peer: "@", unix: true},
+		{description: "Unix malformed forwarding", peer: "@", forwarded: "invalid", unix: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.description, func(t *testing.T) {
+			c, engine := gin.CreateTestContext(httptest.NewRecorder())
+			require.NoError(t, engine.SetTrustedProxies(tc.proxies))
+
+			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+			c.Request.RemoteAddr = tc.peer
+			c.Request.Header.Set("X-Forwarded-For", tc.forwarded)
+
+			if tc.unix {
+				ctx := context.WithValue(c.Request.Context(), http.LocalAddrContextKey, &net.UnixAddr{Name: "/tmp/tinyauth-test.sock", Net: "unix"})
+				c.Request = c.Request.WithContext(ctx)
+			}
+
+			assert.Equal(t, tc.expected, tailscaleClientIP(c.ClientIP(), c.RemoteIP()))
 		})
 	}
 }

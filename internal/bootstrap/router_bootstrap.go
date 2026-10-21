@@ -17,12 +17,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func configureRouterEngine(engine *gin.Engine) {
+	// Platform headers must not bypass configured proxy trust.
+	engine.TrustedPlatform = ""
+	engine.Use(gin.Recovery())
+}
+
 func (app *BootstrapApp) setupRouter() error {
 	// we don't want gin debug mode
 	gin.SetMode(gin.ReleaseMode)
 
 	engine := gin.New()
-	engine.Use(gin.Recovery())
+	configureRouterEngine(engine)
 
 	if len(app.config.Auth.TrustedProxies) > 0 {
 		err := engine.SetTrustedProxies(app.config.Auth.TrustedProxies)
