@@ -210,6 +210,7 @@ type UIConfig struct {
 	ForgotPasswordMessage string `description:"Message displayed on the forgot password page." yaml:"forgotPasswordMessage,omitempty"`
 	BackgroundImage       string `description:"Path to the background image." yaml:"backgroundImage,omitempty"`
 	BackgroundCSS         string `description:"Value of the CSS background property, takes precedence over the background image." yaml:"backgroundCss,omitempty"`
+	Favicon               string `description:"Path to the favicon." yaml:"favicon,omitempty"`
 	WarningsEnabled       bool   `description:"Enable UI warnings." yaml:"warningsEnabled,omitempty"`
 }
 
