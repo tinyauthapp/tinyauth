@@ -62,7 +62,7 @@ jobs:
         run: cp -r frontend/dist internal/assets/dist
 
       - name: Run tests
-        run: go test -coverpkg=github.com/tinyauthapp/tinyauth/internal/middleware -coverprofile=coverage.txt -v ./... ./internal/middleware/__tests__
+        run: go test -coverprofile=coverage.txt -v ./...
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1

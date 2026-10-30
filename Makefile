@@ -69,15 +69,15 @@ binary-linux-arm64:
 
 # Go test
 test:
-	go test -v ./... ./internal/middleware/__tests__
+	go test -v ./...
 
 # Go vet
 vet:
-	go vet ./... ./internal/middleware/__tests__
+	go vet ./...
 
 # Go race
 test-race:
-	go test -race ./... ./internal/middleware/__tests__
+	go test -race ./...
 
 # Development
 dev:

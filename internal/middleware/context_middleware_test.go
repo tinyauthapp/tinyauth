@@ -1,4 +1,4 @@
-package middleware_test
+package middleware
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -325,7 +324,7 @@ func TestContextMiddleware(t *testing.T) {
 
 	require.NoError(t, err)
 
-	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareInput{
+	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
 		Log:              log,
 		RuntimeConfig:    &runtime,
 		AuthService:      authService,
@@ -398,7 +397,7 @@ func TestTailscaleClientIP(t *testing.T) {
 				c.Request = c.Request.WithContext(ctx)
 			}
 
-			assert.Equal(t, tc.expected, middleware.TailscaleClientIP(c.ClientIP(), c.RemoteIP(), len(tc.proxies) > 0))
+			assert.Equal(t, tc.expected, tailscaleClientIP(c.ClientIP(), c.RemoteIP(), len(tc.proxies) > 0))
 		})
 	}
 }

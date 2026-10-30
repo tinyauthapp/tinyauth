@@ -130,7 +130,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		// Lastly check if we have a tailscale session to add
 		if m.tailscale != nil {
-			ip := TailscaleClientIP(c.ClientIP(), c.RemoteIP(), m.runtime.TrustedProxiesConfigured)
+			ip := tailscaleClientIP(c.ClientIP(), c.RemoteIP(), m.runtime.TrustedProxiesConfigured)
 			tailscaleContext, err := m.tailscaleWhois(ip)
 
 			if err != nil {
@@ -150,7 +150,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 	}
 }
 
-func TailscaleClientIP(clientIP, peerIP string, trustedProxiesConfigured bool) string {
+func tailscaleClientIP(clientIP, peerIP string, trustedProxiesConfigured bool) string {
 	parsedClientIP := net.ParseIP(clientIP)
 
 	if parsedClientIP == nil {
@@ -202,7 +202,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid, clientIP, peer
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
 	case model.ProviderTailscale:
-		ip := TailscaleClientIP(clientIP, peerIP, m.runtime.TrustedProxiesConfigured)
+		ip := tailscaleClientIP(clientIP, peerIP, m.runtime.TrustedProxiesConfigured)
 		tailscaleContext, err := m.tailscaleWhois(ip)
 
 		if err != nil {
