@@ -375,6 +375,8 @@ func TestTailscaleClientIP(t *testing.T) {
 		{description: "Missing forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}},
 		{description: "Malformed forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "invalid"},
 		{description: "Trusted proxy network", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.0/24"}},
+		{description: "Exhausted exact trusted proxy chain", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1", "100.101.0.2"}, forwarded: "100.101.0.2"},
+		{description: "Exhausted trusted proxy network", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.0/24"}, forwarded: "100.101.0.2"},
 		{description: "Mapped IPv4 peer equality", peer: "[::ffff:100.101.0.1]:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.1"},
 		{description: "Expanded IPv6 peer equality", peer: "[fd7a:115c:a1e0:0:0:0:0:1]:1234", proxies: []string{"fd7a:115c:a1e0::1"}, forwarded: "fd7a:115c:a1e0::1"},
 		{description: "Invalid address", peer: "invalid"},
@@ -397,7 +399,7 @@ func TestTailscaleClientIP(t *testing.T) {
 				c.Request = c.Request.WithContext(ctx)
 			}
 
-			assert.Equal(t, tc.expected, tailscaleClientIP(c.ClientIP(), c.RemoteIP(), len(tc.proxies) > 0))
+			assert.Equal(t, tc.expected, tailscaleClientIP(c.ClientIP(), c.RemoteIP(), tc.proxies))
 		})
 	}
 }
