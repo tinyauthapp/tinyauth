@@ -76,6 +76,59 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 					Block: "^/admin$",
 				},
 			},
+			"app_acl_precedence_block": {
+				Config: model.AppConfig{
+					Domain: "acl-precedence-block.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "^/allowed$",
+				},
+				IP: model.AppIP{
+					Block: []string{"10.10.10.10"},
+				},
+			},
+			"app_acl_precedence_allow": {
+				Config: model.AppConfig{
+					Domain: "acl-precedence-allow.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "^/allowed$",
+				},
+				IP: model.AppIP{
+					Allow: []string{"10.10.10.10"},
+				},
+			},
+			"app_acl_precedence_global": {
+				Config: model.AppConfig{
+					Domain: "acl-precedence-global.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "^/allowed$",
+				},
+			},
+			"app_acl_precedence_path_block": {
+				Config: model.AppConfig{
+					Domain: "acl-precedence-path-block.example.com",
+				},
+				Path: model.AppPath{
+					Block: "^/private$",
+				},
+				IP: model.AppIP{
+					Block: []string{"10.10.10.10"},
+				},
+			},
+			"app_acl_precedence_bypass": {
+				Config: model.AppConfig{
+					Domain: "acl-precedence-bypass.example.com",
+				},
+				Path: model.AppPath{
+					Allow: "^/allowed$",
+				},
+				IP: model.AppIP{
+					Block:  []string{"10.10.10.10"},
+					Bypass: []string{"10.10.10.10"},
+				},
+			},
 			"app_user_allow": {
 				Config: model.AppConfig{
 					Domain: "user-allow.example.com",

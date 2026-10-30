@@ -134,16 +134,6 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		return
 	}
 
-	if controller.policyEngine.Evaluate(service.RuleAuthEnabled, aclsCtx) {
-		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
-		controller.setHeaders(c, acls)
-		c.JSON(200, gin.H{
-			"status":  200,
-			"message": "Authenticated",
-		})
-		return
-	}
-
 	if !controller.policyEngine.Evaluate(service.RuleIPAllowed, aclsCtx) {
 		queries, err := query.Values(UnauthorizedQuery{
 			Resource: strings.Split(proxyCtx.Host, ".")[0],
@@ -168,6 +158,16 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 		}
 
 		c.Redirect(http.StatusFound, redirectURL)
+		return
+	}
+
+	if controller.policyEngine.Evaluate(service.RuleAuthEnabled, aclsCtx) {
+		controller.log.App.Debug().Msg("Authentication is disabled for this resource, allowing access without authentication")
+		controller.setHeaders(c, acls)
+		c.JSON(200, gin.H{
+			"status":  200,
+			"message": "Authenticated",
+		})
 		return
 	}
 
