@@ -25,6 +25,7 @@ func TestProxyController(t *testing.T) {
 	log.Init()
 
 	cfg, runtime := test.CreateTestConfigs(t)
+	cfg.Auth.IP.Block = []string{"198.51.100.9"}
 
 	const browserUserAgent = `
 	Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36`
@@ -508,6 +509,94 @@ func TestProxyController(t *testing.T) {
 				req.Header.Set("x-forwarded-uri", "/secret?next=/allowed")
 				router.ServeHTTP(recorder, req)
 				assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			description: "App IP block takes precedence over path rules",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-forwarded-for", "10.10.10.10")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusForbidden, recorder.Code)
+				assert.Contains(t, recorder.Header().Get("x-tinyauth-location"), "ip=10.10.10.10")
+			},
+		},
+		{
+			description: "App IP allow list takes precedence over path rules",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-allow.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-forwarded-for", "10.10.10.11")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusForbidden, recorder.Code)
+				assert.Contains(t, recorder.Header().Get("x-tinyauth-location"), "ip=10.10.10.11")
+			},
+		},
+		{
+			description: "Global IP block takes precedence over path rules",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-global.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-forwarded-for", "198.51.100.9")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusForbidden, recorder.Code)
+				assert.Contains(t, recorder.Header().Get("x-tinyauth-location"), "ip=198.51.100.9")
+			},
+		},
+		{
+			description: "App IP block takes precedence over path block rules",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-path-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/public")
+				req.Header.Set("x-forwarded-for", "10.10.10.10")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusForbidden, recorder.Code)
+				assert.Contains(t, recorder.Header().Get("x-tinyauth-location"), "ip=10.10.10.10")
+			},
+		},
+		{
+			description: "Path rules allow unrestricted IPs",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-block.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-forwarded-for", "10.10.10.11")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			description: "IP bypass retains highest precedence",
+			middlewares: []gin.HandlerFunc{},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "acl-precedence-bypass.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/allowed")
+				req.Header.Set("x-forwarded-for", "10.10.10.10")
+				router.ServeHTTP(recorder, req)
+
+				assert.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
 		{
