@@ -138,6 +138,51 @@ func TestUserAllowedRule(t *testing.T) {
 			expected: EffectAllow,
 		},
 		{
+			name: "allows local user when username matches allow list and not block list",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Allow: "alice,bob", Block: "bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "denies local user when username matches allow and block lists",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Allow: "alice,bob", Block: "bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "bob"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "denies local user when username matches neither allow nor block list",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Allow: "alice,bob", Block: "bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "charlie"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
 			name: "denies when block list filter is invalid",
 			ctx: &ACLContext{
 				ACLs: &model.App{
