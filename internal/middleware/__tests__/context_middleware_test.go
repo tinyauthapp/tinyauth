@@ -1,4 +1,4 @@
-package middleware
+package middleware_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/middleware"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
@@ -324,7 +325,7 @@ func TestContextMiddleware(t *testing.T) {
 
 	require.NoError(t, err)
 
-	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
+	contextMiddleware := middleware.NewContextMiddleware(middleware.ContextMiddlewareInput{
 		Log:              log,
 		RuntimeConfig:    &runtime,
 		AuthService:      authService,
@@ -369,10 +370,12 @@ func TestTailscaleClientIP(t *testing.T) {
 		expected    string
 	}{
 		{description: "Trusted forwarded client", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.2", expected: "100.101.0.2"},
-		{description: "No trusted proxies", peer: "100.101.0.1:1234", forwarded: "100.101.0.2"},
-		{description: "Mismatched trusted proxy", peer: "100.101.0.1:1234", proxies: []string{"192.0.2.1"}, forwarded: "100.101.0.2"},
+		{description: "Direct client", peer: "100.101.0.1:1234", expected: "100.101.0.1"},
+		{description: "No trusted proxies", peer: "100.101.0.1:1234", forwarded: "100.101.0.2", expected: "100.101.0.1"},
+		{description: "Mismatched trusted proxy", peer: "100.101.0.1:1234", proxies: []string{"192.0.2.1"}, forwarded: "100.101.0.2", expected: "100.101.0.1"},
 		{description: "Missing forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}},
 		{description: "Malformed forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "invalid"},
+		{description: "Trusted proxy network", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.0/24"}},
 		{description: "Mapped IPv4 peer equality", peer: "[::ffff:100.101.0.1]:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.1"},
 		{description: "Expanded IPv6 peer equality", peer: "[fd7a:115c:a1e0:0:0:0:0:1]:1234", proxies: []string{"fd7a:115c:a1e0::1"}, forwarded: "fd7a:115c:a1e0::1"},
 		{description: "Invalid address", peer: "invalid"},
@@ -395,7 +398,7 @@ func TestTailscaleClientIP(t *testing.T) {
 				c.Request = c.Request.WithContext(ctx)
 			}
 
-			assert.Equal(t, tc.expected, tailscaleClientIP(c.ClientIP(), c.RemoteIP()))
+			assert.Equal(t, tc.expected, middleware.TailscaleClientIP(c.ClientIP(), c.RemoteIP(), tc.proxies))
 		})
 	}
 }
