@@ -17,18 +17,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func configureRouterEngine(engine *gin.Engine) {
-	// Platform headers must not bypass configured proxy trust.
-	engine.TrustedPlatform = ""
-	engine.Use(gin.Recovery())
-}
-
 func (app *BootstrapApp) setupRouter() error {
 	// we don't want gin debug mode
 	gin.SetMode(gin.ReleaseMode)
 
 	engine := gin.New()
-	configureRouterEngine(engine)
+	// Platform headers must not bypass configured proxy trust.
+	engine.TrustedPlatform = ""
+	engine.Use(gin.Recovery())
 
 	if len(app.config.Auth.TrustedProxies) > 0 {
 		err := engine.SetTrustedProxies(app.config.Auth.TrustedProxies)
@@ -45,7 +41,7 @@ func (app *BootstrapApp) setupRouter() error {
 			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
 
-		app.log.App.Warn().Msg("Trusted proxies are not configured, IP access controls will NOT work")
+		app.log.App.Warn().Msg("Trusted proxies are not configured, features relying on forwarded client IPs will NOT work")
 	}
 
 	middlewareProvideFor := []any{
