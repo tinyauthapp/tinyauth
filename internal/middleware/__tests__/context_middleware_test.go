@@ -372,7 +372,7 @@ func TestTailscaleClientIP(t *testing.T) {
 		{description: "Trusted forwarded client", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "100.101.0.2", expected: "100.101.0.2"},
 		{description: "Direct client", peer: "100.101.0.1:1234", expected: "100.101.0.1"},
 		{description: "No trusted proxies", peer: "100.101.0.1:1234", forwarded: "100.101.0.2", expected: "100.101.0.1"},
-		{description: "Mismatched trusted proxy", peer: "100.101.0.1:1234", proxies: []string{"192.0.2.1"}, forwarded: "100.101.0.2", expected: "100.101.0.1"},
+		{description: "Unlisted proxy in proxy mode", peer: "100.101.0.1:1234", proxies: []string{"192.0.2.1"}, forwarded: "100.101.0.2"},
 		{description: "Missing forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}},
 		{description: "Malformed forwarding", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.1"}, forwarded: "invalid"},
 		{description: "Trusted proxy network", peer: "100.101.0.1:1234", proxies: []string{"100.101.0.0/24"}},
@@ -398,7 +398,7 @@ func TestTailscaleClientIP(t *testing.T) {
 				c.Request = c.Request.WithContext(ctx)
 			}
 
-			assert.Equal(t, tc.expected, middleware.TailscaleClientIP(c.ClientIP(), c.RemoteIP(), tc.proxies))
+			assert.Equal(t, tc.expected, middleware.TailscaleClientIP(c.ClientIP(), c.RemoteIP(), len(tc.proxies) > 0))
 		})
 	}
 }

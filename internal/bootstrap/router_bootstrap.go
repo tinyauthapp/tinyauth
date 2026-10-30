@@ -41,7 +41,7 @@ func (app *BootstrapApp) setupRouter() error {
 			return fmt.Errorf("failed to set trusted proxies: %w", err)
 		}
 
-		app.log.App.Warn().Msg("Trusted proxies are not configured, features relying on forwarded client IPs will NOT work")
+		app.log.App.Warn().Msg("Trusted proxies are not configured, only direct client connections can safely use IP-based features")
 	}
 
 	middlewareProvideFor := []any{

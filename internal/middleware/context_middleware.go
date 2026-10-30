@@ -130,7 +130,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 
 		// Lastly check if we have a tailscale session to add
 		if m.tailscale != nil {
-			ip := TailscaleClientIP(c.ClientIP(), c.RemoteIP(), m.config.Auth.TrustedProxies)
+			ip := TailscaleClientIP(c.ClientIP(), c.RemoteIP(), m.runtime.TrustedProxiesConfigured)
 			tailscaleContext, err := m.tailscaleWhois(ip)
 
 			if err != nil {
@@ -150,7 +150,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 	}
 }
 
-func TailscaleClientIP(clientIP, peerIP string, trustedProxies []string) string {
+func TailscaleClientIP(clientIP, peerIP string, trustedProxiesConfigured bool) string {
 	parsedClientIP := net.ParseIP(clientIP)
 
 	if parsedClientIP == nil {
@@ -159,28 +159,11 @@ func TailscaleClientIP(clientIP, peerIP string, trustedProxies []string) string 
 
 	parsedPeerIP := net.ParseIP(peerIP)
 
-	if parsedClientIP.Equal(parsedPeerIP) && isTrustedProxy(parsedPeerIP, trustedProxies) {
+	if trustedProxiesConfigured && parsedClientIP.Equal(parsedPeerIP) {
 		return ""
 	}
 
 	return clientIP
-}
-
-func isTrustedProxy(ip net.IP, trustedProxies []string) bool {
-	for _, trustedProxy := range trustedProxies {
-		parsedTrustedProxy := net.ParseIP(trustedProxy)
-
-		if parsedTrustedProxy != nil && parsedTrustedProxy.Equal(ip) {
-			return true
-		}
-
-		_, network, err := net.ParseCIDR(trustedProxy)
-		if err == nil && network.Contains(ip) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid, clientIP, peerIP string) (*model.UserContext, *http.Cookie, error) {
@@ -219,7 +202,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid, clientIP, peer
 			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
 		}
 	case model.ProviderTailscale:
-		ip := TailscaleClientIP(clientIP, peerIP, m.config.Auth.TrustedProxies)
+		ip := TailscaleClientIP(clientIP, peerIP, m.runtime.TrustedProxiesConfigured)
 		tailscaleContext, err := m.tailscaleWhois(ip)
 
 		if err != nil {
