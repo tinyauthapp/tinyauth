@@ -14,7 +14,7 @@
   "loginOauthFailSubtitle": "Errada en obtenir l'URL OAuth",
   "loginOauthSuccessTitle": "Redirigint",
   "loginOauthSuccessSubtitle": "Redirigint al vostre proveïdor OAuth",
-  "loginOauthAutoRedirectTitle": "Autoredirecció OAuth",
+  "loginOauthAutoRedirectTitle": "Auto redirecció OAuth",
   "loginOauthAutoRedirectSubtitle": "Sereu automàticament redirigits al vostre proveïdor OAuth per a autenticar-vos.",
   "loginOauthAutoRedirectButton": "Redirigeix ara",
   "continueTitle": "Continuar",
