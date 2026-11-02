@@ -70,7 +70,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "^1.26.4"
+          go-version: "^1.26.10"
 
       - name: Install frontend dependencies
         working-directory: ./frontend
@@ -119,7 +119,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "^1.26.4"
+          go-version: "^1.26.10"
 
       - name: Install frontend dependencies
         working-directory: ./frontend
