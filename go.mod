@@ -1,6 +1,6 @@
 module github.com/tinyauthapp/tinyauth
 
-go 1.26.4
+go 1.26.10
 
 require (
 	charm.land/huh/v2 v2.0.3
@@ -24,7 +24,7 @@ require (
 	github.com/weppos/publicsuffix-go v0.50.3
 	go.uber.org/dig v1.19.0
 	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/tools v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
