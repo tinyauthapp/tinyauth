@@ -18,6 +18,8 @@
 
 <br />
 
+**Note as of 30/10/2026**: Right now, Tinyauth is maintained by a single person. AI agents are constantly spamming our repositories with bugs and security reports, some of them valid, some others not. Reviewing and fixing all of them takes a considerable amount of time which I unfortunately do not have. So, If you are a developer and would like to help, please reach out to me on Discord or via <a href="mailto:hello@tinyauth.app">hello@tinyauth.app</a>.
+
 Tinyauth is the simplest and tiniest authentication and authorization server you have ever seen. It is designed to both work as an authentication middleware for your apps, offering support for OAuth, LDAP and access-controls, and as a standalone authentication server. It supports all the popular proxies like Traefik, Nginx and Caddy.
 
 ![Screenshot](assets/screenshot.png)
