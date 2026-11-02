@@ -1100,11 +1100,12 @@ func TestOIDCController(t *testing.T) {
 				expiry := time.Now().Add(time.Hour).Unix()
 				token := "valid-userinfo-token"
 
-				userinfo, err := json.Marshal(service.UserinfoResponse{
-					Sub:               "userinfo-sub",
+				userinfo, err := json.Marshal(service.Userinfo{
+					Subject:           "userinfo-sub",
 					Name:              "Test User",
 					PreferredUsername: "testuser",
 					Email:             "testuser@example.com",
+					EmailVerified:     true,
 				})
 				require.NoError(t, err)
 
@@ -1126,9 +1127,9 @@ func TestOIDCController(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, recorder.Code)
 
-				var res service.UserinfoResponse
+				var res service.Userinfo
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
-				assert.Equal(t, "userinfo-sub", res.Sub)
+				assert.Equal(t, "userinfo-sub", res.Subject)
 				assert.Equal(t, "Test User", res.Name)
 				assert.Equal(t, "testuser@example.com", res.Email)
 				assert.True(t, res.EmailVerified)
@@ -1140,9 +1141,9 @@ func TestOIDCController(t *testing.T) {
 				expiry := time.Now().Add(time.Hour).Unix()
 				token := "valid-userinfo-post-token"
 
-				userinfo, err := json.Marshal(service.UserinfoResponse{
-					Sub:   "userinfo-post-sub",
-					Email: "testuser@example.com",
+				userinfo, err := json.Marshal(service.Userinfo{
+					Subject: "userinfo-post-sub",
+					Email:   "testuser@example.com",
 				})
 				require.NoError(t, err)
 
@@ -1167,9 +1168,9 @@ func TestOIDCController(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, recorder.Code)
 
-				var res service.UserinfoResponse
+				var res service.Userinfo
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
-				assert.Equal(t, "userinfo-post-sub", res.Sub)
+				assert.Equal(t, "userinfo-post-sub", res.Subject)
 				assert.Equal(t, "testuser@example.com", res.Email)
 			},
 		},

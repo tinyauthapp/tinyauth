@@ -606,7 +606,7 @@ func (controller *OIDCController) token(c *gin.Context) {
 		}
 
 		// mark code as used to prevent reuse
-		controller.oidc.MarkCodeAsUsed(controller.oidc.Hash(req.Code), entry.Userinfo.Sub)
+		controller.oidc.MarkCodeAsUsed(controller.oidc.Hash(req.Code), entry.Userinfo.Subject)
 
 		if entry.RedirectURI != req.RedirectURI {
 			controller.log.App.Warn().Msg("Redirect URI does not match")
@@ -626,7 +626,11 @@ func (controller *OIDCController) token(c *gin.Context) {
 			return
 		}
 
-		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry, entry.AuthTime)
+		tokenRes, err := controller.oidc.GenerateAccessToken(service.GenerateAccessTokenParams{
+			Ctx:       c,
+			Client:    &client,
+			CodeEntry: entry,
+		})
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to generate access token")
@@ -755,7 +759,7 @@ func (controller *OIDCController) userinfo(c *gin.Context) {
 		return
 	}
 
-	var userinfo service.UserinfoResponse
+	var userinfo service.Userinfo
 
 	err = json.Unmarshal([]byte(entry.UserinfoJson), &userinfo)
 
@@ -767,7 +771,7 @@ func (controller *OIDCController) userinfo(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, controller.oidc.CompileUserinfo(userinfo, entry.Scope))
+	c.JSON(200, userinfo)
 }
 
 func (controller *OIDCController) endSession(c *gin.Context) {
