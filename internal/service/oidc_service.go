@@ -67,7 +67,7 @@ func (p OIDCPrompt) String() string {
 
 var SupportedPrompts = []string{string(OIDCPromptLogin), string(OIDCPromptNone)}
 
-type UserinfoAddress struct {
+type UserinfoAddressClaims struct {
 	Formatted     string `json:"formatted,omitempty"`
 	StreetAddress string `json:"street_address,omitempty"`
 	Locality      string `json:"locality,omitempty"`
@@ -76,38 +76,41 @@ type UserinfoAddress struct {
 	Country       string `json:"country,omitempty"`
 }
 
-type Userinfo struct {
-	Subject             string           `json:"sub,omitempty"`
-	Name                string           `json:"name,omitempty"`
-	GivenName           string           `json:"given_name,omitempty"`
-	FamilyName          string           `json:"family_name,omitempty"`
-	MiddleName          string           `json:"middle_name,omitempty"`
-	Nickname            string           `json:"nickname,omitempty"`
-	PreferredUsername   string           `json:"preferred_username,omitempty"`
-	Profile             string           `json:"profile,omitempty"`
-	Picture             string           `json:"picture,omitempty"`
-	Website             string           `json:"website,omitempty"`
-	Email               string           `json:"email,omitempty"`
-	EmailVerified       bool             `json:"email_verified,omitempty"`
-	Gender              string           `json:"gender,omitempty"`
-	Birthdate           string           `json:"birthdate,omitempty"`
-	Zoneinfo            string           `json:"zoneinfo,omitempty"`
-	Locale              string           `json:"locale,omitempty"`
-	PhoneNumber         string           `json:"phone_number,omitempty"`
-	PhoneNumberVerified bool             `json:"phone_number_verified,omitempty"`
-	Address             UserinfoAddress  `json:"address,omitempty"`
-	Groups              jwt.ClaimStrings `json:"groups,omitempty"`
-	// This will be unfortunately included in the ID token, but we need it in the userinfo
-	UpdatedAt int64 `json:"updated_at,omitempty"`
+type UserinfoClaims struct {
+	Name                string                `json:"name,omitempty"`
+	GivenName           string                `json:"given_name,omitempty"`
+	FamilyName          string                `json:"family_name,omitempty"`
+	MiddleName          string                `json:"middle_name,omitempty"`
+	Nickname            string                `json:"nickname,omitempty"`
+	PreferredUsername   string                `json:"preferred_username,omitempty"`
+	Profile             string                `json:"profile,omitempty"`
+	Picture             string                `json:"picture,omitempty"`
+	Website             string                `json:"website,omitempty"`
+	Email               string                `json:"email,omitempty"`
+	EmailVerified       bool                  `json:"email_verified,omitempty"`
+	Gender              string                `json:"gender,omitempty"`
+	Birthdate           string                `json:"birthdate,omitempty"`
+	Zoneinfo            string                `json:"zoneinfo,omitempty"`
+	Locale              string                `json:"locale,omitempty"`
+	PhoneNumber         string                `json:"phone_number,omitempty"`
+	PhoneNumberVerified bool                  `json:"phone_number_verified,omitempty"`
+	Address             UserinfoAddressClaims `json:"address,omitempty"`
+	Groups              jwt.ClaimStrings      `json:"groups,omitempty"`
 }
 
-// This is not spec-compliant, the ID token SHOULD NOT contain user info claims but,
-// it has became a "standard" and apps are looking for the claims in the ID tokens
-// instead of calling the userinfo endpoint, so we include them in the ID token as well
-// for better compatibility with existing apps
-type ClaimSet struct {
+type Userinfo struct {
+	UserinfoClaims
+	Subject   string `json:"sub,omitempty"`
+	UpdatedAt int64  `json:"updated_at,omitempty"`
+}
+
+func (u Userinfo) ToClaims() UserinfoClaims {
+	return u.UserinfoClaims
+}
+
+type IDTokenClaims struct {
 	jwt.RegisteredClaims
-	Userinfo
+	UserinfoClaims
 	AuthTime *jwt.NumericDate `json:"auth_time,omitempty"`
 	Nonce    string           `json:"nonce,omitempty"`
 }
@@ -471,10 +474,12 @@ func (service *OIDCService) CreateCode(req AuthorizeRequest, userContext model.U
 
 func (service *OIDCService) userinfoFromContext(userContext model.UserContext) Userinfo {
 	userinfo := Userinfo{
-		Name:              userContext.GetName(),
-		Email:             userContext.GetEmail(),
-		PreferredUsername: userContext.GetUsername(),
-		UpdatedAt:         userContext.AuthTime.Unix(),
+		UserinfoClaims: UserinfoClaims{
+			Name:              userContext.GetName(),
+			Email:             userContext.GetEmail(),
+			PreferredUsername: userContext.GetUsername(),
+		},
+		UpdatedAt: userContext.AuthTime.Unix(),
 	}
 
 	if userContext.IsLocal() {
@@ -549,7 +554,8 @@ type generateIDTokenParmas struct {
 	client   *model.OIDCClientConfig
 	authTime *time.Time
 	nonce    string
-	userinfo Userinfo
+	sub      string
+	userinfo UserinfoClaims
 }
 
 func (service *OIDCService) generateIDToken(params generateIDTokenParmas) (string, error) {
@@ -581,9 +587,10 @@ func (service *OIDCService) generateIDToken(params generateIDTokenParmas) (strin
 		return "", err
 	}
 
-	claims := ClaimSet{
-		Userinfo: params.userinfo,
+	claims := IDTokenClaims{
+		UserinfoClaims: params.userinfo,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   params.sub,
 			Issuer:    service.issuer,
 			Audience:  jwt.ClaimStrings{params.client.ClientID},
 			IssuedAt:  jwt.NewNumericDate(createdAt),
@@ -629,7 +636,7 @@ func (service *OIDCService) GenerateAccessToken(params GenerateAccessTokenParams
 		client:   params.Client,
 		authTime: params.AuthTime,
 		nonce:    params.CodeEntry.Nonce,
-		userinfo: service.compileScopedUserinfo(params.CodeEntry.Userinfo, params.CodeEntry.Scope),
+		userinfo: service.compileScopedUserinfo(params.CodeEntry.Userinfo, params.CodeEntry.Scope).ToClaims(),
 	})
 
 	if err != nil {
@@ -714,7 +721,7 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 		},
 		authTime: nil,
 		nonce:    entry.Nonce,
-		userinfo: service.compileScopedUserinfo(userinfo, entry.Scope),
+		userinfo: service.compileScopedUserinfo(userinfo, entry.Scope).ToClaims(),
 	})
 
 	if err != nil {
@@ -968,13 +975,18 @@ func (service *OIDCService) DeleteAuthorizeRequestTicket(ticket string) {
 	service.caches.authorize.Delete(ticket)
 }
 
-func (service *OIDCService) DecodeIDToken(tokenStr string) (*ClaimSet, error) {
-	var claims ClaimSet
+func (service *OIDCService) DecodeIDToken(tokenStr string, withExpiration bool) (*IDTokenClaims, error) {
+	var claims IDTokenClaims
 
-	parser := jwt.NewParser(
-		jwt.WithExpirationRequired(),
+	opts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{"RS256"}),
-	)
+	}
+
+	if withExpiration {
+		opts = append(opts, jwt.WithExpirationRequired())
+	}
+
+	parser := jwt.NewParser(opts...)
 
 	token, err := parser.ParseWithClaims(tokenStr, &claims, func(token *jwt.Token) (any, error) {
 		return service.publicKey, nil

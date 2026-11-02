@@ -1101,11 +1101,13 @@ func TestOIDCController(t *testing.T) {
 				token := "valid-userinfo-token"
 
 				userinfo, err := json.Marshal(service.Userinfo{
-					Subject:           "userinfo-sub",
-					Name:              "Test User",
-					PreferredUsername: "testuser",
-					Email:             "testuser@example.com",
-					EmailVerified:     true,
+					Subject: "userinfo-sub",
+					UserinfoClaims: service.UserinfoClaims{
+						Name:              "Test User",
+						PreferredUsername: "testuser",
+						Email:             "testuser@example.com",
+						EmailVerified:     true,
+					},
 				})
 				require.NoError(t, err)
 
@@ -1143,7 +1145,9 @@ func TestOIDCController(t *testing.T) {
 
 				userinfo, err := json.Marshal(service.Userinfo{
 					Subject: "userinfo-post-sub",
-					Email:   "testuser@example.com",
+					UserinfoClaims: service.UserinfoClaims{
+						Email: "testuser@example.com",
+					},
 				})
 				require.NoError(t, err)
 
@@ -1176,19 +1180,19 @@ func TestOIDCController(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
 			router := gin.Default()
 			gin.SetMode(gin.TestMode)
 
-			for _, middleware := range test.middlewares {
+			for _, middleware := range tt.middlewares {
 				router.Use(middleware)
 			}
 
 			group := router.Group("/api")
 
 			svc := oidcService
-			if test.oidcDisabled {
+			if tt.oidcDisabled {
 				svc = nil
 			}
 
@@ -1202,7 +1206,7 @@ func TestOIDCController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			test.run(t, router, recorder)
+			tt.run(t, router, recorder)
 		})
 	}
 }

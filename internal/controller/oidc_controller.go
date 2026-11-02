@@ -790,10 +790,10 @@ func (controller *OIDCController) endSession(c *gin.Context) {
 		return
 	}
 
-	var idToken *service.ClaimSet
+	var idToken *service.IDTokenClaims
 
 	if req.IDTokenHint != "" {
-		claims, err := controller.oidc.DecodeIDToken(req.IDTokenHint)
+		claims, err := controller.oidc.DecodeIDToken(req.IDTokenHint, false)
 
 		if err != nil {
 			controller.log.App.Warn().Err(err).Msg("Failed to decode ID token hint")

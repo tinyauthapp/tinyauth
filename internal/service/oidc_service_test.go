@@ -16,31 +16,33 @@ import (
 
 func newTestUser() Userinfo {
 	return Userinfo{
-		Subject:           "test-sub",
-		Name:              "Test User",
-		PreferredUsername: "testuser",
-		Email:             "test@example.com",
-		Groups:            jwt.ClaimStrings{"admins", "users"},
-		UpdatedAt:         1234567890,
-		GivenName:         "Test",
-		FamilyName:        "User",
-		MiddleName:        "M",
-		Nickname:          "testy",
-		Profile:           "https://example.com/testuser",
-		Picture:           "https://example.com/testuser.jpg",
-		Website:           "https://testuser.example.com",
-		Gender:            "male",
-		Birthdate:         "1990-01-01",
-		Zoneinfo:          "America/Chicago",
-		Locale:            "en-US",
-		PhoneNumber:       "+15555550100",
-		Address: UserinfoAddress{
-			Formatted:     "123 Main St",
-			StreetAddress: "123 Main St",
-			Locality:      "Springfield",
-			Region:        "IL",
-			PostalCode:    "62701",
-			Country:       "US",
+		Subject:   "test-sub",
+		UpdatedAt: 1234567890,
+		UserinfoClaims: UserinfoClaims{
+			Name:              "Test User",
+			PreferredUsername: "testuser",
+			Email:             "test@example.com",
+			Groups:            jwt.ClaimStrings{"admins", "users"},
+			GivenName:         "Test",
+			FamilyName:        "User",
+			MiddleName:        "M",
+			Nickname:          "testy",
+			Profile:           "https://example.com/testuser",
+			Picture:           "https://example.com/testuser.jpg",
+			Website:           "https://testuser.example.com",
+			Gender:            "male",
+			Birthdate:         "1990-01-01",
+			Zoneinfo:          "America/Chicago",
+			Locale:            "en-US",
+			PhoneNumber:       "+15555550100",
+			Address: UserinfoAddressClaims{
+				Formatted:     "123 Main St",
+				StreetAddress: "123 Main St",
+				Locality:      "Springfield",
+				Region:        "IL",
+				PostalCode:    "62701",
+				Country:       "US",
+			},
 		},
 	}
 }
@@ -97,7 +99,7 @@ func TestCompileUserinfo(t *testing.T) {
 				assert.Empty(t, info.Email)
 				assert.Nil(t, info.Groups)
 				assert.False(t, info.PhoneNumberVerified)
-				assert.Equal(t, UserinfoAddress{}, info.Address)
+				assert.Equal(t, UserinfoAddressClaims{}, info.Address)
 			},
 		},
 		{
