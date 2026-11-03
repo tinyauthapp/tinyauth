@@ -94,7 +94,7 @@ type UserinfoClaims struct {
 	Locale              string                `json:"locale,omitempty"`
 	PhoneNumber         string                `json:"phone_number,omitempty"`
 	PhoneNumberVerified bool                  `json:"phone_number_verified,omitempty"`
-	Address             UserinfoAddressClaims `json:"address,omitempty"`
+	Address             UserinfoAddressClaims `json:"address,omitzero"`
 	Groups              jwt.ClaimStrings      `json:"groups,omitempty"`
 }
 
@@ -628,14 +628,14 @@ type GenerateAccessTokenParams struct {
 	Ctx       context.Context
 	Client    *model.OIDCClientConfig
 	CodeEntry *AuthorizeCodeEntry
-	AuthTime  *time.Time
 }
 
 func (service *OIDCService) GenerateAccessToken(params GenerateAccessTokenParams) (*TokenResponse, error) {
 	idToken, err := service.generateIDToken(generateIDTokenParmas{
 		client:   params.Client,
-		authTime: params.AuthTime,
+		authTime: &params.CodeEntry.AuthTime,
 		nonce:    params.CodeEntry.Nonce,
+		sub:      params.CodeEntry.Userinfo.Subject,
 		userinfo: service.compileScopedUserinfo(params.CodeEntry.Userinfo, params.CodeEntry.Scope).ToClaims(),
 	})
 
@@ -662,7 +662,7 @@ func (service *OIDCService) GenerateAccessToken(params GenerateAccessTokenParams
 
 	var userInfoJson []byte
 
-	userInfoJson, err = json.Marshal(params.CodeEntry.Userinfo)
+	userInfoJson, err = json.Marshal(service.compileScopedUserinfo(params.CodeEntry.Userinfo, params.CodeEntry.Scope))
 
 	if err != nil {
 		return nil, err
@@ -719,8 +719,8 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 		client: &model.OIDCClientConfig{
 			ClientID: entry.ClientID,
 		},
-		authTime: nil,
 		nonce:    entry.Nonce,
+		sub:      entry.Sub,
 		userinfo: service.compileScopedUserinfo(userinfo, entry.Scope).ToClaims(),
 	})
 
