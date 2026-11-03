@@ -122,7 +122,11 @@ export const LoginPage = () => {
     },
   });
 
-  const { mutate: loginMutate, isPending: loginIsPending } = useMutation({
+  const {
+    mutate: loginMutate,
+    isPending: loginIsPending,
+    isSuccess: loginIsSuccess,
+  } = useMutation({
     mutationFn: (values: LoginSchema) => axios.post("/api/user/login", values),
     mutationKey: ["login"],
     onSuccess: (data) => {
@@ -309,7 +313,10 @@ export const LoginPage = () => {
         )}
         {userAuthConfigured && (
           <LoginForm
-            onSubmit={(values) => loginMutate(values)}
+            onSubmit={(values) => {
+              if (loginIsPending || loginIsSuccess) return;
+              loginMutate(values);
+            }}
             loading={loginIsPending || oauthIsPending}
             formId={formId}
             params={(() => {
