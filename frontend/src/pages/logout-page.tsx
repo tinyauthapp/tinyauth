@@ -9,35 +9,61 @@ import {
 import { useUserContext } from "@/context/user-context";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Navigate } from "react-router";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { type UseMutationResult } from "@tanstack/react-query";
-import { type AxiosResponse } from "axios";
-import { useLocation } from "react-router";
 import {
   searchParamsFromObject,
   useScreenParams,
 } from "@/lib/hooks/screen-params";
 
 export const LogoutPage = () => {
-  const { auth, oauth, tailscale } = useUserContext();
+  const { auth } = useUserContext();
   const { t } = useTranslation();
   const { search } = useLocation();
+  const navigate = useNavigate();
 
+  const { logout_reason, ...loginParams } = useScreenParams(
+    new URLSearchParams(search),
+  );
+  const params = searchParamsFromObject(loginParams).toString();
+  const loginUrl = `/login${params ? `?${params}` : ""}`;
+  const { mutate, isPending, isSuccess } = useLogout(loginUrl);
+
+  if (!auth.authenticated) {
+    return <Navigate to={loginUrl} replace />;
+  }
+
+  if (logout_reason === "oidc") {
+    return (
+      <LogoutCard
+        title={t("logoutOidcTitle")}
+        isPending={isPending || isSuccess}
+        onLogout={mutate}
+        onCancel={() => navigate("/", { replace: true })}
+      >
+        {t("logoutOidcSubtitle")}
+      </LogoutCard>
+    );
+  }
+
+  return (
+    <LogoutCard
+      title={t("logoutTitle")}
+      isPending={isPending || isSuccess}
+      onLogout={mutate}
+    >
+      <LogoutDescription />
+    </LogoutCard>
+  );
+};
+
+function useLogout(loginUrl: string) {
+  const { t } = useTranslation();
   const redirectTimer = useRef<number | null>(null);
-  const searchParams = new URLSearchParams(search);
-  const screenParams = useScreenParams(searchParams);
-  const compiledParams = (() => {
-    const params = searchParamsFromObject(screenParams).toString();
-    if (params.length > 0) {
-      return `?${params}`;
-    }
-    return "";
-  })();
 
-  const logoutMutation = useMutation({
+  const mutation = useMutation({
     mutationFn: () => axios.post("/api/user/logout"),
     mutationKey: ["logout"],
     onSuccess: () => {
@@ -46,7 +72,7 @@ export const LogoutPage = () => {
       });
 
       redirectTimer.current = window.setTimeout(() => {
-        window.location.replace(`/login${compiledParams}`);
+        window.location.replace(loginUrl);
       }, 500);
     },
     onError: () => {
@@ -58,99 +84,78 @@ export const LogoutPage = () => {
 
   useEffect(() => {
     return () => {
-      if (redirectTimer.current) {
-        clearTimeout(redirectTimer.current);
+      if (redirectTimer.current !== null) {
+        window.clearTimeout(redirectTimer.current);
       }
     };
-  }, [redirectTimer]);
+  }, []);
 
-  if (!auth.authenticated) {
-    return <Navigate to={`/login${compiledParams}`} replace />;
-  }
-
-  if (oauth.active) {
-    return (
-      <LogoutLayout logoutMutation={logoutMutation}>
-        <Trans
-          i18nKey="logoutOauthSubtitle"
-          t={t}
-          components={{
-            code: <code />,
-          }}
-          values={{
-            username: auth.email,
-            provider: oauth.displayName,
-          }}
-          shouldUnescape={true}
-        />
-      </LogoutLayout>
-    );
-  }
-
-  if (auth.providerId === "tailscale") {
-    return (
-      <LogoutLayout logoutMutation={logoutMutation}>
-        <Trans
-          i18nKey="logoutTailscaleSubtitle"
-          t={t}
-          components={{
-            code: <code />,
-          }}
-          values={{
-            deviceName: tailscale.nodeName,
-          }}
-          shouldUnescape={true}
-        />
-      </LogoutLayout>
-    );
-  }
-
-  return (
-    <LogoutLayout logoutMutation={logoutMutation}>
-      <Trans
-        i18nKey="logoutUsernameSubtitle"
-        t={t}
-        components={{
-          code: <code />,
-        }}
-        values={{
-          username: auth.username,
-        }}
-        shouldUnescape={true}
-      />
-    </LogoutLayout>
-  );
-};
-
-interface LogoutLayoutProps {
-  children: React.ReactNode;
-  logoutMutation: UseMutationResult<
-    //eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-empty-object-type
-    AxiosResponse<any, any, {}>,
-    Error,
-    void,
-    unknown
-  >;
+  return mutation;
 }
 
-function LogoutLayout({ children, logoutMutation }: LogoutLayoutProps) {
+interface LogoutCardProps {
+  title: string;
+  children: ReactNode;
+  isPending?: boolean;
+  onLogout?: () => void;
+  onCancel?: () => void;
+}
+
+function LogoutCard({
+  title,
+  children,
+  isPending = false,
+  onLogout,
+  onCancel,
+}: LogoutCardProps) {
   const { t } = useTranslation();
+
   return (
-    <Card>
+    <Card aria-live="polite">
       <CardHeader className="gap-1.5">
-        <CardTitle className="text-xl">{t("logoutTitle")}</CardTitle>
+        <CardTitle className="text-xl">{title}</CardTitle>
         <CardDescription>{children}</CardDescription>
       </CardHeader>
-      <CardFooter>
-        <Button
-          className="w-full text-destructive"
-          variant="outline"
-          loading={logoutMutation.isPending}
-          onClick={() => logoutMutation.mutate()}
-        >
-          {t("logoutTitle")}
-        </Button>
-      </CardFooter>
+      {onLogout && (
+        <CardFooter className="flex flex-col items-stretch gap-3">
+          <Button
+            variant="destructive"
+            loading={isPending}
+            onClick={onLogout}
+          >
+            {t("logoutTitle")}
+          </Button>
+          {onCancel && (
+            <Button variant="outline" disabled={isPending} onClick={onCancel}>
+              {t("cancelTitle")}
+            </Button>
+          )}
+        </CardFooter>
+      )}
     </Card>
+  );
+}
+
+function LogoutDescription() {
+  const { auth, oauth, tailscale } = useUserContext();
+  const { t } = useTranslation();
+  const subtitle = oauth.active
+    ? "logoutOauthSubtitle"
+    : auth.providerId === "tailscale"
+      ? "logoutTailscaleSubtitle"
+      : "logoutUsernameSubtitle";
+
+  return (
+    <Trans
+      i18nKey={subtitle}
+      t={t}
+      components={{ code: <code /> }}
+      values={{
+        username: oauth.active ? auth.email : auth.username,
+        provider: oauth.displayName,
+        deviceName: tailscale.nodeName,
+      }}
+      shouldUnescape={true}
+    />
   );
 }

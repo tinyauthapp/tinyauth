@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,33 +14,35 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
-func newTestUser() UserinfoResponse {
-	return UserinfoResponse{
-		Sub:               "test-sub",
-		Name:              "Test User",
-		PreferredUsername: "testuser",
-		Email:             "test@example.com",
-		Groups:            []string{"admins", "users"},
-		UpdatedAt:         1234567890,
-		GivenName:         "Test",
-		FamilyName:        "User",
-		MiddleName:        "M",
-		Nickname:          "testy",
-		Profile:           "https://example.com/testuser",
-		Picture:           "https://example.com/testuser.jpg",
-		Website:           "https://testuser.example.com",
-		Gender:            "male",
-		Birthdate:         "1990-01-01",
-		Zoneinfo:          "America/Chicago",
-		Locale:            "en-US",
-		PhoneNumber:       "+15555550100",
-		Address: &model.AddressClaim{
-			Formatted:     "123 Main St",
-			StreetAddress: "123 Main St",
-			Locality:      "Springfield",
-			Region:        "IL",
-			PostalCode:    "62701",
-			Country:       "US",
+func newTestUser() Userinfo {
+	return Userinfo{
+		Subject:   "test-sub",
+		UpdatedAt: 1234567890,
+		UserinfoClaims: UserinfoClaims{
+			Name:              "Test User",
+			PreferredUsername: "testuser",
+			Email:             "test@example.com",
+			Groups:            jwt.ClaimStrings{"admins", "users"},
+			GivenName:         "Test",
+			FamilyName:        "User",
+			MiddleName:        "M",
+			Nickname:          "testy",
+			Profile:           "https://example.com/testuser",
+			Picture:           "https://example.com/testuser.jpg",
+			Website:           "https://testuser.example.com",
+			Gender:            "male",
+			Birthdate:         "1990-01-01",
+			Zoneinfo:          "America/Chicago",
+			Locale:            "en-US",
+			PhoneNumber:       "+15555550100",
+			Address: UserinfoAddressClaims{
+				Formatted:     "123 Main St",
+				StreetAddress: "123 Main St",
+				Locality:      "Springfield",
+				Region:        "IL",
+				PostalCode:    "62701",
+				Country:       "US",
+			},
 		},
 	}
 }
@@ -80,29 +83,29 @@ func TestCompileUserinfo(t *testing.T) {
 
 	type testCase struct {
 		description string
-		mutate      func(u *UserinfoResponse)
+		mutate      func(u *Userinfo)
 		scope       string
-		run         func(t *testing.T, info UserinfoResponse)
+		run         func(t *testing.T, info Userinfo)
 	}
 
 	tests := []testCase{
 		{
 			description: "openid scope only returns sub and updated_at",
 			scope:       "openid",
-			run: func(t *testing.T, info UserinfoResponse) {
-				assert.Equal(t, "test-sub", info.Sub)
+			run: func(t *testing.T, info Userinfo) {
 				assert.Equal(t, int64(1234567890), info.UpdatedAt)
+				assert.Equal(t, "test-sub", info.Subject)
 				assert.Empty(t, info.Name)
 				assert.Empty(t, info.Email)
 				assert.Nil(t, info.Groups)
-				assert.Nil(t, info.PhoneNumberVerified)
-				assert.Nil(t, info.Address)
+				assert.False(t, info.PhoneNumberVerified)
+				assert.Equal(t, UserinfoAddressClaims{}, info.Address)
 			},
 		},
 		{
 			description: "profile scope returns all profile fields",
 			scope:       "openid profile",
-			run: func(t *testing.T, info UserinfoResponse) {
+			run: func(t *testing.T, info Userinfo) {
 				assert.Equal(t, "Test User", info.Name)
 				assert.Equal(t, "testuser", info.PreferredUsername)
 				assert.Equal(t, "Test", info.GivenName)
@@ -122,7 +125,7 @@ func TestCompileUserinfo(t *testing.T) {
 		{
 			description: "email scope sets email and email_verified true when email present",
 			scope:       "openid email",
-			run: func(t *testing.T, info UserinfoResponse) {
+			run: func(t *testing.T, info Userinfo) {
 				assert.Equal(t, "test@example.com", info.Email)
 				assert.True(t, info.EmailVerified)
 				assert.Empty(t, info.Name)
@@ -131,8 +134,8 @@ func TestCompileUserinfo(t *testing.T) {
 		{
 			description: "email scope sets email_verified false when email absent",
 			scope:       "openid email",
-			mutate:      func(u *UserinfoResponse) { u.Email = "" },
-			run: func(t *testing.T, info UserinfoResponse) {
+			mutate:      func(u *Userinfo) { u.Email = "" },
+			run: func(t *testing.T, info Userinfo) {
 				assert.Empty(t, info.Email)
 				assert.False(t, info.EmailVerified)
 			},
@@ -140,25 +143,25 @@ func TestCompileUserinfo(t *testing.T) {
 		{
 			description: "phone scope sets phone_number_verified true when phone present",
 			scope:       "openid phone",
-			run: func(t *testing.T, info UserinfoResponse) {
+			run: func(t *testing.T, info Userinfo) {
 				assert.Equal(t, "+15555550100", info.PhoneNumber)
 				require.NotNil(t, info.PhoneNumberVerified)
-				assert.True(t, *info.PhoneNumberVerified)
+				assert.True(t, info.PhoneNumberVerified)
 			},
 		},
 		{
 			description: "phone scope sets phone_number_verified false when phone absent",
 			scope:       "openid phone",
-			mutate:      func(u *UserinfoResponse) { u.PhoneNumber = "" },
-			run: func(t *testing.T, info UserinfoResponse) {
+			mutate:      func(u *Userinfo) { u.PhoneNumber = "" },
+			run: func(t *testing.T, info Userinfo) {
 				require.NotNil(t, info.PhoneNumberVerified)
-				assert.False(t, *info.PhoneNumberVerified)
+				assert.False(t, info.PhoneNumberVerified)
 			},
 		},
 		{
 			description: "address scope returns parsed address",
 			scope:       "openid address",
-			run: func(t *testing.T, info UserinfoResponse) {
+			run: func(t *testing.T, info Userinfo) {
 				require.NotNil(t, info.Address)
 				assert.Equal(t, "123 Main St", info.Address.Formatted)
 				assert.Equal(t, "123 Main St", info.Address.StreetAddress)
@@ -171,22 +174,22 @@ func TestCompileUserinfo(t *testing.T) {
 		{
 			description: "groups scope returns split groups",
 			scope:       "openid groups",
-			run: func(t *testing.T, info UserinfoResponse) {
-				assert.Equal(t, []string{"admins", "users"}, info.Groups)
+			run: func(t *testing.T, info Userinfo) {
+				assert.Equal(t, jwt.ClaimStrings{"admins", "users"}, info.Groups)
 			},
 		},
 		{
 			description: "all scopes return all fields",
 			scope:       "openid profile email phone address groups",
-			run: func(t *testing.T, info UserinfoResponse) {
+			run: func(t *testing.T, info Userinfo) {
 				assert.Equal(t, "Test User", info.Name)
 				assert.Equal(t, "test@example.com", info.Email)
 				assert.Equal(t, "+15555550100", info.PhoneNumber)
 				require.NotNil(t, info.PhoneNumberVerified)
-				assert.True(t, *info.PhoneNumberVerified)
+				assert.True(t, info.PhoneNumberVerified)
 				require.NotNil(t, info.Address)
 				assert.Equal(t, "Springfield", info.Address.Locality)
-				assert.Equal(t, []string{"admins", "users"}, info.Groups)
+				assert.Equal(t, jwt.ClaimStrings{"admins", "users"}, info.Groups)
 			},
 		},
 	}
@@ -197,8 +200,8 @@ func TestCompileUserinfo(t *testing.T) {
 			if test.mutate != nil {
 				test.mutate(&user)
 			}
-			info := svc.CompileUserinfo(user, test.scope)
-			test.run(t, info)
+			res := svc.compileScopedUserinfo(user, test.scope)
+			test.run(t, res)
 		})
 	}
 }
