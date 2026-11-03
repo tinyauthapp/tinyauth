@@ -4,14 +4,22 @@
 
 package postgres
 
-type OidcConsent struct {
+type Identity struct {
+	UUID           string
+	UserUUID       string
+	Provider       string
+	ProviderUserID string
+	ContextJSON    string
+}
+
+type OIDCConsent struct {
 	Username  string
 	ClientID  string
 	Scope     string
 	CreatedAt int64
 }
 
-type OidcSession struct {
+type OIDCSession struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
@@ -24,15 +32,17 @@ type OidcSession struct {
 }
 
 type Session struct {
-	UUID        string
-	Username    string
-	Email       string
-	Name        string
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	Expiry      int64
-	CreatedAt   int64
-	OAuthName   string
-	OAuthSub    string
+	UUID         string
+	IdentityUuid string
+	CSRFToken    string
+	ExpiresAt    int64
+	CreatedAt    int64
+	ContextJSON  string
+}
+
+type User struct {
+	UUID     string
+	Username string
+	Email    string
+	Name     string
 }
