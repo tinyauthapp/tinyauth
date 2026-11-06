@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 )
 
 var (
@@ -67,9 +66,10 @@ type UserContext struct {
 }
 
 type BaseContext struct {
-	Username string
-	Name     string
-	Email    string
+	DistinctUserID string
+	Username       string
+	Name           string
+	Email          string
 }
 
 type LocalContext struct {
@@ -141,61 +141,63 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 	return c, nil
 }
 
-// Compatability layer until we get an excuse to drop in database migrations
-func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
+func (c *UserContext) NewFromSession(session SessionGetResult, identity IdentityResult) (*UserContext, error) {
 	*c = UserContext{
-		Authenticated: !session.TotpPending,
-		AuthTime:      session.CreatedAt,
+		Authenticated: !session.SessionContext.Local.TOTPPending,
+		AuthTime:      session.Session.CreatedAt,
 	}
 
-	switch session.Provider {
-	case "local":
+	switch identity.Provider {
+	case ProviderLocal:
 		c.Provider = ProviderLocal
 		c.Local = &LocalContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
-			TOTPPending: session.TotpPending,
+			TOTPPending: session.SessionContext.Local.TOTPPending,
 		}
-	case "ldap":
+	case ProviderLDAP:
 		c.Provider = ProviderLDAP
 		c.LDAP = &LDAPContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 		}
-	case "tailscale":
+	case ProviderTailscale:
 		c.Provider = ProviderTailscale
 		c.Tailscale = &TailscaleContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 		}
-	// By default we assume an unknown name which is oauth
-	default:
+	case ProviderOAuth:
 		c.Provider = ProviderOAuth
 		c.OAuth = &OAuthContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 			Groups: func() []string {
-				if session.OAuthGroups == "" {
+				if identity.IdentityContext.OAuth.Groups == "" {
 					return nil
 				}
-				return strings.Split(session.OAuthGroups, ",")
+				return strings.Split(identity.IdentityContext.OAuth.Groups, ",")
 			}(),
-			Sub:         session.OAuthSub,
-			DisplayName: session.OAuthName,
-			ID:          session.Provider,
+			DisplayName: identity.IdentityContext.OAuth.DisplayName,
 		}
+	default:
+		return nil, errors.New("unknown provider")
 	}
 
 	return c, nil

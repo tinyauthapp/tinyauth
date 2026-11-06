@@ -13,42 +13,6 @@ import (
 	"go.uber.org/dig"
 )
 
-type LinkingMode string
-
-const (
-	LinkingModeEmail    LinkingMode = "email"
-	LinkingModeUsername LinkingMode = "username"
-)
-
-type IdentityLocalContext struct {
-	Attributes model.UserAttributes `json:"attributes"`
-}
-
-type IdentityOAuthContext struct {
-	Groups      string `json:"groups"`
-	Sub         string `json:"sub"`
-	DisplayName string `json:"display_name"`
-}
-
-type IdentityLDAPContext struct {
-	Groups []string `json:"groups"`
-}
-
-type IdentityTailscaleContext struct {
-	NodeName string `json:"node_name"`
-}
-
-type IdentityContext struct {
-	Local     IdentityLocalContext     `json:"local"`
-	OAuth     IdentityOAuthContext     `json:"oauth"`
-	LDAP      IdentityLDAPContext      `json:"ldap"`
-	Tailscale IdentityTailscaleContext `json:"tailscale"`
-}
-
-func (l LinkingMode) String() string {
-	return string(l)
-}
-
 type IdentityServiceInput struct {
 	dig.In
 
@@ -60,7 +24,7 @@ type IdentityService struct {
 	store   repository.Store
 	runtime *model.RuntimeConfig
 
-	linkingMode LinkingMode
+	linkingMode model.LinkingMode
 }
 
 func NewIdentityService(i IdentityServiceInput) *IdentityService {
@@ -78,11 +42,11 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 	}
 
 	switch s.linkingMode {
-	case LinkingModeEmail:
+	case model.LinkingModeEmail:
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByEmail(ctx, args.Email)
 		}
-	case LinkingModeUsername:
+	case model.LinkingModeUsername:
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByUsername(ctx, args.Username)
 		}
@@ -175,7 +139,7 @@ type StoreIdentityParams struct {
 	ProviderUserID string
 
 	// Context information
-	IdentityContext IdentityContext
+	IdentityContext model.IdentityContext
 }
 
 func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams) (identity repository.Identity, err error) {
@@ -218,50 +182,36 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 	return identity, nil
 }
 
-type IdentityResult struct {
-	// User information
-	Username string
-	Email    string
-	Name     string
-
-	// Identity information
-	Provider       model.ProviderType
-	ProviderUserID string
-
-	// Context information
-	IdentityContext IdentityContext
-}
-
-func (s *IdentityService) Load(ctx context.Context, uuid string) (result IdentityResult, err error) {
+func (s *IdentityService) Load(ctx context.Context, uuid string) (result model.IdentityResult, err error) {
 	identity, err := s.store.GetIdentityByUUID(ctx, uuid)
 
 	if err != nil {
-		return IdentityResult{}, fmt.Errorf("failed to get identity: %w", err)
+		return model.IdentityResult{}, fmt.Errorf("failed to get identity: %w", err)
 	}
 
 	user, err := s.store.GetUserByUUID(ctx, identity.UserUUID)
 
 	if err != nil {
-		return IdentityResult{}, fmt.Errorf("failed to get user: %w", err)
+		return model.IdentityResult{}, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	var identityContext IdentityContext
+	var identityContext model.IdentityContext
 
 	if identity.ContextJSON != "" {
 		err = json.Unmarshal([]byte(identity.ContextJSON), &identityContext)
 
 		if err != nil {
-			return IdentityResult{}, fmt.Errorf("failed to unmarshal context: %w", err)
+			return model.IdentityResult{}, fmt.Errorf("failed to unmarshal context: %w", err)
 		}
 	}
 
 	provider, err := model.ProviderFromString(identity.Provider)
 
 	if err != nil {
-		return IdentityResult{}, fmt.Errorf("failed to parse provider: %w", err)
+		return model.IdentityResult{}, fmt.Errorf("failed to parse provider: %w", err)
 	}
 
-	return IdentityResult{
+	return model.IdentityResult{
 		Username:        user.Username,
 		Email:           user.Email,
 		Name:            user.Name,

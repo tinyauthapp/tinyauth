@@ -238,11 +238,10 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		Name:     user.Name,
 	})
 
-	identityContext := service.IdentityContext{
-		OAuth: service.IdentityOAuthContext{
+	identityContext := model.IdentityContext{
+		OAuth: model.IdentityOAuthContext{
 			Groups:      utils.CoalesceToString(user.Groups),
-			Sub:         user.Sub,
-			DisplayName: user.Name,
+			DisplayName: flow.Service.Name(),
 		},
 	}
 
@@ -264,7 +263,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 	controller.log.App.Debug().Str("username", userinfo.Username).Str("email", userinfo.Email).Msg("Identity created")
 
-	session, err := controller.sessions.Create(c, identity.UUID, service.SessionContext{})
+	session, err := controller.sessions.Create(c, identity.UUID, model.SessionContext{})
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to create session")
@@ -317,13 +316,6 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {
 	return params.LoginFor == string(FrontendLoginForOIDC)
-}
-
-func (controller *OAuthController) getCookieDomain() string {
-	if !controller.config.Auth.SubdomainsEnabled {
-		return ""
-	}
-	return controller.runtime.CookieDomain
 }
 
 func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {

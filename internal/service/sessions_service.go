@@ -18,14 +18,6 @@ var (
 	ErrSessionNotFound = fmt.Errorf("session not found")
 )
 
-type SessionLocalContext struct {
-	TOTPPending bool `json:"totp_pending"`
-}
-
-type SessionContext struct {
-	Local SessionLocalContext `json:"local"`
-}
-
 type SessionsService struct {
 	identity *IdentityService
 
@@ -52,7 +44,7 @@ func NewSessionsService(i SessionsServiceInput) *SessionsService {
 	}
 }
 
-func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessionContext SessionContext) (repository.Session, error) {
+func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessionContext model.SessionContext) (repository.Session, error) {
 	// validate that the identity exists (we use map[string]any because we know the ctx is json)
 	_, err := s.identity.Load[map[string]any](ctx, identityUUID)
 
@@ -141,37 +133,31 @@ func (s *SessionsService) Delete(ctx context.Context, uuid string) error {
 
 	return nil
 }
-
-type SessionGetResult struct {
-	Session        repository.Session
-	SessionContext SessionContext
-}
-
-func (s *SessionsService) Get(ctx context.Context, uuid string) (SessionGetResult, error) {
+func (s *SessionsService) Get(ctx context.Context, uuid string) (model.SessionGetResult, error) {
 	session, err := s.store.GetSessionByUUID(ctx, uuid)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return SessionGetResult{}, ErrSessionNotFound
+			return model.SessionGetResult{}, ErrSessionNotFound
 		}
-		return SessionGetResult{}, fmt.Errorf("failed to get session: %w", err)
+		return model.SessionGetResult{}, fmt.Errorf("failed to get session: %w", err)
 	}
 
-	var sessionContext SessionContext
+	var sessionContext model.SessionContext
 
 	err = json.Unmarshal([]byte(session.ContextJSON), &sessionContext)
 
 	if err != nil {
-		return SessionGetResult{}, fmt.Errorf("failed to unmarshal session context: %w", err)
+		return model.SessionGetResult{}, fmt.Errorf("failed to unmarshal session context: %w", err)
 	}
 
-	return SessionGetResult{
+	return model.SessionGetResult{
 		Session:        session,
 		SessionContext: sessionContext,
 	}, nil
 }
 
-func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContext SessionContext) (repository.Session, error) {
+func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContext model.SessionContext) (repository.Session, error) {
 	session, err := s.store.GetSessionByUUID(ctx, uuid)
 
 	if err != nil {
