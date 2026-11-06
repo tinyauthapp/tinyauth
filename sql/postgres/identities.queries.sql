@@ -2,11 +2,12 @@
 INSERT INTO "identities" (
     "uuid",
     "user_uuid",
+    "provider_type",
     "provider",
     "provider_user_id",
     "context_json"
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 

@@ -122,11 +122,11 @@ func (broker *OAuthBrokerService) GetService(name string) (IOAuthService, bool) 
 	return service, exists
 }
 
-func (broker *OAuthBrokerService) BeginOAuthFlow(serviceName string, params OAuthCallbackParams) (string, error) {
+func (broker *OAuthBrokerService) BeginOAuthFlow(serviceName string, params OAuthCallbackParams) (string, bool) {
 	service, exists := broker.services[serviceName]
 
 	if !exists {
-		return "", fmt.Errorf("oauth service not found: %s", serviceName)
+		return "", false
 	}
 
 	u := uuid.New()
@@ -143,7 +143,7 @@ func (broker *OAuthBrokerService) BeginOAuthFlow(serviceName string, params OAut
 
 	broker.caches.flows.Set(u.String(), session, time.Minute*10)
 
-	return u.String(), nil
+	return u.String(), true
 }
 
 func (broker *OAuthBrokerService) FlowAuthURL(flowId string) (string, bool) {

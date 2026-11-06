@@ -13,18 +13,20 @@ const createIdentity = `-- name: CreateIdentity :one
 INSERT INTO "identities" (
     "uuid",
     "user_uuid",
+    "provider_type",
     "provider",
     "provider_user_id",
     "context_json"
 ) VALUES (
-    ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?
 )
-RETURNING uuid, user_uuid, provider, provider_user_id, context_json
+RETURNING uuid, user_uuid, provider_type, provider, provider_user_id, context_json
 `
 
 type CreateIdentityParams struct {
 	UUID           string
 	UserUUID       string
+	ProviderType   string
 	Provider       string
 	ProviderUserID string
 	ContextJSON    string
@@ -34,6 +36,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 	row := q.db.QueryRowContext(ctx, createIdentity,
 		arg.UUID,
 		arg.UserUUID,
+		arg.ProviderType,
 		arg.Provider,
 		arg.ProviderUserID,
 		arg.ContextJSON,
@@ -42,6 +45,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 	err := row.Scan(
 		&i.UUID,
 		&i.UserUUID,
+		&i.ProviderType,
 		&i.Provider,
 		&i.ProviderUserID,
 		&i.ContextJSON,
@@ -50,7 +54,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 }
 
 const getIdentityByUUID = `-- name: GetIdentityByUUID :one
-SELECT uuid, user_uuid, provider, provider_user_id, context_json FROM "identities"
+SELECT uuid, user_uuid, provider_type, provider, provider_user_id, context_json FROM "identities"
 WHERE "uuid" = ?
 `
 
@@ -60,6 +64,7 @@ func (q *Queries) GetIdentityByUUID(ctx context.Context, uuid string) (Identity,
 	err := row.Scan(
 		&i.UUID,
 		&i.UserUUID,
+		&i.ProviderType,
 		&i.Provider,
 		&i.ProviderUserID,
 		&i.ContextJSON,

@@ -31,6 +31,7 @@ type UpdateUserParams struct {
 type Identity struct {
 	UUID           string
 	UserUUID       string
+	ProviderType   string
 	Provider       string
 	ProviderUserID string
 	ContextJSON    string
@@ -39,6 +40,7 @@ type Identity struct {
 type CreateIdentityParams struct {
 	UUID           string
 	UserUUID       string
+	ProviderType   string
 	Provider       string
 	ProviderUserID string
 	ContextJSON    string

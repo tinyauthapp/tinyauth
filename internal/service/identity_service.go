@@ -25,10 +25,9 @@ type IdentityLocalContext struct {
 }
 
 type IdentityOAuthContext struct {
-	Groups      []string `json:"groups"`
-	Sub         string   `json:"sub"`
-	DisplayName string   `json:"display_name"`
-	ID          string   `json:"id"`
+	Groups      string `json:"groups"`
+	Sub         string `json:"sub"`
+	DisplayName string `json:"display_name"`
 }
 
 type IdentityLDAPContext struct {
@@ -171,7 +170,8 @@ type StoreIdentityParams struct {
 	Name     string
 
 	// Identity information
-	Provider       model.ProviderType
+	ProviderID     string
+	ProviderType   model.ProviderType
 	ProviderUserID string
 
 	// Context information
@@ -179,7 +179,7 @@ type StoreIdentityParams struct {
 }
 
 func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams) (identity repository.Identity, err error) {
-	if params.Provider == model.ProviderTailscale &&
+	if params.ProviderType == model.ProviderTailscale &&
 		!slices.Contains(s.runtime.ConfiguredProviders, model.Provider{
 			Name: "Tailscale",
 			ID:   "tailscale",
@@ -205,7 +205,8 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 
 	identity, err = s.ensureIdentity(ctx, repository.CreateIdentityParams{
 		UserUUID:       user.UUID,
-		Provider:       params.Provider.String(),
+		Provider:       params.ProviderID,
+		ProviderType:   params.ProviderType.String(),
 		ProviderUserID: params.ProviderUserID,
 		ContextJSON:    string(encoded),
 	})
