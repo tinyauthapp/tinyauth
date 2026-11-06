@@ -19,6 +19,13 @@ type CreateUserParams struct {
 	Name     string
 }
 
+type UpdateUserParams struct {
+	Username string
+	Email    string
+	Name     string
+	UUID     string
+}
+
 // Identities
 
 type Identity struct {
@@ -41,7 +48,7 @@ type CreateIdentityParams struct {
 
 type Session struct {
 	UUID         string
-	IdentityUuid string
+	IdentityUUID string
 	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
@@ -50,11 +57,17 @@ type Session struct {
 
 type CreateSessionParams struct {
 	UUID         string
-	IdentityUuid string
+	IdentityUUID string
 	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
 	ContextJSON  string
+}
+
+type UpdateSessionByUUIDParams struct {
+	ExpiresAt   int64
+	ContextJSON string
+	UUID        string
 }
 
 // OIDC

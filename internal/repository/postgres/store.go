@@ -132,8 +132,24 @@ func (s *Store) GetSessionByUUID(ctx context.Context, uuid string) (repository.S
 	return repository.Session(r), nil
 }
 
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (repository.User, error) {
+	r, err := s.q.GetUserByEmail(ctx, email)
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
 func (s *Store) GetUserByUUID(ctx context.Context, uuid string) (repository.User, error) {
 	r, err := s.q.GetUserByUUID(ctx, uuid)
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
+func (s *Store) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
+	r, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
 		return repository.User{}, mapErr(err)
 	}
@@ -158,6 +174,18 @@ func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDC
 		return repository.OIDCSession{}, mapErr(err)
 	}
 	return repository.OIDCSession(r), nil
+}
+
+func (s *Store) UpdateSessionByUUID(ctx context.Context, arg repository.UpdateSessionByUUIDParams) (repository.Session, error) {
+	r, err := s.q.UpdateSessionByUUID(ctx, UpdateSessionByUUIDParams(arg))
+	if err != nil {
+		return repository.Session{}, mapErr(err)
+	}
+	return repository.Session(r), nil
+}
+
+func (s *Store) UpdateUser(ctx context.Context, arg repository.UpdateUserParams) error {
+	return mapErr(s.q.UpdateUser(ctx, UpdateUserParams(arg)))
 }
 
 func (s *Store) UpsertOIDCConsent(ctx context.Context, arg repository.UpsertOIDCConsentParams) (repository.OIDCConsent, error) {

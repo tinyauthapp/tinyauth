@@ -1,0 +1,201 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+	"uuid"
+
+	"github.com/tinyauthapp/tinyauth/internal/model"
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+	"github.com/tinyauthapp/tinyauth/internal/utils"
+	"go.uber.org/dig"
+)
+
+var (
+	ErrSessionNotFound = fmt.Errorf("session not found")
+)
+
+type SessionLocalContext struct {
+	TOTPPending bool `json:"totp_pending"`
+}
+
+type SessionContext struct {
+	Local SessionLocalContext `json:"local"`
+}
+
+type SessionsService struct {
+	identity *IdentityService
+
+	store   repository.Store
+	config  *model.Config
+	runtime *model.RuntimeConfig
+}
+
+type SessionsServiceInput struct {
+	dig.In
+
+	Store    repository.Store
+	Identity *IdentityService
+	Config   *model.Config
+	Runtime  *model.RuntimeConfig
+}
+
+func NewSessionsService(i SessionsServiceInput) *SessionsService {
+	return &SessionsService{
+		store:    i.Store,
+		identity: i.Identity,
+		config:   i.Config,
+		runtime:  i.Runtime,
+	}
+}
+
+func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessionContext SessionContext) (repository.Session, error) {
+	// validate that the identity exists (we use map[string]any because we know the ctx is json)
+	_, err := s.identity.Load[map[string]any](ctx, identityUUID)
+
+	if err != nil {
+		return repository.Session{}, err
+	}
+
+	u := uuid.New()
+	csrfToken := utils.GenerateSecureString(32)
+	createdAt := time.Now()
+
+	expiresAt := createdAt.Add(time.Duration(s.config.Auth.SessionExpiry) * time.Second)
+
+	if sessionContext.Local.TOTPPending {
+		expiresAt = createdAt.Add(time.Duration(3600) * time.Second)
+	}
+
+	contextJSON, err := json.Marshal(sessionContext)
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to marshal session context: %w", err)
+	}
+
+	session, err := s.store.CreateSession(ctx, repository.CreateSessionParams{
+		UUID:         u.String(),
+		IdentityUUID: identityUUID,
+		CSRFToken:    csrfToken,
+		ExpiresAt:    expiresAt.Unix(),
+		CreatedAt:    createdAt.Unix(),
+		ContextJSON:  string(contextJSON),
+	})
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	return session, nil
+}
+
+func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.Session, error) {
+	session, err := s.store.GetSessionByUUID(ctx, uuid)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return repository.Session{}, ErrSessionNotFound
+		}
+		return repository.Session{}, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	t := time.Now()
+
+	refreshThreshold := int64(time.Hour.Seconds())
+
+	if s.config.Auth.SessionExpiry <= int(time.Hour.Seconds()) {
+		refreshThreshold = int64(s.config.Auth.SessionExpiry / 2)
+	}
+
+	if int64(time.Unix(session.ExpiresAt, 0).Sub(t).Seconds()) > refreshThreshold {
+		return repository.Session{}, nil
+	}
+
+	expiresAt := time.Unix(session.ExpiresAt, 0).Add(time.Duration(refreshThreshold) * time.Second)
+
+	session, err = s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
+		UUID:        session.UUID,
+		ExpiresAt:   expiresAt.Unix(),
+		ContextJSON: session.ContextJSON,
+	})
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to update session expiry: %w", err)
+	}
+
+	return session, nil
+}
+
+func (s *SessionsService) Delete(ctx context.Context, uuid string) error {
+	err := s.store.DeleteSessionByUUID(ctx, uuid)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+
+	return nil
+}
+
+type SessionGetResult struct {
+	Session        repository.Session
+	SessionContext SessionContext
+}
+
+func (s *SessionsService) Get(ctx context.Context, uuid string) (SessionGetResult, error) {
+	session, err := s.store.GetSessionByUUID(ctx, uuid)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return SessionGetResult{}, ErrSessionNotFound
+		}
+		return SessionGetResult{}, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	var sessionContext SessionContext
+
+	err = json.Unmarshal([]byte(session.ContextJSON), &sessionContext)
+
+	if err != nil {
+		return SessionGetResult{}, fmt.Errorf("failed to unmarshal session context: %w", err)
+	}
+
+	return SessionGetResult{
+		Session:        session,
+		SessionContext: sessionContext,
+	}, nil
+}
+
+func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContext SessionContext) (repository.Session, error) {
+	session, err := s.store.GetSessionByUUID(ctx, uuid)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return repository.Session{}, ErrSessionNotFound
+		}
+		return repository.Session{}, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	contextJSON, err := json.Marshal(sessionContext)
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to marshal session context: %w", err)
+	}
+
+	session, err = s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
+		UUID:        session.UUID,
+		ExpiresAt:   session.ExpiresAt,
+		ContextJSON: string(contextJSON),
+	})
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to update session: %w", err)
+	}
+
+	return session, nil
+}

@@ -112,7 +112,7 @@ func GenerateUUID(str string) string {
 	return uuid.String()
 }
 
-func GenerateString(length int) string {
+func GenerateSecureString(length int) string {
 	src := make([]byte, length)
 	rand.Read(src)
 	return base64.RawURLEncoding.EncodeToString(src)[:length]

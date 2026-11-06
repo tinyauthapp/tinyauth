@@ -45,6 +45,23 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT uuid, username, email, name FROM "users"
+WHERE "email" = ?
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.UUID,
+		&i.Username,
+		&i.Email,
+		&i.Name,
+	)
+	return i, err
+}
+
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT uuid, username, email, name FROM "users"
 WHERE "uuid" = ?
@@ -60,4 +77,46 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid string) (User, error) 
 		&i.Name,
 	)
 	return i, err
+}
+
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT uuid, username, email, name FROM "users"
+WHERE "username" = ?
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+	var i User
+	err := row.Scan(
+		&i.UUID,
+		&i.Username,
+		&i.Email,
+		&i.Name,
+	)
+	return i, err
+}
+
+const updateUser = `-- name: UpdateUser :exec
+UPDATE "users" SET
+    "username" = ?,
+    "email" = ?,
+    "name" = ?
+WHERE "uuid" = ?
+`
+
+type UpdateUserParams struct {
+	Username string
+	Email    string
+	Name     string
+	UUID     string
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
+	_, err := q.db.ExecContext(ctx, updateUser,
+		arg.Username,
+		arg.Email,
+		arg.Name,
+		arg.UUID,
+	)
+	return err
 }

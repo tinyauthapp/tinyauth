@@ -15,6 +15,9 @@ type Store interface {
 	// Users
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetUserByUUID(ctx context.Context, uuid string) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 
 	// Identities
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (Identity, error)
@@ -25,11 +28,13 @@ type Store interface {
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	DeleteSessionByUUID(ctx context.Context, uuid string) error
 	GetSessionByUUID(ctx context.Context, uuid string) (Session, error)
+	UpdateSessionByUUID(ctx context.Context, arg UpdateSessionByUUIDParams) (Session, error)
 
 	// OIDC
 	CreateOIDCSession(ctx context.Context, arg CreateOIDCSessionParams) (OIDCSession, error)
 	DeleteExpiredOIDCSessions(ctx context.Context, arg DeleteExpiredOIDCSessionsParams) error
 	DeleteOIDCSessionBySub(ctx context.Context, sub string) error
+	GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (OIDCSession, error)
 	GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (OIDCSession, error)
 	GetOIDCSessionBySub(ctx context.Context, sub string) (OIDCSession, error)
 	UpdateOIDCSession(ctx context.Context, arg UpdateOIDCSessionParams) (OIDCSession, error)

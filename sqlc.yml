@@ -15,6 +15,7 @@ sql:
           csrf_token: "CSRFToken"
           oidc_session: "OIDCSession"
           oidc_consent: "OIDCConsent"
+          identity_uuid: "IdentityUUID"
         overrides:
           - column: "oidc_sessions.nonce"
             go_type: "string"
@@ -33,3 +34,4 @@ sql:
           csrf_token: "CSRFToken"
           oidc_session: "OIDCSession"
           oidc_consent: "OIDCConsent"
+          identity_uuid: "IdentityUUID"

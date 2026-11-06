@@ -11,6 +11,13 @@ INSERT INTO "sessions" (
 )
 RETURNING *;
 
+-- name: UpdateSessionByUUID :one
+UPDATE "sessions" SET
+    "expires_at" = $1,
+    "context_json" = $2
+WHERE "uuid" = $3
+RETURNING *;
+
 -- name: GetSessionByUUID :one
 SELECT * FROM "sessions"
 WHERE "uuid" = $1;

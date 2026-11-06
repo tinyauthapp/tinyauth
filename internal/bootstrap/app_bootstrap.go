@@ -38,12 +38,14 @@ type Services struct {
 	accessControlService *service.AccessControlsService
 	authService          *service.AuthService
 	dockerService        *service.DockerService
+	identityService      *service.IdentityService
 	kubernetesService    *service.KubernetesService
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
 	tailscaleService     *service.TailscaleService
 	policyEngine         *service.PolicyEngine
+	sessionsService      *service.SessionsService
 }
 
 type BootstrapApp struct {
@@ -253,17 +255,22 @@ func (app *BootstrapApp) Setup() error {
 
 	if app.services.authService.LocalAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
-			Name:  "Local",
-			ID:    "local",
-			OAuth: false,
+			Name: "Local",
+			ID:   "local",
 		})
 	}
 
 	if app.services.authService.LDAPAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
-			Name:  "LDAP",
-			ID:    "ldap",
-			OAuth: false,
+			Name: "LDAP",
+			ID:   "ldap",
+		})
+	}
+
+	if app.services.authService.TailscaleAuthConfigured() {
+		configuredProviders = append(configuredProviders, model.Provider{
+			Name: "Tailscale",
+			ID:   "tailscale",
 		})
 	}
 

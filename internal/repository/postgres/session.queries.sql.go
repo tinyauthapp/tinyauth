@@ -25,7 +25,7 @@ RETURNING uuid, identity_uuid, csrf_token, expires_at, created_at, context_json
 
 type CreateSessionParams struct {
 	UUID         string
-	IdentityUuid string
+	IdentityUUID string
 	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
@@ -35,7 +35,7 @@ type CreateSessionParams struct {
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRowContext(ctx, createSession,
 		arg.UUID,
-		arg.IdentityUuid,
+		arg.IdentityUUID,
 		arg.CSRFToken,
 		arg.ExpiresAt,
 		arg.CreatedAt,
@@ -44,7 +44,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	var i Session
 	err := row.Scan(
 		&i.UUID,
-		&i.IdentityUuid,
+		&i.IdentityUUID,
 		&i.CSRFToken,
 		&i.ExpiresAt,
 		&i.CreatedAt,
@@ -83,7 +83,35 @@ func (q *Queries) GetSessionByUUID(ctx context.Context, uuid string) (Session, e
 	var i Session
 	err := row.Scan(
 		&i.UUID,
-		&i.IdentityUuid,
+		&i.IdentityUUID,
+		&i.CSRFToken,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.ContextJSON,
+	)
+	return i, err
+}
+
+const updateSessionByUUID = `-- name: UpdateSessionByUUID :one
+UPDATE "sessions" SET
+    "expires_at" = $1,
+    "context_json" = $2
+WHERE "uuid" = $3
+RETURNING uuid, identity_uuid, csrf_token, expires_at, created_at, context_json
+`
+
+type UpdateSessionByUUIDParams struct {
+	ExpiresAt   int64
+	ContextJSON string
+	UUID        string
+}
+
+func (q *Queries) UpdateSessionByUUID(ctx context.Context, arg UpdateSessionByUUIDParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, updateSessionByUUID, arg.ExpiresAt, arg.ContextJSON, arg.UUID)
+	var i Session
+	err := row.Scan(
+		&i.UUID,
+		&i.IdentityUUID,
 		&i.CSRFToken,
 		&i.ExpiresAt,
 		&i.CreatedAt,

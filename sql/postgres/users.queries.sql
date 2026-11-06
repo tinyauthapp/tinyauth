@@ -12,3 +12,18 @@ RETURNING *;
 -- name: GetUserByUUID :one
 SELECT * FROM "users"
 WHERE "uuid" = $1;
+
+-- name: GetUserByUsername :one
+SELECT * FROM "users"
+WHERE "username" = $1;
+
+-- name: GetUserByEmail :one
+SELECT * FROM "users"
+WHERE "email" = $1;
+
+-- name: UpdateUser :exec
+UPDATE "users" SET
+    "username" = $1,
+    "email" = $2,
+    "name" = $3
+WHERE "uuid" = $4;

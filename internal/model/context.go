@@ -22,6 +22,40 @@ const (
 	ProviderTailscale
 )
 
+func (t ProviderType) String() string {
+	switch t {
+	case ProviderLocal:
+		return "local"
+	case ProviderBasicAuth:
+		return "basic"
+	case ProviderOAuth:
+		return "oauth"
+	case ProviderLDAP:
+		return "ldap"
+	case ProviderTailscale:
+		return "tailscale"
+	default:
+		return "unknown"
+	}
+}
+
+func ProviderFromString(s string) (ProviderType, error) {
+	switch s {
+	case "local":
+		return ProviderLocal, nil
+	case "basic":
+		return ProviderBasicAuth, nil
+	case "oauth":
+		return ProviderOAuth, nil
+	case "ldap":
+		return ProviderLDAP, nil
+	case "tailscale":
+		return ProviderTailscale, nil
+	default:
+		return ProviderLocal, errors.New("unknown provider")
+	}
+}
+
 type UserContext struct {
 	Authenticated bool
 	Provider      ProviderType

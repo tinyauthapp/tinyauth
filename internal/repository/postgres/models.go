@@ -33,7 +33,7 @@ type OIDCSession struct {
 
 type Session struct {
 	UUID         string
-	IdentityUuid string
+	IdentityUUID string
 	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
