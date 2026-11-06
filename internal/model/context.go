@@ -230,6 +230,14 @@ func (c *UserContext) getBaseContext() *BaseContext {
 	}
 }
 
+func (c *UserContext) GetDistinctUserID() string {
+	base := c.getBaseContext()
+	if base == nil {
+		return ""
+	}
+	return base.DistinctUserID
+}
+
 func (c *UserContext) GetUsername() string {
 	base := c.getBaseContext()
 	if base == nil {

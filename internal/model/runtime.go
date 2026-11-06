@@ -47,7 +47,6 @@ type IdentityResult struct {
 }
 
 type IdentityLocalContext struct {
-	UserID     string         `json:"user_id"`
 	Attributes UserAttributes `json:"attributes"`
 }
 
@@ -58,7 +57,6 @@ type IdentityOAuthContext struct {
 
 type IdentityLDAPContext struct {
 	Groups []string `json:"groups"`
-	DN     string   `json:"dn"`
 }
 
 type IdentityTailscaleContext struct {

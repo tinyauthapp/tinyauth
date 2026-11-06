@@ -180,7 +180,7 @@ func (app *BootstrapApp) Setup() error {
 	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 
 	app.runtime.SessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
-	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
+	app.runtime.OAuthFlowCookieName = fmt.Sprintf("%s-%s", model.OAuthFlowCookieName, cookieId)
 
 	// database
 	store, err := app.SetupStore()

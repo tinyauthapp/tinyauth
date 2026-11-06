@@ -15,7 +15,6 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/assets"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/repository/postgres"
 	"github.com/tinyauthapp/tinyauth/internal/repository/sqlite"
 )
@@ -23,7 +22,7 @@ import (
 func (app *BootstrapApp) SetupStore() (repository.Store, error) {
 	switch app.config.Database.Driver {
 	case "memory":
-		return memory.New(), nil
+		return app.setupSQLite(":memory:")
 	case "sqlite", "":
 		return app.setupSQLite(app.config.Database.Path)
 	case "postgres":

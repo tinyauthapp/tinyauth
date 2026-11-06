@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -28,9 +27,11 @@ type TotpRequest struct {
 }
 
 type UserController struct {
-	log     *logger.Logger
-	runtime *model.RuntimeConfig
-	auth    *service.AuthService
+	log      *logger.Logger
+	runtime  *model.RuntimeConfig
+	auth     *service.AuthService
+	identity *service.IdentityService
+	sessions *service.SessionsService
 }
 
 type UserControllerInput struct {
@@ -40,13 +41,17 @@ type UserControllerInput struct {
 	RuntimeConfig *model.RuntimeConfig
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	AuthService   *service.AuthService
+	Identity      *service.IdentityService
+	Sessions      *service.SessionsService
 }
 
 func NewUserController(i UserControllerInput) *UserController {
 	controller := &UserController{
-		log:     i.Log,
-		runtime: i.RuntimeConfig,
-		auth:    i.AuthService,
+		log:      i.Log,
+		runtime:  i.RuntimeConfig,
+		auth:     i.AuthService,
+		identity: i.Identity,
+		sessions: i.Sessions,
 	}
 
 	userGroup := i.RouterGroup.Group("/user")
@@ -129,13 +134,15 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 		return
 	}
 
-	var localUser *model.LocalUser
+	var identityParams service.StoreIdentityParams
+	var sessionContext model.SessionContext
 
-	if search.Type == model.UserLocal {
-		localUser = controller.auth.GetLocalUser(req.Username)
+	switch search.Type {
+	case model.UserLocal:
+		user := controller.auth.GetLocalUser(search.Username)
 
-		if localUser == nil {
-			controller.log.App.Error().Str("username", req.Username).Msg("Local user not found after successful password verification")
+		if user == nil {
+			controller.log.App.Error().Str("username", search.Username).Msg("Local user not found after successful password verification")
 			c.JSON(401, gin.H{
 				"status":  401,
 				"message": "Unauthorized",
@@ -143,83 +150,96 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 			return
 		}
 
-		if localUser.TOTPSecret != "" {
-			controller.log.App.Debug().Str("username", req.Username).Msg("TOTP required for user, creating pending TOTP session")
+		if user.TOTPSecret != "" {
+			sessionContext.Local.TOTPPending = true
+		}
 
-			name := localUser.Attributes.Name
-			if name == "" {
-				name = utils.Capitalize(localUser.Username)
-			}
+		name := utils.Capitalize(user.Username)
+		if user.Attributes.Name != "" {
+			name = user.Attributes.Name
+		}
 
-			email := localUser.Attributes.Email
-			if email == "" {
-				email = utils.CompileUserEmail(localUser.Username, controller.runtime.CookieDomain)
-			}
+		email := utils.CompileUserEmail(user.Username, controller.runtime.CookieDomain)
+		if user.Attributes.Email != "" {
+			email = user.Attributes.Email
+		}
 
-			cookie, err := controller.auth.CreateSession(c, repository.Session{
-				Username:    localUser.Username,
-				Name:        name,
-				Email:       email,
-				Provider:    "local",
-				TotpPending: true,
-			})
+		identityParams = service.StoreIdentityParams{
+			Username:       user.Username,
+			Email:          email,
+			Name:           name,
+			ProviderID:     "local",
+			ProviderType:   model.ProviderLocal,
+			ProviderUserID: "local:" + user.Username,
+			IdentityContext: model.IdentityContext{
+				Local: model.IdentityLocalContext{
+					Attributes: user.Attributes,
+				},
+			},
+		}
+	case model.UserLDAP:
+		user, err := controller.auth.GetLDAPUser(search.Username)
 
-			if err != nil {
-				controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Failed to create pending TOTP session")
-				c.JSON(500, gin.H{
-					"status":  500,
-					"message": "Internal Server Error",
-				})
-				return
-			}
-
-			http.SetCookie(c.Writer, cookie)
-
-			c.JSON(200, gin.H{
-				"status":      200,
-				"message":     "TOTP required",
-				"totpPending": true,
+		if err != nil {
+			controller.log.App.Error().Err(err).Str("username", search.Username).Msg("Error retrieving LDAP user after successful password verification")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
 			})
 			return
 		}
-	}
 
-	sessionCookie := repository.Session{
-		Username: req.Username,
-		Name:     utils.Capitalize(req.Username),
-		Email:    utils.CompileUserEmail(req.Username, controller.runtime.CookieDomain),
-		Provider: "local",
-	}
+		if user == nil {
+			controller.log.App.Error().Str("username", search.Username).Msg("LDAP user not found after successful password verification")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 
-	if search.Type == model.UserLocal {
-		if localUser.Attributes.Name != "" {
-			sessionCookie.Name = localUser.Attributes.Name
-		}
-		if localUser.Attributes.Email != "" {
-			sessionCookie.Email = localUser.Attributes.Email
-		}
-	}
-
-	if search.Type == model.UserLDAP {
-		sessionCookie.Provider = "ldap"
-		if search.Email != "" {
-			sessionCookie.Email = search.Email
-		}
-		if search.Name != "" {
-			sessionCookie.Name = search.Name
+		identityParams = service.StoreIdentityParams{
+			Username:       req.Username,
+			Email:          search.Email,
+			Name:           search.Name,
+			ProviderID:     "ldap",
+			ProviderType:   model.ProviderLDAP,
+			ProviderUserID: user.DN,
+			IdentityContext: model.IdentityContext{
+				LDAP: model.IdentityLDAPContext{
+					Groups: user.Groups,
+				},
+			},
 		}
 	}
 
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	identity, err := controller.identity.Store(c, identityParams)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Failed to create session cookie after successful login")
+		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error storing identity after successful login")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
 		})
 		return
 	}
+
+	session, err := controller.sessions.Create(c, identity.UUID, sessionContext)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Str("username", req.Username).Msg("Error creating session after successful login")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.SessionCookieName,
+		Value:     session.UUID,
+		ExpiresAt: time.Unix(session.ExpiresAt, 0),
+	})
 
 	http.SetCookie(c.Writer, cookie)
 
@@ -260,7 +280,7 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		return
 	}
 
-	cookie, err := controller.auth.DeleteSession(c, uuid)
+	err = controller.sessions.Delete(c, uuid)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Error deleting session on logout")
@@ -280,6 +300,12 @@ func (controller *UserController) logoutHandler(c *gin.Context) {
 		controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
 	}
 
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.SessionCookieName,
+		Value:     "",
+		ExpiresAt: time.Now().Add(-time.Hour),
+	})
+
 	http.SetCookie(c.Writer, cookie)
 
 	c.JSON(200, gin.H{
@@ -297,6 +323,17 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		c.JSON(400, gin.H{
 			"status":  400,
 			"message": "Bad Request",
+		})
+		return
+	}
+
+	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
 		})
 		return
 	}
@@ -372,10 +409,8 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 			return fmt.Errorf("invalid TOTP code")
 		}
 
-		uuid, err := c.Cookie(controller.runtime.SessionCookieName)
-
 		if err == nil {
-			_, err = controller.auth.DeleteSession(c, uuid)
+			err = controller.sessions.Delete(c, uuid)
 			if err != nil {
 				controller.log.App.Error().Err(err).Msg("Failed to delete pending TOTP session after successful verification")
 			}
@@ -392,32 +427,20 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		return
 	}
 
-	sessionCookie := repository.Session{
-		Username: user.Username,
-		Name:     utils.Capitalize(user.Username),
-		Email:    utils.CompileUserEmail(user.Username, controller.runtime.CookieDomain),
-		Provider: "local",
-	}
-
-	if user.Attributes.Name != "" {
-		sessionCookie.Name = user.Attributes.Name
-	}
-	if user.Attributes.Email != "" {
-		sessionCookie.Email = user.Attributes.Email
-	}
-
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	_, err = controller.sessions.Update(c, uuid, model.SessionContext{
+		Local: model.SessionLocalContext{
+			TOTPPending: false,
+		},
+	})
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful TOTP verification")
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to update pending TOTP session after successful verification")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
 		})
 		return
 	}
-
-	http.SetCookie(c.Writer, cookie)
 
 	controller.log.App.Info().Str("username", context.GetUsername()).Msg("TOTP verification successful, login complete")
 	controller.log.AuditLoginSuccess(context.GetUsername(), "local", c.ClientIP())
@@ -457,23 +480,45 @@ func (controller *UserController) tailscaleHandler(c *gin.Context) {
 		return
 	}
 
-	sessionCookie := repository.Session{
-		Username: context.Tailscale.Username,
-		Name:     context.Tailscale.Name,
-		Email:    context.Tailscale.Email,
-		Provider: "tailscale",
-	}
-
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	identity, err := controller.identity.Store(c, service.StoreIdentityParams{
+		Username:       context.Tailscale.Username,
+		Email:          context.Tailscale.Email,
+		Name:           context.Tailscale.Name,
+		ProviderID:     "tailscale",
+		ProviderType:   model.ProviderTailscale,
+		ProviderUserID: context.GetDistinctUserID(),
+		IdentityContext: model.IdentityContext{
+			Tailscale: model.IdentityTailscaleContext{
+				NodeName: context.Tailscale.NodeName,
+			},
+		},
+	})
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create session cookie after successful Tailscale login")
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to store Tailscale identity after successful login")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
 		})
 		return
 	}
+
+	session, err := controller.sessions.Create(c, identity.UUID, model.SessionContext{})
+
+	if err != nil {
+		controller.log.App.Error().Err(err).Str("username", context.GetUsername()).Msg("Failed to create Tailscale session after successful login")
+		c.JSON(500, gin.H{
+			"status":  500,
+			"message": "Internal Server Error",
+		})
+		return
+	}
+
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.SessionCookieName,
+		Value:     session.UUID,
+		ExpiresAt: time.Unix(session.ExpiresAt, 0),
+	})
 
 	http.SetCookie(c.Writer, cookie)
 

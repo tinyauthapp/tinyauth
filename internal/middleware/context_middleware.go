@@ -344,9 +344,10 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		userContext.Provider = model.ProviderLocal
 		userContext.Local = &model.LocalContext{
 			BaseContext: model.BaseContext{
-				Username: user.Username,
-				Name:     utils.Capitalize(user.Username),
-				Email:    utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
+				DistinctUserID: "local:" + user.Username,
+				Username:       user.Username,
+				Name:           utils.Capitalize(user.Username),
+				Email:          utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
 			},
 			Attributes: user.Attributes,
 		}
@@ -374,8 +375,9 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		userContext.Provider = model.ProviderLDAP
 		userContext.LDAP = &model.LDAPContext{
 			BaseContext: model.BaseContext{
-				Username: username,
-				Name:     name,
+				DistinctUserID: search.Username,
+				Username:       username,
+				Name:           name,
 			},
 			Groups: user.Groups,
 		}
@@ -417,8 +419,9 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 
 	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
-			Email: whois.LoginName,
-			Name:  whois.DisplayName,
+			DistinctUserID: whois.UserID,
+			Email:          whois.LoginName,
+			Name:           whois.DisplayName,
 		},
 		NodeName: whois.NodeName,
 	}
