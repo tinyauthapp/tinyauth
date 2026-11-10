@@ -26,6 +26,11 @@ type UpdateUserParams struct {
 	UUID     string
 }
 
+type GetUserByUsernameAndEmailParams struct {
+	Username string
+	Email    string
+}
+
 // Identities
 
 type Identity struct {

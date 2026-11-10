@@ -21,6 +21,10 @@ WHERE "username" = ?;
 SELECT * FROM "users"
 WHERE "email" = ?;
 
+-- name: GetUserByUsernameAndEmail :one
+SELECT * FROM "users"
+WHERE "username" = ? AND "email" = ?;
+
 -- name: UpdateUser :exec
 UPDATE "users" SET
     "username" = ?,

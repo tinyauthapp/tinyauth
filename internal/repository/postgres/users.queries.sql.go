@@ -96,6 +96,28 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserByUsernameAndEmail = `-- name: GetUserByUsernameAndEmail :one
+SELECT uuid, username, email, name FROM "users"
+WHERE "username" = $1 AND "email" = $2
+`
+
+type GetUserByUsernameAndEmailParams struct {
+	Username string
+	Email    string
+}
+
+func (q *Queries) GetUserByUsernameAndEmail(ctx context.Context, arg GetUserByUsernameAndEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUsernameAndEmail, arg.Username, arg.Email)
+	var i User
+	err := row.Scan(
+		&i.UUID,
+		&i.Username,
+		&i.Email,
+		&i.Name,
+	)
+	return i, err
+}
+
 const updateUser = `-- name: UpdateUser :exec
 UPDATE "users" SET
     "username" = $1,

@@ -376,7 +376,7 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		Email: input.Email,
 	}
 
-	if controller.config.Experimental.OAuthBridgeEnabled {
+	if controller.config.Experimental.NoOAuthUserinfoGen {
 		if input.Username != "" {
 			info.Username = input.Username
 		} else {

@@ -21,6 +21,10 @@ WHERE "username" = $1;
 SELECT * FROM "users"
 WHERE "email" = $1;
 
+-- name: GetUserByUsernameAndEmail :one
+SELECT * FROM "users"
+WHERE "username" = $1 AND "email" = $2;
+
 -- name: UpdateUser :exec
 UPDATE "users" SET
     "username" = $1,

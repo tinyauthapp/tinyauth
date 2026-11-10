@@ -426,7 +426,7 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 		NodeName: whois.NodeName,
 	}
 
-	if m.config.Experimental.OAuthBridgeEnabled {
+	if m.config.Experimental.NoOAuthUserinfoGen {
 		uctx.BaseContext.Username = strings.SplitN(whois.LoginName, "@", 2)[0]
 	} else {
 		uctx.BaseContext.Username = strings.Replace(whois.LoginName, "@", "_", 1)

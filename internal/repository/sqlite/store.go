@@ -156,6 +156,14 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (reposit
 	return repository.User(r), nil
 }
 
+func (s *Store) GetUserByUsernameAndEmail(ctx context.Context, arg repository.GetUserByUsernameAndEmailParams) (repository.User, error) {
+	r, err := s.q.GetUserByUsernameAndEmail(ctx, GetUserByUsernameAndEmailParams(arg))
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
 func (s *Store) ListOIDCConsents(ctx context.Context) ([]repository.OIDCConsent, error) {
 	rows, err := s.q.ListOIDCConsents(ctx)
 	if err != nil {

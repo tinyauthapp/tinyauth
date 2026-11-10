@@ -1,6 +1,10 @@
 package model
 
-import "github.com/tinyauthapp/tinyauth/internal/repository"
+import (
+	"fmt"
+
+	"github.com/tinyauthapp/tinyauth/internal/repository"
+)
 
 type RuntimeConfig struct {
 	AppURL                   string
@@ -26,10 +30,24 @@ type LinkingMode string
 const (
 	LinkingModeEmail    LinkingMode = "email"
 	LinkingModeUsername LinkingMode = "username"
+	LinkingModeBoth     LinkingMode = "both"
 )
 
 func (l LinkingMode) String() string {
 	return string(l)
+}
+
+func LinkingModeFromString(s string) (LinkingMode, error) {
+	switch s {
+	case "email":
+		return LinkingModeEmail, nil
+	case "username":
+		return LinkingModeUsername, nil
+	case "both":
+		return LinkingModeBoth, nil
+	default:
+		return LinkingModeBoth, fmt.Errorf("invalid linking mode: %s", s)
+	}
 }
 
 type IdentityResult struct {

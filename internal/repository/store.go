@@ -17,6 +17,7 @@ type Store interface {
 	GetUserByUUID(ctx context.Context, uuid string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByUsernameAndEmail(ctx context.Context, arg GetUserByUsernameAndEmailParams) (User, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 
 	// Identities

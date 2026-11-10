@@ -17,6 +17,7 @@ type IdentityServiceInput struct {
 	dig.In
 
 	Store   repository.Store
+	Config  *model.Config
 	Runtime *model.RuntimeConfig
 }
 
@@ -27,13 +28,18 @@ type IdentityService struct {
 	linkingMode model.LinkingMode
 }
 
-func NewIdentityService(i IdentityServiceInput) *IdentityService {
-	return &IdentityService{
-		store:   i.Store,
-		runtime: i.Runtime,
-		// TODO: make configurable
-		linkingMode: model.LinkingModeEmail,
+func NewIdentityService(i IdentityServiceInput) (*IdentityService, error) {
+	linkingMode, err := model.LinkingModeFromString(i.Config.Auth.LinkingMode)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse linking mode: %w", err)
 	}
+
+	return &IdentityService{
+		store:       i.Store,
+		runtime:     i.Runtime,
+		linkingMode: linkingMode,
+	}, nil
 }
 
 func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx context.Context) (user repository.User, err error) {
@@ -44,6 +50,13 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 	}
 
 	switch s.linkingMode {
+	case model.LinkingModeBoth:
+		return func(ctx context.Context) (user repository.User, err error) {
+			return s.store.GetUserByUsernameAndEmail(ctx, repository.GetUserByUsernameAndEmailParams{
+				Username: args.Username,
+				Email:    args.Email,
+			})
+		}
 	case model.LinkingModeEmail:
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByEmail(ctx, args.Email)
