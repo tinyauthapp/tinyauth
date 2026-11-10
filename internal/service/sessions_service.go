@@ -45,8 +45,8 @@ func NewSessionsService(i SessionsServiceInput) *SessionsService {
 }
 
 func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessionContext model.SessionContext) (repository.Session, error) {
-	// validate that the identity exists (we use map[string]any because we know the ctx is json)
-	_, err := s.identity.Load[map[string]any](ctx, identityUUID)
+	// validate that the identity exists
+	_, err := s.identity.Load(ctx, identityUUID)
 
 	if err != nil {
 		return repository.Session{}, err

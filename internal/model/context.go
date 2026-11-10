@@ -81,9 +81,8 @@ type LocalContext struct {
 type OAuthContext struct {
 	BaseContext
 	Groups      []string
-	Sub         string
 	DisplayName string
-	ID          string
+	ProviderID  string
 }
 
 type LDAPContext struct {
@@ -147,7 +146,7 @@ func (c *UserContext) NewFromSession(session SessionGetResult, identity Identity
 		AuthTime:      session.Session.CreatedAt,
 	}
 
-	switch identity.Provider {
+	switch identity.ProviderType {
 	case ProviderLocal:
 		c.Provider = ProviderLocal
 		c.Local = &LocalContext{
@@ -195,6 +194,7 @@ func (c *UserContext) NewFromSession(session SessionGetResult, identity Identity
 				return strings.Split(identity.IdentityContext.OAuth.Groups, ",")
 			}(),
 			DisplayName: identity.IdentityContext.OAuth.DisplayName,
+			ProviderID:  identity.Provider,
 		}
 	default:
 		return nil, errors.New("unknown provider")
@@ -269,7 +269,7 @@ func (c *UserContext) GetProviderID() string {
 	case ProviderLDAP:
 		return "ldap"
 	case ProviderOAuth:
-		return c.OAuth.ID
+		return c.OAuth.ProviderID
 	case ProviderTailscale:
 		return "tailscale"
 	default:

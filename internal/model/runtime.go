@@ -39,7 +39,8 @@ type IdentityResult struct {
 	Name     string
 
 	// Identity information
-	Provider       ProviderType
+	Provider       string
+	ProviderType   ProviderType
 	ProviderUserID string
 
 	// Context information

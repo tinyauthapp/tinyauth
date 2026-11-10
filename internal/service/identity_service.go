@@ -31,6 +31,8 @@ func NewIdentityService(i IdentityServiceInput) *IdentityService {
 	return &IdentityService{
 		store:   i.Store,
 		runtime: i.Runtime,
+		// TODO: make configurable
+		linkingMode: model.LinkingModeEmail,
 	}
 }
 
@@ -205,7 +207,7 @@ func (s *IdentityService) Load(ctx context.Context, uuid string) (result model.I
 		}
 	}
 
-	provider, err := model.ProviderFromString(identity.Provider)
+	provider, err := model.ProviderFromString(identity.ProviderType)
 
 	if err != nil {
 		return model.IdentityResult{}, fmt.Errorf("failed to parse provider: %w", err)
@@ -215,7 +217,8 @@ func (s *IdentityService) Load(ctx context.Context, uuid string) (result model.I
 		Username:        user.Username,
 		Email:           user.Email,
 		Name:            user.Name,
-		Provider:        provider,
+		Provider:        identity.Provider,
+		ProviderType:    provider,
 		ProviderUserID:  identity.ProviderUserID,
 		IdentityContext: identityContext,
 	}, nil

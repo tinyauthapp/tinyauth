@@ -98,8 +98,8 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				return
 			}
 
-			if userContext != nil {
-				m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
+			if err != nil {
+				m.log.App.Debug().Err(err).Msg("Error authenticating session cookie")
 			}
 		}
 
@@ -244,13 +244,13 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 		}
 
 	case model.ProviderOAuth:
-		_, exists := m.broker.GetService(userContext.OAuth.ID)
+		_, exists := m.broker.GetService(userContext.OAuth.ProviderID)
 
 		if !exists {
-			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ID)
+			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ProviderID)
 		}
 
-		if !m.auth.IsEmailWhitelisted(userContext.OAuth.ID, userContext.OAuth.Email) {
+		if !m.auth.IsEmailWhitelisted(userContext.OAuth.ProviderID, userContext.OAuth.Email) {
 			err := m.session.Delete(ctx, uuid)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error deleting session: %w", err)
