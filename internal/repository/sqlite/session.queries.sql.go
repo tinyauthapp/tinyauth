@@ -13,20 +13,18 @@ const createSession = `-- name: CreateSession :one
 INSERT INTO "sessions" (
     "uuid",
     "identity_uuid",
-    "csrf_token",
     "expires_at",
     "created_at",
     "context_json"
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?
 )
-RETURNING uuid, identity_uuid, csrf_token, expires_at, created_at, context_json
+RETURNING uuid, identity_uuid, expires_at, created_at, context_json
 `
 
 type CreateSessionParams struct {
 	UUID         string
 	IdentityUUID string
-	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
 	ContextJSON  string
@@ -36,7 +34,6 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	row := q.db.QueryRowContext(ctx, createSession,
 		arg.UUID,
 		arg.IdentityUUID,
-		arg.CSRFToken,
 		arg.ExpiresAt,
 		arg.CreatedAt,
 		arg.ContextJSON,
@@ -45,7 +42,6 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	err := row.Scan(
 		&i.UUID,
 		&i.IdentityUUID,
-		&i.CSRFToken,
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.ContextJSON,
@@ -74,7 +70,7 @@ func (q *Queries) DeleteSessionByUUID(ctx context.Context, uuid string) error {
 }
 
 const getSessionByUUID = `-- name: GetSessionByUUID :one
-SELECT uuid, identity_uuid, csrf_token, expires_at, created_at, context_json FROM "sessions"
+SELECT uuid, identity_uuid, expires_at, created_at, context_json FROM "sessions"
 WHERE "uuid" = ?
 `
 
@@ -84,7 +80,6 @@ func (q *Queries) GetSessionByUUID(ctx context.Context, uuid string) (Session, e
 	err := row.Scan(
 		&i.UUID,
 		&i.IdentityUUID,
-		&i.CSRFToken,
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.ContextJSON,
@@ -97,7 +92,7 @@ UPDATE "sessions" SET
     "expires_at" = ?,
     "context_json" = ?
 WHERE "uuid" = ?
-RETURNING uuid, identity_uuid, csrf_token, expires_at, created_at, context_json
+RETURNING uuid, identity_uuid, expires_at, created_at, context_json
 `
 
 type UpdateSessionByUUIDParams struct {
@@ -112,7 +107,6 @@ func (q *Queries) UpdateSessionByUUID(ctx context.Context, arg UpdateSessionByUU
 	err := row.Scan(
 		&i.UUID,
 		&i.IdentityUUID,
-		&i.CSRFToken,
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.ContextJSON,

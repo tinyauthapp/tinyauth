@@ -2,12 +2,11 @@
 INSERT INTO "sessions" (
     "uuid",
     "identity_uuid",
-    "csrf_token",
     "expires_at",
     "created_at",
     "context_json"
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5
 )
 RETURNING *;
 

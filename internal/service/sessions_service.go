@@ -10,7 +10,6 @@ import (
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"go.uber.org/dig"
 )
 
@@ -53,7 +52,6 @@ func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessi
 	}
 
 	u := uuid.New()
-	csrfToken := utils.GenerateSecureString(32)
 	createdAt := time.Now()
 
 	expiresAt := createdAt.Add(time.Duration(s.config.Auth.SessionExpiry) * time.Second)
@@ -71,7 +69,6 @@ func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessi
 	session, err := s.store.CreateSession(ctx, repository.CreateSessionParams{
 		UUID:         u.String(),
 		IdentityUUID: identityUUID,
-		CSRFToken:    csrfToken,
 		ExpiresAt:    expiresAt.Unix(),
 		CreatedAt:    createdAt.Unix(),
 		ContextJSON:  string(contextJSON),

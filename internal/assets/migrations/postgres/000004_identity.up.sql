@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS "identities" (
 CREATE TABLE IF NOT EXISTS "sessions" (
     "uuid" TEXT PRIMARY KEY,
     "identity_uuid" TEXT NOT NULL,
-    "csrf_token" TEXT NOT NULL,
     "expires_at" BIGINT NOT NULL,
     "created_at" BIGINT NOT NULL,
     "context_json" TEXT NOT NULL,

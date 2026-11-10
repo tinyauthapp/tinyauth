@@ -51,7 +51,6 @@ type CreateIdentityParams struct {
 type Session struct {
 	UUID         string
 	IdentityUUID string
-	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
 	ContextJSON  string
@@ -60,7 +59,6 @@ type Session struct {
 type CreateSessionParams struct {
 	UUID         string
 	IdentityUUID string
-	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
 	ContextJSON  string

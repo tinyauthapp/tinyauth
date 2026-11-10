@@ -35,7 +35,6 @@ type OIDCSession struct {
 type Session struct {
 	UUID         string
 	IdentityUUID string
-	CSRFToken    string
 	ExpiresAt    int64
 	CreatedAt    int64
 	ContextJSON  string
