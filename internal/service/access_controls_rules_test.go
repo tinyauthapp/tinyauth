@@ -212,6 +212,66 @@ func TestUserAllowedRule(t *testing.T) {
 			},
 			expected: EffectDeny,
 		},
+		{
+			name: "denies user when both block and allow configured and user in block list",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Block: "evil", Allow: "alice,bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "evil"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "allows user when both block and allow configured and user in allow list",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Block: "evil", Allow: "alice,bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectAllow,
+		},
+		{
+			name: "denies user when both block and allow configured and user in neither",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Block: "evil", Allow: "alice,bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "charlie"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
+		{
+			name: "denies user when both block and allow match same user",
+			ctx: &ACLContext{
+				ACLs: &model.App{
+					Users: model.AppUsers{Block: "alice", Allow: "alice,bob"},
+				},
+				UserContext: &model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{Username: "alice"},
+					},
+				},
+			},
+			expected: EffectDeny,
+		},
 	}
 
 	for _, tt := range tests {

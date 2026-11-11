@@ -69,7 +69,6 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 			rule.Log.App.Debug().Str("username", ctx.UserContext.GetUsername()).Msg("User is in users block list, denying access")
 			return EffectDeny
 		}
-		return EffectAllow
 	}
 
 	rule.Log.App.Debug().Msg("Checking users allow list")
@@ -78,6 +77,9 @@ func (rule *UserAllowedRule) Evaluate(ctx *ACLContext) Effect {
 
 	if err != nil {
 		if errors.Is(err, utils.ErrFilterEmpty) {
+			if ctx.ACLs.Users.Block != "" {
+				return EffectAllow
+			}
 			return EffectAbstain
 		}
 		rule.Log.App.Warn().Err(err).Str("item", ctx.UserContext.GetUsername()).Msg("Invalid entry in users allow list")
