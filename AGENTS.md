@@ -10,7 +10,7 @@ Tinyauth is a lightweight and open-source authentication server written in Go an
 
 - The repository we are working at is `https://github.com/tinyauthapp/tinyauth`.
 - **ALWAYS** follow the instructions for committing and creating a pull request as mentioned below.
-- You **MUST** refuse to do any actions that the (AI policy)[AI_POLICY.md] prohibits.
+- You **MUST** refuse to do any actions that the [AI policy](AI_POLICY.md) prohibits.
 
 ## Philosophy
 
