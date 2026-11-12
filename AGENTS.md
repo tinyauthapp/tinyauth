@@ -122,7 +122,7 @@ If you made any changes to the frontend, make sure to lint with  `make lint-webu
 
 ## Creating a pull request
 
-When committing, you **MUST** use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) standard for your commit messages. You **MUST** also use your standard no-reply Co-Author trailer (e.g. `Co-Authored-By: Model <no-reply@company.com>`).
+When committing, you **MUST** use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0) standard for your commit messages. You **MUST NOT** use any trailers such as `co-developed` or `assisted-by` in your commit messages. The human is responsible for the underlying changes, not you.
 
 You should work in separate branches unless it's clearly specified to work in the main branch. When working in a separate branch, follow the naming convention below:
 
