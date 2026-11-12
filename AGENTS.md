@@ -89,6 +89,7 @@ frontend/src
 
 Tinyauth uses a Makefile for simplifying development. A reference of the available recipes can be found below:
 
+- `tools` - Download and install the required Go tools.
 - `deps` - Install the frontend and backend dependencies.
 - `clean-data` - Clean any data created by running Tinyauth.
 - `clean-webui` - Clean frontend build output.
