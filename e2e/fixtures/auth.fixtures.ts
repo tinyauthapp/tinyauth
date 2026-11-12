@@ -7,7 +7,7 @@ export class LoginFixture {
     async run(username: string, password: string) {
         await expect(this.page.getByText('Welcome back, please login')).toBeVisible();
         await this.page.getByLabel('Username').fill(username);
-        await this.page.getByLabel('Password').fill(password);
+        await this.page.getByLabel('Password', { exact: true }).fill(password);
         await this.page.getByRole('button', { name: 'Login' }).click();
     }
 
