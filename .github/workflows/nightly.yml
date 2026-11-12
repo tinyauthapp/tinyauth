@@ -5,11 +5,12 @@ on:
     - cron: "0 0 * * *"
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   create-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,6 +30,8 @@ jobs:
           tag_name: nightly
 
   generate-metadata:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs: create-release
     outputs:
@@ -52,6 +55,8 @@ jobs:
           echo "BUILD_TAGS=$GIN_BUILD_TAGS" >> "$GITHUB_OUTPUT"
 
   binary-build:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs:
       - create-release
@@ -101,6 +106,8 @@ jobs:
           path: tinyauth-amd64
 
   binary-build-arm:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04-arm
     needs:
       - create-release
@@ -150,6 +157,9 @@ jobs:
           path: tinyauth-arm64
 
   image-build:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     needs:
       - create-release
@@ -208,6 +218,9 @@ jobs:
           retention-days: 1
 
   image-build-distroless:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     needs:
       - create-release
@@ -268,6 +281,9 @@ jobs:
           retention-days: 1
 
   image-build-arm:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-24.04-arm
     needs:
       - create-release
@@ -326,6 +342,9 @@ jobs:
           retention-days: 1
 
   image-build-arm-distroless:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-24.04-arm
     needs:
       - create-release
@@ -386,6 +405,8 @@ jobs:
           retention-days: 1
 
   image-merge:
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     needs:
       - image-build
@@ -425,6 +446,8 @@ jobs:
             $(printf 'ghcr.io/${{ github.repository_owner }}/tinyauth@sha256:%s ' *)
 
   image-merge-distroless:
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     needs:
       - image-build-distroless
@@ -464,6 +487,8 @@ jobs:
             $(printf 'ghcr.io/${{ github.repository_owner }}/tinyauth@sha256:%s ' *)
 
   update-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs:
       - binary-build

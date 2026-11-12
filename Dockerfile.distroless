@@ -1,5 +1,5 @@
 # Site builder
-FROM node:26.10-alpine3.23 AS frontend-builder
+FROM node:26.10-alpine3.23@sha256:c3c6e314fd42e41962360b2482fc18d150beb47976c3aa7b8b9689d7ef42a5c2 AS frontend-builder
 
 WORKDIR /frontend
 
@@ -54,7 +54,7 @@ RUN mkdir -p /data/resources /data/oidc /data/tailscale
 RUN chown -R tinyauth:tinyauth /data
 
 # Runner
-FROM gcr.io/distroless/static-debian12:latest AS runner
+FROM gcr.io/distroless/static-debian12:latest@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2 AS runner
 
 WORKDIR /tinyauth
 
