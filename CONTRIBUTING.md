@@ -3,7 +3,7 @@
 Contributing to Tinyauth is straightforward. Follow the steps below to set up a development server.
 
 > [!NOTE]
-> If you are using large language models to contribute to the project, please ensure that you have read and understood the [AI Policy](AI_POLICY.md).
+> If you are using LLMs (Large Language Models) to contribute to the project, please make sure that you have read and understood the [AI Policy](AI_POLICY.md).
 
 ## Requirements
 
