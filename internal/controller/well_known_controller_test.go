@@ -49,6 +49,7 @@ func TestWellKnownController(t *testing.T) {
 					AuthorizationEndpoint:                  fmt.Sprintf("%s/authorize", runtime.AppURL),
 					TokenEndpoint:                          fmt.Sprintf("%s/api/oidc/token", runtime.AppURL),
 					UserinfoEndpoint:                       fmt.Sprintf("%s/api/oidc/userinfo", runtime.AppURL),
+					EndSessionEndpoint:                     fmt.Sprintf("%s/api/oidc/end-session", runtime.AppURL),
 					JwksUri:                                fmt.Sprintf("%s/.well-known/jwks.json", runtime.AppURL),
 					ScopesSupported:                        service.SupportedScopes,
 					ResponseTypesSupported:                 service.SupportedResponseTypes,
