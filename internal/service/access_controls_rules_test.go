@@ -294,8 +294,8 @@ func TestOAuthGroupRule(t *testing.T) {
 				UserContext: &model.UserContext{
 					Provider: model.ProviderOAuth,
 					OAuth: &model.OAuthContext{
-						ID:     "google",
-						Groups: []string{"unrelated"},
+						ProviderID: "google",
+						Groups:     []string{"unrelated"},
 					},
 				},
 			},
@@ -310,8 +310,8 @@ func TestOAuthGroupRule(t *testing.T) {
 				UserContext: &model.UserContext{
 					Provider: model.ProviderOAuth,
 					OAuth: &model.OAuthContext{
-						ID:     "custom",
-						Groups: []string{"users"},
+						ProviderID: "custom",
+						Groups:     []string{"users"},
 					},
 				},
 			},
@@ -326,8 +326,8 @@ func TestOAuthGroupRule(t *testing.T) {
 				UserContext: &model.UserContext{
 					Provider: model.ProviderOAuth,
 					OAuth: &model.OAuthContext{
-						ID:     "custom",
-						Groups: []string{"users", "guests"},
+						ProviderID: "custom",
+						Groups:     []string{"users", "guests"},
 					},
 				},
 			},
@@ -342,8 +342,8 @@ func TestOAuthGroupRule(t *testing.T) {
 				UserContext: &model.UserContext{
 					Provider: model.ProviderOAuth,
 					OAuth: &model.OAuthContext{
-						ID:     "custom",
-						Groups: nil,
+						ProviderID: "custom",
+						Groups:     nil,
 					},
 				},
 			},
@@ -358,8 +358,8 @@ func TestOAuthGroupRule(t *testing.T) {
 				UserContext: &model.UserContext{
 					Provider: model.ProviderOAuth,
 					OAuth: &model.OAuthContext{
-						ID:     "custom",
-						Groups: []string{"admins"},
+						ProviderID: "custom",
+						Groups:     []string{"admins"},
 					},
 				},
 			},
