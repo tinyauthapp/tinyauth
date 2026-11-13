@@ -57,6 +57,7 @@ type ACRUI struct {
 	ForgotPasswordMessage string `json:"forgotPasswordMessage"`
 	BackgroundImage       string `json:"backgroundImage"`
 	BackgroundCSS         string `json:"backgroundCss"`
+	Favicon               string `json:"favicon"`
 	WarningsEnabled       bool   `json:"warningsEnabled"`
 }
 
@@ -163,6 +164,7 @@ func (controller *ContextController) appContextHandler(c *gin.Context) {
 			ForgotPasswordMessage: controller.config.UI.ForgotPasswordMessage,
 			BackgroundImage:       controller.config.UI.BackgroundImage,
 			BackgroundCSS:         controller.config.UI.BackgroundCSS,
+			Favicon:               controller.config.UI.Favicon,
 			WarningsEnabled:       controller.config.UI.WarningsEnabled,
 		},
 		App: ACRApp{
