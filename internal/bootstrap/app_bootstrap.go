@@ -183,7 +183,7 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthFlowCookieName = fmt.Sprintf("%s-%s", model.OAuthFlowCookieName, cookieId)
 
 	// database
-	store, err := app.SetupStore()
+	store, err := app.setupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)

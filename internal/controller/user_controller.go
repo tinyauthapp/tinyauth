@@ -243,6 +243,16 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	http.SetCookie(c.Writer, cookie)
 
+	if sessionContext.Local.TOTPPending {
+		controller.log.App.Info().Str("username", req.Username).Msg("Pending TOTP session created, awaiting verification")
+		c.JSON(200, gin.H{
+			"status":      202,
+			"message":     "Pending TOTP session created, awaiting verification",
+			"totpPending": true,
+		})
+		return
+	}
+
 	controller.log.App.Info().Str("username", req.Username).Msg("Login successful")
 
 	controller.log.AuditLoginSuccess(req.Username, search.Type.String(), c.ClientIP())
@@ -330,6 +340,14 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 	uuid, err := c.Cookie(controller.runtime.SessionCookieName)
 
 	if err != nil {
+		if errors.Is(err, http.ErrNoCookie) {
+			controller.log.App.Warn().Msg("TOTP verification attempt without session cookie")
+			c.JSON(401, gin.H{
+				"status":  401,
+				"message": "Unauthorized",
+			})
+			return
+		}
 		controller.log.App.Error().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session")
 		c.JSON(500, gin.H{
 			"status":  500,
@@ -409,15 +427,6 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 			return fmt.Errorf("invalid TOTP code")
 		}
 
-		if err == nil {
-			err = controller.sessions.Delete(c, uuid)
-			if err != nil {
-				controller.log.App.Error().Err(err).Msg("Failed to delete pending TOTP session after successful verification")
-			}
-		} else {
-			controller.log.App.Warn().Err(err).Msg("Failed to retrieve session cookie for pending TOTP session, cannot delete it")
-		}
-
 		controller.auth.RecordLoginAttempt(context.GetUsername(), true, actions)
 
 		return nil
@@ -427,7 +436,7 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		return
 	}
 
-	_, err = controller.sessions.Update(c, uuid, model.SessionContext{
+	session, err := controller.sessions.Update(c, uuid, model.SessionContext{
 		Local: model.SessionLocalContext{
 			TOTPPending: false,
 		},
@@ -441,6 +450,14 @@ func (controller *UserController) totpHandler(c *gin.Context) {
 		})
 		return
 	}
+
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.SessionCookieName,
+		Value:     session.UUID,
+		ExpiresAt: time.Unix(session.ExpiresAt, 0),
+	})
+
+	http.SetCookie(c.Writer, cookie)
 
 	controller.log.App.Info().Str("username", context.GetUsername()).Msg("TOTP verification successful, login complete")
 	controller.log.AuditLoginSuccess(context.GetUsername(), "local", c.ClientIP())

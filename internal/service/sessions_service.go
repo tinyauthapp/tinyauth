@@ -155,13 +155,14 @@ func (s *SessionsService) Get(ctx context.Context, uuid string) (model.SessionGe
 }
 
 func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContext model.SessionContext) (repository.Session, error) {
-	session, err := s.store.GetSessionByUUID(ctx, uuid)
-
+	current, err := s.Get(ctx, uuid)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return repository.Session{}, ErrSessionNotFound
-		}
-		return repository.Session{}, fmt.Errorf("failed to get session: %w", err)
+		return repository.Session{}, err
+	}
+
+	expiresAt := current.Session.ExpiresAt
+	if current.SessionContext.Local.TOTPPending && !sessionContext.Local.TOTPPending {
+		expiresAt = time.Now().Add(time.Duration(s.config.Auth.SessionExpiry) * time.Second).Unix()
 	}
 
 	contextJSON, err := json.Marshal(sessionContext)
@@ -170,9 +171,9 @@ func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContex
 		return repository.Session{}, fmt.Errorf("failed to marshal session context: %w", err)
 	}
 
-	session, err = s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
-		UUID:        session.UUID,
-		ExpiresAt:   session.ExpiresAt,
+	session, err := s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
+		UUID:        current.Session.UUID,
+		ExpiresAt:   expiresAt,
 		ContextJSON: string(contextJSON),
 	})
 

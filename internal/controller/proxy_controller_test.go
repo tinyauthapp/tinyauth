@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -1046,7 +1045,9 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	store := memory.New()
+	tdb, err := test.NewTestDatabase()
+	require.NoError(t, err)
+	store := tdb.Store()
 
 	ctx := context.TODO()
 	dg := ding.New(ctx)
@@ -1055,6 +1056,7 @@ func TestProxyController(t *testing.T) {
 		Log:     log,
 		Runtime: &runtime,
 		Ctx:     ctx,
+		Ding:    dg,
 	})
 	aclsService := service.NewAccessControlsService(service.AccessControlServiceInput{
 		Log:           log,
@@ -1130,4 +1132,8 @@ func TestProxyController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
+
+	t.Cleanup(func() {
+		tdb.Close()
+	})
 }
