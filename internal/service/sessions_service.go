@@ -140,6 +140,10 @@ func (s *SessionsService) Get(ctx context.Context, uuid string) (model.SessionGe
 		return model.SessionGetResult{}, fmt.Errorf("failed to get session: %w", err)
 	}
 
+	if session.ExpiresAt < time.Now().Unix() {
+		return model.SessionGetResult{}, ErrSessionNotFound
+	}
+
 	var sessionContext model.SessionContext
 
 	err = json.Unmarshal([]byte(session.ContextJSON), &sessionContext)

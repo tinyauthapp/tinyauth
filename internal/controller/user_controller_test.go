@@ -563,7 +563,7 @@ func TestUserController(t *testing.T) {
 
 				sess, err := sessionsService.Create(context.TODO(), ident.UUID, model.SessionContext{
 					Local: model.SessionLocalContext{
-						TOTPPending: true,
+						TOTPPending: tc.ctx.TOTPPending(),
 					},
 				})
 				require.NoError(tct, err)
