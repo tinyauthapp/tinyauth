@@ -92,7 +92,7 @@ sql:
 	sqlc generate
 
 # Go gen
-generate:
+generate: webui
 	go generate ./...
 
 # an alias for generate
