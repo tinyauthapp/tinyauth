@@ -36,13 +36,6 @@ jobs:
       - name: Setup controller-gen
         run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0
 
-      - name: Check codegen is up to date
-        run: |
-          sqlc generate
-          go generate ./...
-          git diff --exit-code
-          git status --porcelain | grep -q . && echo "untracked files code gen files" && exit 1 || true
-
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: pnpm ci
@@ -60,6 +53,13 @@ jobs:
 
       - name: Copy frontend
         run: cp -r frontend/dist internal/assets/dist
+
+      - name: Check codegen is up to date
+        run: |
+          sqlc generate
+          go generate ./...
+          git diff --exit-code
+          git status --porcelain | grep -q . && echo "untracked files code gen files" && exit 1 || true
 
       - name: Run tests
         run: go test -coverprofile=coverage.txt -v ./...
