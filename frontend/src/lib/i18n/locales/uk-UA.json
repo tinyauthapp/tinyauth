@@ -99,7 +99,7 @@
   "quickActionsThemeSystem": "Система",
   "quickActionsLogout": "Вийти",
   "quickActionsTitle": "Швидкі дії",
-  "quickActionsProviderLocal": "Local",
+  "quickActionsProviderLocal": "Локальний",
   "quickActionsProviderLDAP": "LDAP",
   "quickActionsProviderOAuth": "{{provider}} OAuth"
 }
