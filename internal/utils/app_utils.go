@@ -125,3 +125,16 @@ func Filter[T any](slice []T, test func(T) bool) (res []T) {
 	}
 	return res
 }
+
+// JoinHostPort joins a host and port, bracketing IPv6 addresses. Already bracketed hosts (e.g. [::]) are accepted too.
+func JoinHostPort(host string, port string) string {
+	return net.JoinHostPort(TrimHostBrackets(host), port)
+}
+
+// TrimHostBrackets removes one pair of enclosing brackets (e.g. [::] becomes ::), unbalanced brackets are kept so they still fail to parse
+func TrimHostBrackets(host string) string {
+	if len(host) >= 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		return host[1 : len(host)-1]
+	}
+	return host
+}
