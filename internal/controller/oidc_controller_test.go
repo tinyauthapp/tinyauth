@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -32,7 +31,9 @@ func TestOIDCController(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	store := memory.New()
+	tdb, err := test.NewTestDatabase()
+	require.NoError(t, err)
+	store := tdb.Store()
 
 	oidcService, err := service.NewOIDCService(service.OIDCServiceInput{
 		Log:     log,
@@ -1204,4 +1205,8 @@ func TestOIDCController(t *testing.T) {
 			test.run(t, router, recorder)
 		})
 	}
+
+	t.Cleanup(func() {
+		tdb.Close()
+	})
 }

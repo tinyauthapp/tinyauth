@@ -32,12 +32,20 @@ func mapErr(err error) error {
 	return err
 }
 
-func (s *Store) CreateOIDCSession(ctx context.Context, arg repository.CreateOIDCSessionParams) (repository.OidcSession, error) {
+func (s *Store) CreateIdentity(ctx context.Context, arg repository.CreateIdentityParams) (repository.Identity, error) {
+	r, err := s.q.CreateIdentity(ctx, CreateIdentityParams(arg))
+	if err != nil {
+		return repository.Identity{}, mapErr(err)
+	}
+	return repository.Identity(r), nil
+}
+
+func (s *Store) CreateOIDCSession(ctx context.Context, arg repository.CreateOIDCSessionParams) (repository.OIDCSession, error) {
 	r, err := s.q.CreateOIDCSession(ctx, CreateOIDCSessionParams(arg))
 	if err != nil {
-		return repository.OidcSession{}, mapErr(err)
+		return repository.OIDCSession{}, mapErr(err)
 	}
-	return repository.OidcSession(r), nil
+	return repository.OIDCSession(r), nil
 }
 
 func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
@@ -48,12 +56,20 @@ func (s *Store) CreateSession(ctx context.Context, arg repository.CreateSessionP
 	return repository.Session(r), nil
 }
 
+func (s *Store) CreateUser(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+	r, err := s.q.CreateUser(ctx, CreateUserParams(arg))
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
 func (s *Store) DeleteExpiredOIDCSessions(ctx context.Context, arg repository.DeleteExpiredOIDCSessionsParams) error {
 	return mapErr(s.q.DeleteExpiredOIDCSessions(ctx, DeleteExpiredOIDCSessionsParams(arg)))
 }
 
-func (s *Store) DeleteExpiredSessions(ctx context.Context, expiry int64) error {
-	return mapErr(s.q.DeleteExpiredSessions(ctx, expiry))
+func (s *Store) DeleteExpiredSessions(ctx context.Context, expiresAt int64) error {
+	return mapErr(s.q.DeleteExpiredSessions(ctx, expiresAt))
 }
 
 func (s *Store) DeleteOIDCConsentByClientID(ctx context.Context, clientID string) error {
@@ -64,82 +80,126 @@ func (s *Store) DeleteOIDCSessionBySub(ctx context.Context, sub string) error {
 	return mapErr(s.q.DeleteOIDCSessionBySub(ctx, sub))
 }
 
-func (s *Store) DeleteSession(ctx context.Context, uuid string) error {
-	return mapErr(s.q.DeleteSession(ctx, uuid))
+func (s *Store) DeleteSessionByUUID(ctx context.Context, uuid string) error {
+	return mapErr(s.q.DeleteSessionByUUID(ctx, uuid))
 }
 
-func (s *Store) GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg repository.GetOIDCConsentByUsernameAndClientIDParams) (repository.OidcConsent, error) {
+func (s *Store) GetIdentityByUUID(ctx context.Context, uuid string) (repository.Identity, error) {
+	r, err := s.q.GetIdentityByUUID(ctx, uuid)
+	if err != nil {
+		return repository.Identity{}, mapErr(err)
+	}
+	return repository.Identity(r), nil
+}
+
+func (s *Store) GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg repository.GetOIDCConsentByUsernameAndClientIDParams) (repository.OIDCConsent, error) {
 	r, err := s.q.GetOIDCConsentByUsernameAndClientID(ctx, GetOIDCConsentByUsernameAndClientIDParams(arg))
 	if err != nil {
-		return repository.OidcConsent{}, mapErr(err)
+		return repository.OIDCConsent{}, mapErr(err)
 	}
-	return repository.OidcConsent(r), nil
+	return repository.OIDCConsent(r), nil
 }
 
-func (s *Store) GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (repository.OidcSession, error) {
+func (s *Store) GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (repository.OIDCSession, error) {
 	r, err := s.q.GetOIDCSessionByAccessTokenHash(ctx, accessTokenHash)
 	if err != nil {
-		return repository.OidcSession{}, mapErr(err)
+		return repository.OIDCSession{}, mapErr(err)
 	}
-	return repository.OidcSession(r), nil
+	return repository.OIDCSession(r), nil
 }
 
-func (s *Store) GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (repository.OidcSession, error) {
+func (s *Store) GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (repository.OIDCSession, error) {
 	r, err := s.q.GetOIDCSessionByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
-		return repository.OidcSession{}, mapErr(err)
+		return repository.OIDCSession{}, mapErr(err)
 	}
-	return repository.OidcSession(r), nil
+	return repository.OIDCSession(r), nil
 }
 
-func (s *Store) GetOIDCSessionBySub(ctx context.Context, sub string) (repository.OidcSession, error) {
+func (s *Store) GetOIDCSessionBySub(ctx context.Context, sub string) (repository.OIDCSession, error) {
 	r, err := s.q.GetOIDCSessionBySub(ctx, sub)
 	if err != nil {
-		return repository.OidcSession{}, mapErr(err)
+		return repository.OIDCSession{}, mapErr(err)
 	}
-	return repository.OidcSession(r), nil
+	return repository.OIDCSession(r), nil
 }
 
-func (s *Store) GetSession(ctx context.Context, uuid string) (repository.Session, error) {
-	r, err := s.q.GetSession(ctx, uuid)
+func (s *Store) GetSessionByUUID(ctx context.Context, uuid string) (repository.Session, error) {
+	r, err := s.q.GetSessionByUUID(ctx, uuid)
 	if err != nil {
 		return repository.Session{}, mapErr(err)
 	}
 	return repository.Session(r), nil
 }
 
-func (s *Store) ListOIDCConsents(ctx context.Context) ([]repository.OidcConsent, error) {
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (repository.User, error) {
+	r, err := s.q.GetUserByEmail(ctx, email)
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
+func (s *Store) GetUserByUUID(ctx context.Context, uuid string) (repository.User, error) {
+	r, err := s.q.GetUserByUUID(ctx, uuid)
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
+func (s *Store) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
+	r, err := s.q.GetUserByUsername(ctx, username)
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
+func (s *Store) GetUserByUsernameAndEmail(ctx context.Context, arg repository.GetUserByUsernameAndEmailParams) (repository.User, error) {
+	r, err := s.q.GetUserByUsernameAndEmail(ctx, GetUserByUsernameAndEmailParams(arg))
+	if err != nil {
+		return repository.User{}, mapErr(err)
+	}
+	return repository.User(r), nil
+}
+
+func (s *Store) ListOIDCConsents(ctx context.Context) ([]repository.OIDCConsent, error) {
 	rows, err := s.q.ListOIDCConsents(ctx)
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	out := make([]repository.OidcConsent, len(rows))
+	out := make([]repository.OIDCConsent, len(rows))
 	for i, row := range rows {
-		out[i] = repository.OidcConsent(row)
+		out[i] = repository.OIDCConsent(row)
 	}
 	return out, nil
 }
 
-func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDCSessionParams) (repository.OidcSession, error) {
+func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDCSessionParams) (repository.OIDCSession, error) {
 	r, err := s.q.UpdateOIDCSession(ctx, UpdateOIDCSessionParams(arg))
 	if err != nil {
-		return repository.OidcSession{}, mapErr(err)
+		return repository.OIDCSession{}, mapErr(err)
 	}
-	return repository.OidcSession(r), nil
+	return repository.OIDCSession(r), nil
 }
 
-func (s *Store) UpdateSession(ctx context.Context, arg repository.UpdateSessionParams) (repository.Session, error) {
-	r, err := s.q.UpdateSession(ctx, UpdateSessionParams(arg))
+func (s *Store) UpdateSessionByUUID(ctx context.Context, arg repository.UpdateSessionByUUIDParams) (repository.Session, error) {
+	r, err := s.q.UpdateSessionByUUID(ctx, UpdateSessionByUUIDParams(arg))
 	if err != nil {
 		return repository.Session{}, mapErr(err)
 	}
 	return repository.Session(r), nil
 }
 
-func (s *Store) UpsertOIDCConsent(ctx context.Context, arg repository.UpsertOIDCConsentParams) (repository.OidcConsent, error) {
+func (s *Store) UpdateUser(ctx context.Context, arg repository.UpdateUserParams) error {
+	return mapErr(s.q.UpdateUser(ctx, UpdateUserParams(arg)))
+}
+
+func (s *Store) UpsertOIDCConsent(ctx context.Context, arg repository.UpsertOIDCConsentParams) (repository.OIDCConsent, error) {
 	r, err := s.q.UpsertOIDCConsent(ctx, UpsertOIDCConsentParams(arg))
 	if err != nil {
-		return repository.OidcConsent{}, mapErr(err)
+		return repository.OIDCConsent{}, mapErr(err)
 	}
-	return repository.OidcConsent(r), nil
+	return repository.OIDCConsent(r), nil
 }

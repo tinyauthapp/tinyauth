@@ -34,7 +34,7 @@ func createOidcClientCmd() *cli.Command {
 
 			u := uuid.New()
 			clientId := u.String()
-			clientSecret := "ta-" + utils.GenerateString(61)
+			clientSecret := "ta-" + utils.GenerateSecureString(61)
 
 			uclientName := strings.ToUpper(clientName)
 			lclientName := strings.ToLower(clientName)

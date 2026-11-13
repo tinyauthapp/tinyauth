@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 )
 
 var (
@@ -22,6 +21,40 @@ const (
 	ProviderTailscale
 )
 
+func (t ProviderType) String() string {
+	switch t {
+	case ProviderLocal:
+		return "local"
+	case ProviderBasicAuth:
+		return "basic"
+	case ProviderOAuth:
+		return "oauth"
+	case ProviderLDAP:
+		return "ldap"
+	case ProviderTailscale:
+		return "tailscale"
+	default:
+		return "unknown"
+	}
+}
+
+func ProviderFromString(s string) (ProviderType, error) {
+	switch s {
+	case "local":
+		return ProviderLocal, nil
+	case "basic":
+		return ProviderBasicAuth, nil
+	case "oauth":
+		return ProviderOAuth, nil
+	case "ldap":
+		return ProviderLDAP, nil
+	case "tailscale":
+		return ProviderTailscale, nil
+	default:
+		return ProviderLocal, errors.New("unknown provider")
+	}
+}
+
 type UserContext struct {
 	Authenticated bool
 	Provider      ProviderType
@@ -33,9 +66,10 @@ type UserContext struct {
 }
 
 type BaseContext struct {
-	Username string
-	Name     string
-	Email    string
+	DistinctUserID string
+	Username       string
+	Name           string
+	Email          string
 }
 
 type LocalContext struct {
@@ -47,9 +81,8 @@ type LocalContext struct {
 type OAuthContext struct {
 	BaseContext
 	Groups      []string
-	Sub         string
 	DisplayName string
-	ID          string
+	ProviderID  string
 }
 
 type LDAPContext struct {
@@ -107,61 +140,64 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 	return c, nil
 }
 
-// Compatability layer until we get an excuse to drop in database migrations
-func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
+func (c *UserContext) NewFromSession(session SessionGetResult, identity IdentityResult) (*UserContext, error) {
 	*c = UserContext{
-		Authenticated: !session.TotpPending,
-		AuthTime:      session.CreatedAt,
+		Authenticated: !session.SessionContext.Local.TOTPPending,
+		AuthTime:      session.Session.CreatedAt,
 	}
 
-	switch session.Provider {
-	case "local":
+	switch identity.ProviderType {
+	case ProviderLocal:
 		c.Provider = ProviderLocal
 		c.Local = &LocalContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
-			TOTPPending: session.TotpPending,
+			TOTPPending: session.SessionContext.Local.TOTPPending,
 		}
-	case "ldap":
+	case ProviderLDAP:
 		c.Provider = ProviderLDAP
 		c.LDAP = &LDAPContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 		}
-	case "tailscale":
+	case ProviderTailscale:
 		c.Provider = ProviderTailscale
 		c.Tailscale = &TailscaleContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 		}
-	// By default we assume an unknown name which is oauth
-	default:
+	case ProviderOAuth:
 		c.Provider = ProviderOAuth
 		c.OAuth = &OAuthContext{
 			BaseContext: BaseContext{
-				Username: session.Username,
-				Name:     session.Name,
-				Email:    session.Email,
+				DistinctUserID: identity.ProviderUserID,
+				Username:       identity.Username,
+				Name:           identity.Name,
+				Email:          identity.Email,
 			},
 			Groups: func() []string {
-				if session.OAuthGroups == "" {
+				if identity.IdentityContext.OAuth.Groups == "" {
 					return nil
 				}
-				return strings.Split(session.OAuthGroups, ",")
+				return strings.Split(identity.IdentityContext.OAuth.Groups, ",")
 			}(),
-			Sub:         session.OAuthSub,
-			DisplayName: session.OAuthName,
-			ID:          session.Provider,
+			DisplayName: identity.IdentityContext.OAuth.DisplayName,
+			ProviderID:  identity.Provider,
 		}
+	default:
+		return nil, errors.New("unknown provider")
 	}
 
 	return c, nil
@@ -192,6 +228,14 @@ func (c *UserContext) getBaseContext() *BaseContext {
 	default:
 		return nil
 	}
+}
+
+func (c *UserContext) GetDistinctUserID() string {
+	base := c.getBaseContext()
+	if base == nil {
+		return ""
+	}
+	return base.DistinctUserID
 }
 
 func (c *UserContext) GetUsername() string {
@@ -225,7 +269,7 @@ func (c *UserContext) GetProviderID() string {
 	case ProviderLDAP:
 		return "ldap"
 	case ProviderOAuth:
-		return c.OAuth.ID
+		return c.OAuth.ProviderID
 	case ProviderTailscale:
 		return "tailscale"
 	default:

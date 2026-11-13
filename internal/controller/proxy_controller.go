@@ -275,7 +275,7 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 
 		if userContext.IsOAuth() {
 			c.Header("Remote-Groups", utils.SanitizeHeader(strings.Join(userContext.OAuth.Groups, ",")))
-			c.Header("Remote-Sub", utils.SanitizeHeader(userContext.OAuth.Sub))
+			c.Header("Remote-Sub", utils.SanitizeHeader(userContext.OAuth.ProviderID))
 		}
 
 		controller.setHeaders(c, acls)

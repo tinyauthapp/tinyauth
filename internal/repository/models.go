@@ -3,21 +3,81 @@ package repository
 // Shared model and parameter types for all storage drivers.
 // sqlc-generated driver packages use these via the conversion layer in their store.go.
 
-type Session struct {
-	UUID        string
-	Username    string
-	Email       string
-	Name        string
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	Expiry      int64
-	CreatedAt   int64
-	OAuthName   string
-	OAuthSub    string
+// Users
+
+type User struct {
+	UUID     string
+	Username string
+	Email    string
+	Name     string
 }
 
-type OidcSession struct {
+type CreateUserParams struct {
+	UUID     string
+	Username string
+	Email    string
+	Name     string
+}
+
+type UpdateUserParams struct {
+	Username string
+	Email    string
+	Name     string
+	UUID     string
+}
+
+type GetUserByUsernameAndEmailParams struct {
+	Username string
+	Email    string
+}
+
+// Identities
+
+type Identity struct {
+	UUID           string
+	UserUUID       string
+	ProviderType   string
+	Provider       string
+	ProviderUserID string
+	ContextJSON    string
+}
+
+type CreateIdentityParams struct {
+	UUID           string
+	UserUUID       string
+	ProviderType   string
+	Provider       string
+	ProviderUserID string
+	ContextJSON    string
+}
+
+// Sessions
+
+type Session struct {
+	UUID         string
+	IdentityUUID string
+	ExpiresAt    int64
+	CreatedAt    int64
+	ContextJSON  string
+}
+
+type CreateSessionParams struct {
+	UUID         string
+	IdentityUUID string
+	ExpiresAt    int64
+	CreatedAt    int64
+	ContextJSON  string
+}
+
+type UpdateSessionByUUIDParams struct {
+	ExpiresAt   int64
+	ContextJSON string
+	UUID        string
+}
+
+// OIDC
+
+type OIDCSession struct {
 	Sub                   string
 	AccessTokenHash       string
 	RefreshTokenHash      string
@@ -28,34 +88,6 @@ type OidcSession struct {
 	Nonce                 string
 	UserinfoJson          string
 }
-
-type CreateSessionParams struct {
-	UUID        string
-	Username    string
-	Email       string
-	Name        string
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	Expiry      int64
-	CreatedAt   int64
-	OAuthName   string
-	OAuthSub    string
-}
-
-type UpdateSessionParams struct {
-	Username    string
-	Email       string
-	Name        string
-	Provider    string
-	TotpPending bool
-	OAuthGroups string
-	Expiry      int64
-	OAuthName   string
-	OAuthSub    string
-	UUID        string
-}
-
 type CreateOIDCSessionParams struct {
 	Sub                   string
 	AccessTokenHash       string
@@ -85,7 +117,9 @@ type DeleteExpiredOIDCSessionsParams struct {
 	RefreshTokenExpiresAt int64
 }
 
-type OidcConsent struct {
+// OIDC Consent
+
+type OIDCConsent struct {
 	Username  string
 	ClientID  string
 	Scope     string

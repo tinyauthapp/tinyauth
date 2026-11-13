@@ -449,7 +449,7 @@ func (service *OIDCService) filterScopes(scopes []string) []string {
 }
 
 func (service *OIDCService) CreateCode(req AuthorizeRequest, userContext model.UserContext) string {
-	code := utils.GenerateString(32)
+	code := utils.GenerateSecureString(32)
 	sub := service.CreateSub(userContext, req.ClientID)
 
 	entry := AuthorizeCodeEntry{
@@ -626,8 +626,8 @@ func (service *OIDCService) GenerateAccessToken(ctx context.Context, client mode
 		return nil, err
 	}
 
-	accessToken := utils.GenerateString(32)
-	refreshToken := utils.GenerateString(32)
+	accessToken := utils.GenerateSecureString(32)
+	refreshToken := utils.GenerateSecureString(32)
 
 	tokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 
@@ -708,8 +708,8 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 		return nil, err
 	}
 
-	accessToken := utils.GenerateString(32)
-	newRefreshToken := utils.GenerateString(32)
+	accessToken := utils.GenerateSecureString(32)
+	newRefreshToken := utils.GenerateSecureString(32)
 
 	tokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry) * time.Second).Unix()
 	refreshTokenExpiresAt := time.Now().Add(time.Duration(service.config.Auth.SessionExpiry*2) * time.Second).Unix()
@@ -742,7 +742,7 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 	return &tokenResponse, nil
 }
 
-func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash string) (*repository.OidcSession, error) {
+func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash string) (*repository.OIDCSession, error) {
 	entry, err := service.queries.GetOIDCSessionByAccessTokenHash(ctx, tokenHash)
 
 	if err != nil {
@@ -935,7 +935,7 @@ func (service *OIDCService) DeleteSessionBySub(ctx context.Context, sub string) 
 }
 
 func (service *OIDCService) CreateAuthorizeRequestTicket(req AuthorizeRequest) string {
-	ticket := utils.GenerateString(32)
+	ticket := utils.GenerateSecureString(32)
 
 	service.caches.authorize.Set(ticket, req, 10*time.Minute)
 
@@ -1007,7 +1007,7 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 	return parsedPromps
 }
 
-func (service *OIDCService) getOIDCConsentUnsafe(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
+func (service *OIDCService) getOIDCConsentUnsafe(ctx context.Context, username, clientId string) (*repository.OIDCConsent, error) {
 	entry, err := service.queries.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
 		Username: username,
 		ClientID: clientId,
@@ -1023,20 +1023,20 @@ func (service *OIDCService) getOIDCConsentUnsafe(ctx context.Context, username, 
 	return &entry, nil
 }
 
-func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OidcConsent, error) {
+func (service *OIDCService) GetOIDCConsent(ctx context.Context, username, clientId string) (*repository.OIDCConsent, error) {
 	service.mus.consent.RLock()
 	defer service.mus.consent.RUnlock()
 	return service.getOIDCConsentUnsafe(ctx, username, clientId)
 }
 
-func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, scope, clientId string) (repository.OidcConsent, error) {
+func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, scope, clientId string) (repository.OIDCConsent, error) {
 	service.mus.consent.Lock()
 	defer service.mus.consent.Unlock()
 
 	existing, err := service.getOIDCConsentUnsafe(ctx, username, clientId)
 
 	if err != nil {
-		return repository.OidcConsent{}, err
+		return repository.OIDCConsent{}, err
 	}
 
 	merged := scope
@@ -1056,7 +1056,7 @@ func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, sco
 
 	if err != nil {
 		service.log.App.Error().Err(err).Msg("Failed to upsert OIDC consent")
-		return repository.OidcConsent{}, err
+		return repository.OIDCConsent{}, err
 	}
 
 	return consent, nil

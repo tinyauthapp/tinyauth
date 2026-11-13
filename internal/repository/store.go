@@ -12,25 +12,37 @@ var ErrNotFound = errors.New("not found")
 // The sqlc-generated *Queries struct satisfies this interface for SQLite.
 // Future drivers (postgres, etc.) must return the shared types defined in this package.
 type Store interface {
+	// Users
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	GetUserByUUID(ctx context.Context, uuid string) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByUsernameAndEmail(ctx context.Context, arg GetUserByUsernameAndEmailParams) (User, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) error
+
+	// Identities
+	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (Identity, error)
+	GetIdentityByUUID(ctx context.Context, uuid string) (Identity, error)
+
 	// Sessions
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
-	GetSession(ctx context.Context, uuid string) (Session, error)
-	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
-	DeleteSession(ctx context.Context, uuid string) error
-	DeleteExpiredSessions(ctx context.Context, expiry int64) error
+	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
+	DeleteSessionByUUID(ctx context.Context, uuid string) error
+	GetSessionByUUID(ctx context.Context, uuid string) (Session, error)
+	UpdateSessionByUUID(ctx context.Context, arg UpdateSessionByUUIDParams) (Session, error)
 
-	// OIDC sessions
-	CreateOIDCSession(ctx context.Context, arg CreateOIDCSessionParams) (OidcSession, error)
+	// OIDC
+	CreateOIDCSession(ctx context.Context, arg CreateOIDCSessionParams) (OIDCSession, error)
 	DeleteExpiredOIDCSessions(ctx context.Context, arg DeleteExpiredOIDCSessionsParams) error
 	DeleteOIDCSessionBySub(ctx context.Context, sub string) error
-	GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (OidcSession, error)
-	GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (OidcSession, error)
-	GetOIDCSessionBySub(ctx context.Context, sub string) (OidcSession, error)
-	UpdateOIDCSession(ctx context.Context, arg UpdateOIDCSessionParams) (OidcSession, error)
+	GetOIDCSessionByAccessTokenHash(ctx context.Context, accessTokenHash string) (OIDCSession, error)
+	GetOIDCSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (OIDCSession, error)
+	GetOIDCSessionBySub(ctx context.Context, sub string) (OIDCSession, error)
+	UpdateOIDCSession(ctx context.Context, arg UpdateOIDCSessionParams) (OIDCSession, error)
 
-	// OIDC Consents
-	UpsertOIDCConsent(ctx context.Context, arg UpsertOIDCConsentParams) (OidcConsent, error)
-	GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg GetOIDCConsentByUsernameAndClientIDParams) (OidcConsent, error)
+	// OIDC Consent
 	DeleteOIDCConsentByClientID(ctx context.Context, clientID string) error
-	ListOIDCConsents(ctx context.Context) ([]OidcConsent, error)
+	GetOIDCConsentByUsernameAndClientID(ctx context.Context, arg GetOIDCConsentByUsernameAndClientIDParams) (OIDCConsent, error)
+	ListOIDCConsents(ctx context.Context) ([]OIDCConsent, error)
+	UpsertOIDCConsent(ctx context.Context, arg UpsertOIDCConsentParams) (OIDCConsent, error)
 }

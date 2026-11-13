@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -24,28 +23,37 @@ type OAuthRequest struct {
 }
 
 type OAuthController struct {
-	log     *logger.Logger
-	config  *model.Config
-	runtime *model.RuntimeConfig
-	auth    *service.AuthService
+	log      *logger.Logger
+	config   *model.Config
+	runtime  *model.RuntimeConfig
+	auth     *service.AuthService
+	broker   *service.OAuthBrokerService
+	identity *service.IdentityService
+	sessions *service.SessionsService
 }
 
 type OAuthControllerInput struct {
 	dig.In
 
-	Log           *logger.Logger
-	Config        *model.Config
-	RuntimeConfig *model.RuntimeConfig
-	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
-	AuthService   *service.AuthService
+	Log             *logger.Logger
+	Config          *model.Config
+	RuntimeConfig   *model.RuntimeConfig
+	RouterGroup     *gin.RouterGroup `name:"apiRouterGroup"`
+	AuthService     *service.AuthService
+	OAuthBroker     *service.OAuthBrokerService
+	IdentityService *service.IdentityService
+	SessionsService *service.SessionsService
 }
 
 func NewOAuthController(i OAuthControllerInput) *OAuthController {
 	controller := &OAuthController{
-		log:     i.Log,
-		config:  i.Config,
-		runtime: i.RuntimeConfig,
-		auth:    i.AuthService,
+		log:      i.Log,
+		config:   i.Config,
+		runtime:  i.RuntimeConfig,
+		auth:     i.AuthService,
+		broker:   i.OAuthBroker,
+		identity: i.IdentityService,
+		sessions: i.SessionsService,
 	}
 
 	oauthGroup := i.RouterGroup.Group("/oauth")
@@ -88,10 +96,10 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		}
 	}
 
-	sessionId, err := controller.auth.NewOAuthSession(req.Provider, reqParams)
+	flowId, ok := controller.broker.BeginOAuthFlow(req.Provider, reqParams)
 
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to create new OAuth session")
+	if !ok {
+		controller.log.App.Error().Err(err).Msg("Failed to initiate OAuth flow")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
@@ -99,10 +107,10 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	authUrl, err := controller.auth.GetOAuthURL(sessionId)
+	authUrl, ok := controller.broker.FlowAuthURL(flowId)
 
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to get OAuth URL for session")
+	if !ok {
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth URL for flow")
 		c.JSON(500, gin.H{
 			"status":  500,
 			"message": "Internal Server Error",
@@ -110,7 +118,13 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie(controller.runtime.OAuthSessionCookieName, sessionId, int(time.Hour.Seconds()), "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.OAuthFlowCookieName,
+		Value:     flowId,
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+
+	http.SetCookie(c.Writer, cookie)
 
 	c.JSON(200, gin.H{
 		"status":  200,
@@ -132,35 +146,41 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	sessionIdCookie, err := c.Cookie(controller.runtime.OAuthSessionCookieName)
+	flowId, err := c.Cookie(controller.runtime.OAuthFlowCookieName)
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to get OAuth session cookie")
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth flow cookie")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
-	c.SetCookie(controller.runtime.OAuthSessionCookieName, "", -1, "/", controller.getCookieDomain(), controller.config.Auth.SecureCookie, true)
+	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.OAuthFlowCookieName,
+		Value:     "",
+		ExpiresAt: time.Now().Add(-time.Hour),
+	})
 
-	oauthPendingSession, err := controller.auth.GetOAuthPendingSession(sessionIdCookie)
+	http.SetCookie(c.Writer, cookie)
 
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to get pending OAuth session")
+	flow, ok := controller.broker.GetFlow(flowId)
+
+	if !ok {
+		controller.log.App.Error().Err(err).Msg("Failed to get OAuth flow")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
-	defer controller.auth.EndOAuthSession(sessionIdCookie)
+	defer controller.broker.EndFlow(flowId)
 
 	state := c.Query("state")
-	if state != oauthPendingSession.State {
+	if state != flow.State {
 		controller.log.App.Warn().Msg("OAuth state mismatch")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
 	code := c.Query("code")
-	_, err = controller.auth.GetOAuthToken(sessionIdCookie, code)
+	_, err = controller.broker.FlowOAuthToken(flowId, code)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to exchange code for token")
@@ -168,7 +188,7 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	user, err := controller.auth.GetOAuthUserinfo(sessionIdCookie)
+	user, err := controller.broker.FlowOAuthUserinfo(flowId)
 
 	if err != nil {
 		controller.log.App.Error().Err(err).Msg("Failed to get user info from OAuth provider")
@@ -188,23 +208,15 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	svc, err := controller.auth.GetOAuthService(sessionIdCookie)
-
-	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to get OAuth service for session")
+	if flow.Service.ID() != req.Provider {
+		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, flow.Service.ID())
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
-	if svc.ID() != req.Provider {
-		controller.log.App.Warn().Msgf("OAuth provider mismatch: expected %s, got %s", req.Provider, svc.ID())
-		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
-		return
-	}
-
-	if !controller.auth.IsEmailWhitelisted(svc.ID(), user.Email) {
+	if !controller.auth.IsEmailWhitelisted(flow.Service.ID(), user.Email) {
 		controller.log.App.Warn().Str("email", user.Email).Msg("Email not whitelisted, denying access")
-		controller.log.AuditLoginFailure(user.Email, svc.ID(), c.ClientIP(), "email not whitelisted")
+		controller.log.AuditLoginFailure(user.Email, flow.Service.ID(), c.ClientIP(), "email not whitelisted")
 
 		queries, err := query.Values(UnauthorizedQuery{
 			Username: user.Email,
@@ -220,39 +232,60 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	oauthUserInfo := controller.createOAuthUserInfo(oauthUserInfo{
+	userinfo := controller.createOAuthUserInfo(oauthUserInfo{
 		Username: user.PreferredUsername,
 		Email:    user.Email,
 		Name:     user.Name,
 	})
 
-	sessionCookie := repository.Session{
-		Username:    oauthUserInfo.Username,
-		Name:        oauthUserInfo.Name,
-		Email:       oauthUserInfo.Email,
-		Provider:    svc.ID(),
-		OAuthGroups: utils.CoalesceToString(user.Groups),
-		OAuthName:   svc.Name(),
-		OAuthSub:    user.Sub,
+	identityContext := model.IdentityContext{
+		OAuth: model.IdentityOAuthContext{
+			Groups:      utils.CoalesceToString(user.Groups),
+			DisplayName: flow.Service.Name(),
+		},
 	}
 
-	controller.log.App.Debug().Msg("Creating session cookie for user")
-
-	cookie, err := controller.auth.CreateSession(c, sessionCookie)
+	identity, err := controller.identity.Store(c, service.StoreIdentityParams{
+		Username:        userinfo.Username,
+		Email:           userinfo.Email,
+		Name:            userinfo.Name,
+		ProviderID:      flow.Service.ID(),
+		ProviderType:    model.ProviderOAuth,
+		ProviderUserID:  user.Sub,
+		IdentityContext: identityContext,
+	})
 
 	if err != nil {
-		controller.log.App.Error().Err(err).Msg("Failed to create session cookie")
+		controller.log.App.Error().Err(err).Msg("Failed to store identity")
 		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
 		return
 	}
 
-	http.SetCookie(c.Writer, cookie)
+	controller.log.App.Debug().Str("username", userinfo.Username).Str("email", userinfo.Email).Msg("Identity created")
 
-	controller.log.AuditLoginSuccess(sessionCookie.Username, sessionCookie.Provider, c.ClientIP())
+	session, err := controller.sessions.Create(c, identity.UUID, model.SessionContext{})
 
-	if controller.isOidcRequest(oauthPendingSession.CallbackParams) {
+	if err != nil {
+		controller.log.App.Error().Err(err).Msg("Failed to create session")
+		c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
+		return
+	}
+
+	controller.log.App.Debug().Str("username", userinfo.Username).Str("email", userinfo.Email).Msg("Session created")
+
+	sessionCookie := controller.auth.CreateCookie(service.CreateCookieParams{
+		Name:      controller.runtime.SessionCookieName,
+		Value:     session.UUID,
+		ExpiresAt: time.Unix(session.ExpiresAt, 0),
+	})
+
+	http.SetCookie(c.Writer, sessionCookie)
+
+	controller.log.AuditLoginSuccess(userinfo.Username, flow.Service.ID(), c.ClientIP())
+
+	if controller.isOidcRequest(flow.CallbackParams) {
 		controller.log.App.Debug().Msg("OIDC request detected, redirecting to authorization endpoint with callback params")
-		queries, err := query.Values(oauthPendingSession.CallbackParams)
+		queries, err := query.Values(flow.CallbackParams)
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to encode OIDC callback query")
 			c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/error", controller.runtime.AppURL))
@@ -262,9 +295,9 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	if oauthPendingSession.CallbackParams.RedirectURI != "" {
+	if flow.CallbackParams.RedirectURI != "" {
 		queries, err := query.Values(RedirectQuery{
-			RedirectURI: oauthPendingSession.CallbackParams.RedirectURI,
+			RedirectURI: flow.CallbackParams.RedirectURI,
 			LoginFor:    FrontendLoginForApp,
 		})
 
@@ -283,13 +316,6 @@ func (controller *OAuthController) oauthCallbackHandler(c *gin.Context) {
 
 func (controller *OAuthController) isOidcRequest(params service.OAuthCallbackParams) bool {
 	return params.LoginFor == string(FrontendLoginForOIDC)
-}
-
-func (controller *OAuthController) getCookieDomain() string {
-	if !controller.config.Auth.SubdomainsEnabled {
-		return ""
-	}
-	return controller.runtime.CookieDomain
 }
 
 func (controller *OAuthController) isRedirectSafe(redirectURI string) bool {
@@ -350,7 +376,7 @@ func (controller *OAuthController) createOAuthUserInfo(input oauthUserInfo) oaut
 		Email: input.Email,
 	}
 
-	if controller.config.Experimental.OAuthBridgeEnabled {
+	if controller.config.Experimental.NoOAuthUserinfoGen {
 		if input.Username != "" {
 			info.Username = input.Username
 		} else {

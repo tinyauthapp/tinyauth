@@ -31,6 +31,8 @@ func (app *BootstrapApp) setupServices() error {
 		service.NewOAuthBrokerService,
 		service.NewAuthService,
 		service.NewOIDCService,
+		service.NewSessionsService,
+		service.NewIdentityService,
 	}
 
 	for _, provider := range serviceProvideFor {
@@ -50,6 +52,8 @@ func (app *BootstrapApp) setupServices() error {
 		OAuthBrokerService   *service.OAuthBrokerService
 		OIDCService          *service.OIDCService
 		TailscaleService     *service.TailscaleService
+		SessionsService      *service.SessionsService
+		IdentityService      *service.IdentityService
 	}
 
 	err = app.dig.Invoke(func(i svcInput) error {
@@ -59,6 +63,8 @@ func (app *BootstrapApp) setupServices() error {
 		app.services.oauthBrokerService = i.OAuthBrokerService
 		app.services.oidcService = i.OIDCService
 		app.services.tailscaleService = i.TailscaleService
+		app.services.sessionsService = i.SessionsService
+		app.services.identityService = i.IdentityService
 		return nil
 	})
 

@@ -38,12 +38,14 @@ type Services struct {
 	accessControlService *service.AccessControlsService
 	authService          *service.AuthService
 	dockerService        *service.DockerService
+	identityService      *service.IdentityService
 	kubernetesService    *service.KubernetesService
 	ldapService          *service.LdapService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
 	tailscaleService     *service.TailscaleService
 	policyEngine         *service.PolicyEngine
+	sessionsService      *service.SessionsService
 }
 
 type BootstrapApp struct {
@@ -178,10 +180,10 @@ func (app *BootstrapApp) Setup() error {
 	cookieId := strings.Split(app.runtime.UUID, "-")[0] // first 8 characters of the uuid should be good enough
 
 	app.runtime.SessionCookieName = fmt.Sprintf("%s-%s", model.SessionCookieName, cookieId)
-	app.runtime.OAuthSessionCookieName = fmt.Sprintf("%s-%s", model.OAuthSessionCookieName, cookieId)
+	app.runtime.OAuthFlowCookieName = fmt.Sprintf("%s-%s", model.OAuthFlowCookieName, cookieId)
 
 	// database
-	store, err := app.SetupStore()
+	store, err := app.setupStore()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
@@ -253,17 +255,22 @@ func (app *BootstrapApp) Setup() error {
 
 	if app.services.authService.LocalAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
-			Name:  "Local",
-			ID:    "local",
-			OAuth: false,
+			Name: "Local",
+			ID:   "local",
 		})
 	}
 
 	if app.services.authService.LDAPAuthConfigured() {
 		configuredProviders = append(configuredProviders, model.Provider{
-			Name:  "LDAP",
-			ID:    "ldap",
-			OAuth: false,
+			Name: "LDAP",
+			ID:   "ldap",
+		})
+	}
+
+	if app.services.authService.TailscaleAuthConfigured() {
+		configuredProviders = append(configuredProviders, model.Provider{
+			Name: "Tailscale",
+			ID:   "tailscale",
 		})
 	}
 

@@ -21,6 +21,6 @@ var OverrideProviders = map[string]string{
 var ReservedProviderNames = []string{"local", "ldap", "tailscale"}
 
 const SessionCookieName = "tinyauth-session"
-const OAuthSessionCookieName = "tinyauth-oauth"
+const OAuthFlowCookieName = "tinyauth-oauth"
 
 const GracefulShutdownTimeout = 5 // seconds

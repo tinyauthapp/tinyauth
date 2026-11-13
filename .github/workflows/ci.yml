@@ -23,7 +23,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "^1.26.4"
+          go-version: "^1.27.3"
 
       - name: Go dependencies
         run: go mod download
@@ -35,13 +35,6 @@ jobs:
 
       - name: Setup controller-gen
         run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.22.0
-
-      - name: Check codegen is up to date
-        run: |
-          sqlc generate
-          go generate ./...
-          git diff --exit-code
-          git status --porcelain | grep -q . && echo "untracked files code gen files" && exit 1 || true
 
       - name: Install frontend dependencies
         working-directory: ./frontend
@@ -60,6 +53,13 @@ jobs:
 
       - name: Copy frontend
         run: cp -r frontend/dist internal/assets/dist
+
+      - name: Check codegen is up to date
+        run: |
+          sqlc generate
+          go generate ./...
+          git diff --exit-code
+          git status --porcelain | grep -q . && echo "untracked files code gen files" && exit 1 || true
 
       - name: Run tests
         run: go test -coverprofile=coverage.txt -v ./...
