@@ -271,7 +271,7 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 	cookie := m.auth.CreateCookie(service.CreateCookieParams{
 		Name:      m.runtime.SessionCookieName,
 		Value:     refreshed.UUID,
-		ExpiresAt: time.Unix(session.Session.ExpiresAt, 0),
+		ExpiresAt: time.Unix(refreshed.ExpiresAt, 0),
 	})
 
 	return userContext, cookie, nil

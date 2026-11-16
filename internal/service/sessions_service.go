@@ -88,7 +88,9 @@ func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.
 		if errors.Is(err, repository.ErrNotFound) {
 			return repository.Session{}, ErrSessionNotFound
 		}
-		return repository.Session{}, fmt.Errorf("failed to get session: %w", err)
+		return repository.Session{
+			ExpiresAt: time.Now().Unix(),
+		}, fmt.Errorf("failed to get session: %w", err)
 	}
 
 	t := time.Now()
@@ -100,10 +102,16 @@ func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.
 	}
 
 	if int64(time.Unix(session.ExpiresAt, 0).Sub(t).Seconds()) > refreshThreshold {
-		return repository.Session{}, nil
+		return session, nil
 	}
 
 	expiresAt := time.Unix(session.ExpiresAt, 0).Add(time.Duration(refreshThreshold) * time.Second)
+
+	if expiresAt.Sub(time.Unix(session.ExpiresAt, 0)) > time.Duration(s.config.Auth.SessionExpiry) {
+		return repository.Session{
+			ExpiresAt: time.Now().Unix(),
+		}, nil
+	}
 
 	session, err = s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
 		UUID:        session.UUID,

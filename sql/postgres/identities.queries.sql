@@ -11,6 +11,16 @@ INSERT INTO "identities" (
 )
 RETURNING *;
 
+-- name: UpdateIdentityByUUID :one
+UPDATE "identities" SET
+    "context_json" = $1
+WHERE "uuid" = $2
+RETURNING *;
+
+-- name: GetIdentityByProviderIDs :one
+SELECT * FROM "identities"
+WHERE "provider_type" = $1 AND "provider" = $2 AND "provider_user_id" = $3;
+
 -- name: GetIdentityByUUID :one
 SELECT * FROM "identities"
 WHERE "uuid" = $1;

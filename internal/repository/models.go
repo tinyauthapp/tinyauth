@@ -51,6 +51,17 @@ type CreateIdentityParams struct {
 	ContextJSON    string
 }
 
+type GetIdentityByProviderIDsParams struct {
+	ProviderType   string
+	Provider       string
+	ProviderUserID string
+}
+
+type UpdateIdentityByUUIDParams struct {
+	ContextJSON string
+	UUID        string
+}
+
 // Sessions
 
 type Session struct {

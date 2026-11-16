@@ -46,7 +46,7 @@ func TestIdentityService(t *testing.T) {
 			description: "stores and loads a new user and identity",
 			run: func(t *testing.T, svc *IdentityService, db *test.TestDatabase) {
 				args := params
-				args.Username, args.Email, args.Name = "newuser", "new@example.com", "New User"
+				args.Username, args.Email, args.Name, args.ProviderUserID = "newuser", "new@example.com", "New User", "new-provider-user-id"
 				stored, err := svc.Store(t.Context(), args)
 				require.NoError(t, err)
 				assert.NotEmpty(t, stored.UUID)

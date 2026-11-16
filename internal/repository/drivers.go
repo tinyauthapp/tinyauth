@@ -23,7 +23,13 @@ func SetupSQLite(databasePath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
 	}
 
-	db, err := sql.Open("sqlite", databasePath)
+	dsn := databasePath + "?_pragma=foreign_keys(1)"
+
+	if databasePath != ":memory:" {
+		dsn += "&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+	}
+
+	db, err := sql.Open("sqlite", dsn)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

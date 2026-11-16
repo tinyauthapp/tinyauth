@@ -84,6 +84,14 @@ func (s *Store) DeleteSessionByUUID(ctx context.Context, uuid string) error {
 	return mapErr(s.q.DeleteSessionByUUID(ctx, uuid))
 }
 
+func (s *Store) GetIdentityByProviderIDs(ctx context.Context, arg repository.GetIdentityByProviderIDsParams) (repository.Identity, error) {
+	r, err := s.q.GetIdentityByProviderIDs(ctx, GetIdentityByProviderIDsParams(arg))
+	if err != nil {
+		return repository.Identity{}, mapErr(err)
+	}
+	return repository.Identity(r), nil
+}
+
 func (s *Store) GetIdentityByUUID(ctx context.Context, uuid string) (repository.Identity, error) {
 	r, err := s.q.GetIdentityByUUID(ctx, uuid)
 	if err != nil {
@@ -174,6 +182,14 @@ func (s *Store) ListOIDCConsents(ctx context.Context) ([]repository.OIDCConsent,
 		out[i] = repository.OIDCConsent(row)
 	}
 	return out, nil
+}
+
+func (s *Store) UpdateIdentityByUUID(ctx context.Context, arg repository.UpdateIdentityByUUIDParams) (repository.Identity, error) {
+	r, err := s.q.UpdateIdentityByUUID(ctx, UpdateIdentityByUUIDParams(arg))
+	if err != nil {
+		return repository.Identity{}, mapErr(err)
+	}
+	return repository.Identity(r), nil
 }
 
 func (s *Store) UpdateOIDCSession(ctx context.Context, arg repository.UpdateOIDCSessionParams) (repository.OIDCSession, error) {

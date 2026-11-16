@@ -23,6 +23,8 @@ type Store interface {
 	// Identities
 	CreateIdentity(ctx context.Context, arg CreateIdentityParams) (Identity, error)
 	GetIdentityByUUID(ctx context.Context, uuid string) (Identity, error)
+	UpdateIdentityByUUID(ctx context.Context, arg UpdateIdentityByUUIDParams) (Identity, error)
+	GetIdentityByProviderIDs(ctx context.Context, arg GetIdentityByProviderIDsParams) (Identity, error)
 
 	// Sessions
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)

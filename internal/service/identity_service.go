@@ -51,6 +51,11 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 
 	switch s.linkingMode {
 	case model.LinkingModeBoth:
+		if args.Email == "" || args.Username == "" {
+			return func(ctx context.Context) (user repository.User, err error) {
+				return repository.User{}, fmt.Errorf("email and username are required for linking mode 'both'")
+			}
+		}
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByUsernameAndEmail(ctx, repository.GetUserByUsernameAndEmailParams{
 				Username: args.Username,
@@ -58,10 +63,20 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 			})
 		}
 	case model.LinkingModeEmail:
+		if args.Email == "" {
+			return func(ctx context.Context) (user repository.User, err error) {
+				return repository.User{}, fmt.Errorf("email is required for linking mode 'email'")
+			}
+		}
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByEmail(ctx, args.Email)
 		}
 	case model.LinkingModeUsername:
+		if args.Username == "" {
+			return func(ctx context.Context) (user repository.User, err error) {
+				return repository.User{}, fmt.Errorf("username is required for linking mode 'username'")
+			}
+		}
 		return func(ctx context.Context) (user repository.User, err error) {
 			return s.store.GetUserByUsername(ctx, args.Username)
 		}
@@ -120,23 +135,36 @@ func (s *IdentityService) ensureUser(ctx context.Context, args repository.Create
 }
 
 func (s *IdentityService) ensureIdentity(ctx context.Context, args repository.CreateIdentityParams) (identity repository.Identity, err error) {
-	identity, err = s.store.GetIdentityByUUID(ctx, args.UUID)
+	identity, err = s.store.GetIdentityByProviderIDs(ctx, repository.GetIdentityByProviderIDsParams{
+		ProviderType:   args.ProviderType,
+		ProviderUserID: args.ProviderUserID,
+		Provider:       args.Provider,
+	})
 
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return repository.Identity{}, fmt.Errorf("failed to get identity: %w", err)
-	}
+	if err != nil {
+		if !errors.Is(err, repository.ErrNotFound) {
+			return repository.Identity{}, fmt.Errorf("failed to get identity: %w", err)
+		}
 
-	if err == nil {
+		u := uuid.New()
+		args.UUID = u.String()
+
+		identity, err = s.store.CreateIdentity(ctx, args)
+
+		if err != nil {
+			return repository.Identity{}, fmt.Errorf("failed to create identity: %w", err)
+		}
+
 		return identity, nil
 	}
 
-	u := uuid.New()
-	args.UUID = u.String()
-
-	identity, err = s.store.CreateIdentity(ctx, args)
+	identity, err = s.store.UpdateIdentityByUUID(ctx, repository.UpdateIdentityByUUIDParams{
+		ContextJSON: identity.ContextJSON,
+		UUID:        identity.UUID,
+	})
 
 	if err != nil {
-		return repository.Identity{}, fmt.Errorf("failed to create identity: %w", err)
+		return repository.Identity{}, fmt.Errorf("failed to update identity: %w", err)
 	}
 
 	return identity, nil

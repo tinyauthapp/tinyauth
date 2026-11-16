@@ -121,7 +121,7 @@ func (controller *OAuthController) oauthURLHandler(c *gin.Context) {
 	cookie := controller.auth.CreateCookie(service.CreateCookieParams{
 		Name:      controller.runtime.OAuthFlowCookieName,
 		Value:     flowId,
-		ExpiresAt: time.Now().Add(time.Hour),
+		ExpiresAt: time.Now().Add(10 * time.Minute),
 	})
 
 	http.SetCookie(c.Writer, cookie)

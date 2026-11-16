@@ -363,7 +363,8 @@ func (auth *AuthService) CreateCookie(args CreateCookieParams) *http.Cookie {
 		MaxAge:   int(time.Until(args.ExpiresAt).Seconds()),
 		Secure:   auth.config.Auth.SecureCookie,
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		// We want lax for both forward-auth and OAuth
+		SameSite: http.SameSiteLaxMode,
 	}
 }
 

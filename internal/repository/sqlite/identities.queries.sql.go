@@ -53,6 +53,31 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 	return i, err
 }
 
+const getIdentityByProviderIDs = `-- name: GetIdentityByProviderIDs :one
+SELECT uuid, user_uuid, provider_type, provider, provider_user_id, context_json FROM "identities"
+WHERE "provider_type" = ? AND "provider" = ? AND "provider_user_id" = ?
+`
+
+type GetIdentityByProviderIDsParams struct {
+	ProviderType   string
+	Provider       string
+	ProviderUserID string
+}
+
+func (q *Queries) GetIdentityByProviderIDs(ctx context.Context, arg GetIdentityByProviderIDsParams) (Identity, error) {
+	row := q.db.QueryRowContext(ctx, getIdentityByProviderIDs, arg.ProviderType, arg.Provider, arg.ProviderUserID)
+	var i Identity
+	err := row.Scan(
+		&i.UUID,
+		&i.UserUUID,
+		&i.ProviderType,
+		&i.Provider,
+		&i.ProviderUserID,
+		&i.ContextJSON,
+	)
+	return i, err
+}
+
 const getIdentityByUUID = `-- name: GetIdentityByUUID :one
 SELECT uuid, user_uuid, provider_type, provider, provider_user_id, context_json FROM "identities"
 WHERE "uuid" = ?
@@ -60,6 +85,32 @@ WHERE "uuid" = ?
 
 func (q *Queries) GetIdentityByUUID(ctx context.Context, uuid string) (Identity, error) {
 	row := q.db.QueryRowContext(ctx, getIdentityByUUID, uuid)
+	var i Identity
+	err := row.Scan(
+		&i.UUID,
+		&i.UserUUID,
+		&i.ProviderType,
+		&i.Provider,
+		&i.ProviderUserID,
+		&i.ContextJSON,
+	)
+	return i, err
+}
+
+const updateIdentityByUUID = `-- name: UpdateIdentityByUUID :one
+UPDATE "identities" SET
+    "context_json" = ?
+WHERE "uuid" = ?
+RETURNING uuid, user_uuid, provider_type, provider, provider_user_id, context_json
+`
+
+type UpdateIdentityByUUIDParams struct {
+	ContextJSON string
+	UUID        string
+}
+
+func (q *Queries) UpdateIdentityByUUID(ctx context.Context, arg UpdateIdentityByUUIDParams) (Identity, error) {
+	row := q.db.QueryRowContext(ctx, updateIdentityByUUID, arg.ContextJSON, arg.UUID)
 	var i Identity
 	err := row.Scan(
 		&i.UUID,
