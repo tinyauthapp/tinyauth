@@ -40,9 +40,6 @@ jobs:
         working-directory: ./frontend
         run: pnpm ci
 
-      - name: Set version
-        run: echo testing > internal/assets/version
-
       - name: Lint frontend
         working-directory: ./frontend
         run: pnpm run lint
