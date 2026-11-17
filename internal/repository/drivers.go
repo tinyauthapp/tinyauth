@@ -23,11 +23,17 @@ func SetupSQLite(databasePath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
 	}
 
-	dsn := databasePath + "?_pragma=foreign_keys(1)"
+	dsn := databasePath
 
 	if databasePath != ":memory:" {
-		dsn += "&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+		dsn += "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
 	}
+
+	if databasePath == ":memory:" {
+		dsn = "file::memory:?cache=shared"
+	}
+
+	dsn += "&_pragma=foreign_keys(1)"
 
 	db, err := sql.Open("sqlite", dsn)
 
@@ -41,10 +47,6 @@ func SetupSQLite(databasePath string) (*sql.DB, error) {
 			db.Close()
 		}
 	}()
-
-	// Limit to 1 connection to sequence writes, this may need to be revisited in the future
-	// if the sqlite connection starts being a bottleneck
-	db.SetMaxOpenConns(1)
 
 	migrations, err := iofs.New(assets.Migrations, "migrations/sqlite")
 

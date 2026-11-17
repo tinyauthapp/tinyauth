@@ -48,18 +48,23 @@ type Services struct {
 	sessionsService      *service.SessionsService
 }
 
+type Factories struct {
+	storeFactory *service.StoreFactory
+}
+
 type BootstrapApp struct {
-	config   model.Config
-	runtime  model.RuntimeConfig
-	services Services
-	log      *logger.Logger
-	ctx      context.Context
-	cancel   context.CancelFunc
-	queries  repository.Store
-	router   *gin.Engine
-	db       *sql.DB
-	ding     *ding.Ding
-	dig      *dig.Container
+	config    model.Config
+	runtime   model.RuntimeConfig
+	services  Services
+	factories Factories
+	log       *logger.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
+	router    *gin.Engine
+	db        *sql.DB
+	dbtyp     model.DatabaseType
+	ding      *ding.Ding
+	dig       *dig.Container
 }
 
 func NewBootstrapApp(config model.Config) *BootstrapApp {
@@ -183,7 +188,7 @@ func (app *BootstrapApp) Setup() error {
 	app.runtime.OAuthFlowCookieName = fmt.Sprintf("%s-%s", model.OAuthFlowCookieName, cookieId)
 
 	// database
-	store, err := app.setupStore()
+	err = app.setupDatabase()
 
 	if err != nil {
 		return fmt.Errorf("failed to setup database: %w", err)
@@ -200,9 +205,6 @@ func (app *BootstrapApp) Setup() error {
 			app.log.App.Error().Err(err).Msg("Failed to close database connection")
 		}
 	}, ding.RingCritical)
-
-	// store
-	app.queries = store
 
 	// provide basic utilities to container
 	type utilityProvider struct {
@@ -223,7 +225,6 @@ func (app *BootstrapApp) Setup() error {
 			Runtime: &app.runtime,
 			Ding:    app.ding,
 			Ctx:     app.ctx,
-			Queries: app.queries,
 		}
 	})
 
@@ -378,7 +379,7 @@ func (app *BootstrapApp) heartbeatRoutine(ctx context.Context) {
 				continue
 			}
 
-			res.Body.Close()
+			_ = res.Body.Close()
 
 			if res.StatusCode != 200 && res.StatusCode != 201 {
 				app.log.App.Debug().Str("status", res.Status).Msg("Heartbeat returned non-200/201 status")
@@ -400,10 +401,18 @@ func (app *BootstrapApp) dbCleanupRoutine(ctx context.Context) {
 		case <-ticker.C:
 			app.log.App.Debug().Msg("Running database cleanup")
 
-			err := app.queries.DeleteExpiredSessions(ctx, time.Now().Unix())
+			store, err := app.factories.storeFactory.ProvideStore()
+
+			if err != nil {
+				app.log.App.Error().Err(err).Msg("Failed to provide store")
+				continue
+			}
+
+			err = store.DeleteExpiredSessions(ctx, time.Now().Unix())
 
 			if err != nil {
 				app.log.App.Error().Err(err).Msg("Failed to delete expired sessions")
+				continue
 			}
 
 			app.log.App.Debug().Msg("Database cleanup completed")

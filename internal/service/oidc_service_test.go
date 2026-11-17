@@ -69,14 +69,18 @@ func TestCompileUserinfo(t *testing.T) {
 
 	tdb, err := test.NewTestDatabase()
 	require.NoError(t, err)
-	store := tdb.Store()
+
+	storeFactory := NewStoreFactory(StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	svc, err := NewOIDCService(OIDCServiceInput{
-		Log:     log,
-		Config:  &cfg,
-		Runtime: &runtime,
-		Queries: store,
-		Ding:    dg,
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		StoreFactory: storeFactory,
+		Ding:         dg,
 	})
 	require.NoError(t, err)
 

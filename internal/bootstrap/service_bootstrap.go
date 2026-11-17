@@ -43,6 +43,18 @@ func (app *BootstrapApp) setupServices() error {
 		}
 	}
 
+	factoryProvideFor := []any{
+		service.NewStoreFactory,
+	}
+
+	for _, provider := range factoryProvideFor {
+		err = app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide factory: %w", err)
+		}
+	}
+
 	type svcInput struct {
 		dig.In
 
@@ -70,6 +82,21 @@ func (app *BootstrapApp) setupServices() error {
 
 	if err != nil {
 		return fmt.Errorf("failed to invoke services: %w", err)
+	}
+
+	type factoryInput struct {
+		dig.In
+
+		StoreFactory *service.StoreFactory
+	}
+
+	err = app.dig.Invoke(func(i factoryInput) error {
+		app.factories.storeFactory = i.StoreFactory
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke factories: %w", err)
 	}
 
 	return nil

@@ -78,7 +78,11 @@ func TestUserController(t *testing.T) {
 
 	tdb, err := test.NewTestDatabase()
 	require.NoError(t, err)
-	store := tdb.Store()
+
+	storeFactory := service.NewStoreFactory(service.StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	type runArgs struct {
 		t            *testing.T
@@ -498,39 +502,29 @@ func TestUserController(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
-		Log:     log,
-		Runtime: &runtime,
-		Ctx:     ctx,
-		Ding:    dg,
-	})
-
 	authService, err := service.NewAuthService(service.AuthServiceInput{
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
-		Ctx:          ctx,
 		Ding:         dg,
 		LDAP:         nil,
-		Queries:      store,
-		OAuthBroker:  broker,
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
 	require.NoError(t, err)
 
 	identityService, err := service.NewIdentityService(service.IdentityServiceInput{
-		Store:   store,
-		Config:  &cfg,
-		Runtime: &runtime,
+		StoreFactory: storeFactory,
+		Config:       &cfg,
+		Runtime:      &runtime,
 	})
 	require.NoError(t, err)
 
 	sessionsService := service.NewSessionsService(service.SessionsServiceInput{
-		Store:    store,
-		Identity: identityService,
-		Config:   &cfg,
-		Runtime:  &runtime,
+		StoreFactory: storeFactory,
+		Identity:     identityService,
+		Config:       &cfg,
+		Runtime:      &runtime,
 	})
 
 	beforeEach := func() {

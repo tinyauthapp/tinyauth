@@ -101,3 +101,10 @@ type SessionGetResult struct {
 	Session        repository.Session
 	SessionContext SessionContext
 }
+
+type DatabaseType string
+
+const (
+	DatabaseTypeSQLite   DatabaseType = "sqlite"
+	DatabaseTypePostgres DatabaseType = "postgres"
+)

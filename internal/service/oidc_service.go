@@ -161,10 +161,10 @@ type UsedCodeEntry struct {
 }
 
 type OIDCService struct {
-	log     *logger.Logger
-	config  *model.Config
-	runtime *model.RuntimeConfig
-	queries repository.Store
+	log          *logger.Logger
+	config       *model.Config
+	runtime      *model.RuntimeConfig
+	storeFactory *StoreFactory
 
 	clients    map[string]model.OIDCClientConfig
 	privateKey *rsa.PrivateKey
@@ -185,11 +185,11 @@ type OIDCService struct {
 type OIDCServiceInput struct {
 	dig.In
 
-	Log     *logger.Logger
-	Config  *model.Config
-	Runtime *model.RuntimeConfig
-	Queries repository.Store
-	Ding    *ding.Ding
+	Log          *logger.Logger
+	Config       *model.Config
+	Runtime      *model.RuntimeConfig
+	StoreFactory *StoreFactory
+	Ding         *ding.Ding
 }
 
 func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
@@ -342,10 +342,10 @@ func NewOIDCService(i OIDCServiceInput) (*OIDCService, error) {
 
 	// Initialize the service
 	service := &OIDCService{
-		log:     i.Log,
-		config:  i.Config,
-		runtime: i.Runtime,
-		queries: i.Queries,
+		log:          i.Log,
+		config:       i.Config,
+		runtime:      i.Runtime,
+		storeFactory: i.StoreFactory,
 
 		clients:    clients,
 		privateKey: privateKey,
@@ -651,7 +651,13 @@ func (service *OIDCService) GenerateAccessToken(ctx context.Context, client mode
 		return nil, err
 	}
 
-	_, err = service.queries.CreateOIDCSession(ctx, repository.CreateOIDCSessionParams{
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = store.CreateOIDCSession(ctx, repository.CreateOIDCSessionParams{
 		Sub:                   codeEntry.Userinfo.Sub,
 		AccessTokenHash:       service.Hash(accessToken),
 		RefreshTokenHash:      service.Hash(refreshToken),
@@ -671,7 +677,13 @@ func (service *OIDCService) GenerateAccessToken(ctx context.Context, client mode
 }
 
 func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken string, clientId string) (*TokenResponse, error) {
-	entry, err := service.queries.GetOIDCSessionByRefreshTokenHash(ctx, service.Hash(refreshToken))
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := store.GetOIDCSessionByRefreshTokenHash(ctx, service.Hash(refreshToken))
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -723,7 +735,7 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 		Scope:        strings.ReplaceAll(entry.Scope, ",", " "),
 	}
 
-	_, err = service.queries.UpdateOIDCSession(ctx, repository.UpdateOIDCSessionParams{
+	_, err = store.UpdateOIDCSession(ctx, repository.UpdateOIDCSessionParams{
 		Sub:                   entry.Sub,
 		AccessTokenHash:       service.Hash(accessToken),
 		RefreshTokenHash:      service.Hash(newRefreshToken),
@@ -743,7 +755,13 @@ func (service *OIDCService) RefreshAccessToken(ctx context.Context, refreshToken
 }
 
 func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash string) (*repository.OIDCSession, error) {
-	entry, err := service.queries.GetOIDCSessionByAccessTokenHash(ctx, tokenHash)
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := store.GetOIDCSessionByAccessTokenHash(ctx, tokenHash)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -757,9 +775,9 @@ func (service *OIDCService) GetSessionByToken(ctx context.Context, tokenHash str
 		// since there is no way for the client to access anything anymore
 		if entry.RefreshTokenExpiresAt < time.Now().Unix() {
 			// Deletes by sub
-			err := service.queries.DeleteOIDCSessionBySub(ctx, entry.Sub)
+			err = store.DeleteOIDCSessionBySub(ctx, entry.Sub)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to delete session: %w", err)
 			}
 			return nil, ErrTokenExpired
 		}
@@ -827,7 +845,11 @@ func (service *OIDCService) Hash(token string) string {
 }
 
 func (service *OIDCService) DeleteOldSession(ctx context.Context, sub string) error {
-	err := service.queries.DeleteOIDCSessionBySub(ctx, sub)
+	store, err := service.storeFactory.ProvideStore()
+	if err != nil {
+		return err
+	}
+	err = store.DeleteOIDCSessionBySub(ctx, sub)
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return err
 	}
@@ -846,8 +868,15 @@ func (service *OIDCService) cleanupRoutine(ctx context.Context) {
 
 			currentTime := time.Now().Unix()
 
+			store, err := service.storeFactory.ProvideStore()
+
+			if err != nil {
+				service.log.App.Warn().Err(err).Msg("Failed to get OIDC store")
+				return
+			}
+
 			// Limitation of sqlc, meaning we need to specify a timestamp for both token and refresh token expiry
-			err := service.queries.DeleteExpiredOIDCSessions(ctx, repository.DeleteExpiredOIDCSessionsParams{
+			err = store.DeleteExpiredOIDCSessions(ctx, repository.DeleteExpiredOIDCSessionsParams{
 				TokenExpiresAt:        currentTime,
 				RefreshTokenExpiresAt: currentTime,
 			})
@@ -931,7 +960,11 @@ func (service *OIDCService) MarkCodeAsUsed(codeHash string, sub string) {
 }
 
 func (service *OIDCService) DeleteSessionBySub(ctx context.Context, sub string) error {
-	return service.queries.DeleteOIDCSessionBySub(ctx, sub)
+	store, err := service.storeFactory.ProvideStore()
+	if err != nil {
+		return err
+	}
+	return store.DeleteOIDCSessionBySub(ctx, sub)
 }
 
 func (service *OIDCService) CreateAuthorizeRequestTicket(req AuthorizeRequest) string {
@@ -1008,7 +1041,13 @@ func (service *OIDCService) GetPrompt(prompt string) []OIDCPrompt {
 }
 
 func (service *OIDCService) getOIDCConsentUnsafe(ctx context.Context, username, clientId string) (*repository.OIDCConsent, error) {
-	entry, err := service.queries.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return nil, err
+	}
+
+	entry, err := store.GetOIDCConsentByUsernameAndClientID(ctx, repository.GetOIDCConsentByUsernameAndClientIDParams{
 		Username: username,
 		ClientID: clientId,
 	})
@@ -1052,7 +1091,13 @@ func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, sco
 		CreatedAt: time.Now().Unix(),
 	}
 
-	consent, err := service.queries.UpsertOIDCConsent(ctx, entry)
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return repository.OIDCConsent{}, err
+	}
+
+	consent, err := store.UpsertOIDCConsent(ctx, entry)
 
 	if err != nil {
 		service.log.App.Error().Err(err).Msg("Failed to upsert OIDC consent")
@@ -1063,7 +1108,13 @@ func (service *OIDCService) UpsertOIDCConsent(ctx context.Context, username, sco
 }
 
 func (service *OIDCService) reconcileOIDCConsents(ctx context.Context) error {
-	consents, err := service.queries.ListOIDCConsents(ctx)
+	store, err := service.storeFactory.ProvideStore()
+
+	if err != nil {
+		return err
+	}
+
+	consents, err := store.ListOIDCConsents(ctx)
 
 	if err != nil {
 		return fmt.Errorf("failed to list oidc consents: %w", err)
@@ -1084,7 +1135,7 @@ func (service *OIDCService) reconcileOIDCConsents(ctx context.Context) error {
 
 		service.log.App.Info().Str("clientId", consent.ClientID).Msg("Removed OIDC client no longer in configuration, deleting its consents")
 
-		if err := service.queries.DeleteOIDCConsentByClientID(ctx, consent.ClientID); err != nil {
+		if err := store.DeleteOIDCConsentByClientID(ctx, consent.ClientID); err != nil {
 			service.log.App.Warn().Err(err).Str("clientId", consent.ClientID).Msg("Failed to delete OIDC consents for removed client")
 		}
 	}

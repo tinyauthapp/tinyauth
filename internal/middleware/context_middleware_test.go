@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -35,7 +34,6 @@ func TestContextMiddleware(t *testing.T) {
 
 	type runArgs struct {
 		do          func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder)
-		queries     repository.Store
 		cfg         *model.Config
 		identitySvc *service.IdentityService
 		sessionsSvc *service.SessionsService
@@ -97,6 +95,7 @@ func TestContextMiddleware(t *testing.T) {
 					Local: &model.LocalContext{
 						BaseContext: model.BaseContext{
 							Username: "testuser",
+							Email:    "testuser@example.com",
 						},
 					},
 				})
@@ -108,6 +107,7 @@ func TestContextMiddleware(t *testing.T) {
 				require.NotNil(t, userCtx)
 				assert.Equal(t, model.ProviderLocal, userCtx.Provider)
 				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.Equal(t, "testuser@example.com", userCtx.GetEmail())
 				assert.True(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
 			},
@@ -120,6 +120,7 @@ func TestContextMiddleware(t *testing.T) {
 					Local: &model.LocalContext{
 						BaseContext: model.BaseContext{
 							Username: "totpuser",
+							Email:    "totpuser@example.com",
 						},
 						TOTPPending: true,
 					},
@@ -131,6 +132,7 @@ func TestContextMiddleware(t *testing.T) {
 
 				require.NotNil(t, userCtx)
 				assert.Equal(t, "totpuser", userCtx.GetUsername())
+				assert.Equal(t, "totpuser@example.com", userCtx.GetEmail())
 				assert.False(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
 				assert.True(t, userCtx.Local.TOTPPending)
@@ -154,6 +156,7 @@ func TestContextMiddleware(t *testing.T) {
 					Local: &model.LocalContext{
 						BaseContext: model.BaseContext{
 							Username: "ghostuser",
+							Email:    "ghostuser@example.com",
 						},
 					},
 				})
@@ -176,6 +179,7 @@ func TestContextMiddleware(t *testing.T) {
 					Local: &model.LocalContext{
 						BaseContext: model.BaseContext{
 							Username: "testuser",
+							Email:    "testuser@example.com",
 						},
 					},
 				})
@@ -252,6 +256,7 @@ func TestContextMiddleware(t *testing.T) {
 					Local: &model.LocalContext{
 						BaseContext: model.BaseContext{
 							Username: "testuser",
+							Email:    "testuser@example.com",
 						},
 					},
 				})
@@ -322,7 +327,11 @@ func TestContextMiddleware(t *testing.T) {
 
 	tdb, err := test.NewTestDatabase()
 	require.NoError(t, err)
-	store := tdb.Store()
+
+	storeFactory := service.NewStoreFactory(service.StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
 		Log:    log,
@@ -341,28 +350,25 @@ func TestContextMiddleware(t *testing.T) {
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
-		Ctx:          ctx,
 		Ding:         dg,
 		LDAP:         nil,
-		Queries:      store,
-		OAuthBroker:  broker,
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
 	require.NoError(t, err)
 
 	identitySvc, err := service.NewIdentityService(service.IdentityServiceInput{
-		Store:   store,
-		Config:  &cfg,
-		Runtime: &runtime,
+		StoreFactory: storeFactory,
+		Config:       &cfg,
+		Runtime:      &runtime,
 	})
 	require.NoError(t, err)
 
 	sessionSvc := service.NewSessionsService(service.SessionsServiceInput{
-		Store:    store,
-		Identity: identitySvc,
-		Config:   &cfg,
-		Runtime:  &runtime,
+		StoreFactory: storeFactory,
+		Identity:     identitySvc,
+		Config:       &cfg,
+		Runtime:      &runtime,
 	})
 
 	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
@@ -397,7 +403,7 @@ func TestContextMiddleware(t *testing.T) {
 				return captured, recorder
 			}
 
-			tc.run(tct, runArgs{do: do, queries: store, sessionsSvc: sessionSvc, identitySvc: identitySvc, cfg: &cfg})
+			tc.run(tct, runArgs{do: do, sessionsSvc: sessionSvc, identitySvc: identitySvc, cfg: &cfg})
 		})
 	}
 }

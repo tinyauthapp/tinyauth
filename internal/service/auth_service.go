@@ -12,7 +12,6 @@ import (
 
 	"github.com/steveiliop56/ding"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 	"github.com/tinyauthapp/tinyauth/pkg/cache"
@@ -35,11 +34,8 @@ type AuthService struct {
 	log     *logger.Logger
 	config  *model.Config
 	runtime *model.RuntimeConfig
-	ctx     context.Context
 
 	ldap         *LdapService
-	queries      repository.Store
-	oauthBroker  *OAuthBrokerService
 	tailscale    *TailscaleService
 	policyEngine *PolicyEngine
 
@@ -57,11 +53,8 @@ type AuthServiceInput struct {
 	Log          *logger.Logger
 	Config       *model.Config
 	Runtime      *model.RuntimeConfig
-	Ctx          context.Context
 	Ding         *ding.Ding
-	LDAP         *LdapService `optional:"true"`
-	Queries      repository.Store
-	OAuthBroker  *OAuthBrokerService
+	LDAP         *LdapService      `optional:"true"`
 	Tailscale    *TailscaleService `optional:"true"`
 	PolicyEngine *PolicyEngine
 }
@@ -70,11 +63,8 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	service := &AuthService{
 		log:          i.Log,
 		runtime:      i.Runtime,
-		ctx:          i.Ctx,
 		config:       i.Config,
 		ldap:         i.LDAP,
-		queries:      i.Queries,
-		oauthBroker:  i.OAuthBroker,
 		tailscale:    i.Tailscale,
 		policyEngine: i.PolicyEngine,
 	}
@@ -236,7 +226,7 @@ func (auth *AuthService) CheckUserPassword(search model.UserSearch, password str
 }
 
 func (auth *AuthService) DummyPasswordCheck(password string) {
-	bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(password))
+	_ = bcrypt.CompareHashAndPassword([]byte(auth.dummyHash), []byte(password))
 }
 
 // Account rate limiting

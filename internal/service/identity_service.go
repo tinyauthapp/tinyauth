@@ -16,14 +16,14 @@ import (
 type IdentityServiceInput struct {
 	dig.In
 
-	Store   repository.Store
-	Config  *model.Config
-	Runtime *model.RuntimeConfig
+	StoreFactory *StoreFactory
+	Config       *model.Config
+	Runtime      *model.RuntimeConfig
 }
 
 type IdentityService struct {
-	store   repository.Store
-	runtime *model.RuntimeConfig
+	storeFactory *StoreFactory
+	runtime      *model.RuntimeConfig
 
 	linkingMode model.LinkingMode
 }
@@ -36,16 +36,16 @@ func NewIdentityService(i IdentityServiceInput) (*IdentityService, error) {
 	}
 
 	return &IdentityService{
-		store:       i.Store,
-		runtime:     i.Runtime,
-		linkingMode: linkingMode,
+		storeFactory: i.StoreFactory,
+		runtime:      i.Runtime,
+		linkingMode:  linkingMode,
 	}, nil
 }
 
-func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx context.Context) (user repository.User, err error) {
+func (s *IdentityService) getUserFunc(store repository.Store, args repository.CreateUserParams) func(ctx context.Context) (user repository.User, err error) {
 	if args.UUID != "" {
 		return func(ctx context.Context) (user repository.User, err error) {
-			return s.store.GetUserByUUID(ctx, args.UUID)
+			return store.GetUserByUUID(ctx, args.UUID)
 		}
 	}
 
@@ -57,7 +57,7 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 			}
 		}
 		return func(ctx context.Context) (user repository.User, err error) {
-			return s.store.GetUserByUsernameAndEmail(ctx, repository.GetUserByUsernameAndEmailParams{
+			return store.GetUserByUsernameAndEmail(ctx, repository.GetUserByUsernameAndEmailParams{
 				Username: args.Username,
 				Email:    args.Email,
 			})
@@ -69,7 +69,7 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 			}
 		}
 		return func(ctx context.Context) (user repository.User, err error) {
-			return s.store.GetUserByEmail(ctx, args.Email)
+			return store.GetUserByEmail(ctx, args.Email)
 		}
 	case model.LinkingModeUsername:
 		if args.Username == "" {
@@ -78,7 +78,7 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 			}
 		}
 		return func(ctx context.Context) (user repository.User, err error) {
-			return s.store.GetUserByUsername(ctx, args.Username)
+			return store.GetUserByUsername(ctx, args.Username)
 		}
 	}
 
@@ -87,8 +87,8 @@ func (s *IdentityService) getUserFunc(args repository.CreateUserParams) func(ctx
 	}
 }
 
-func (s *IdentityService) ensureUser(ctx context.Context, args repository.CreateUserParams) (user repository.User, err error) {
-	user, err = s.getUserFunc(args)(ctx)
+func (s *IdentityService) ensureUser(ctx context.Context, store repository.Store, args repository.CreateUserParams) (user repository.User, err error) {
+	user, err = s.getUserFunc(store, args)(ctx)
 
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return repository.User{}, fmt.Errorf("failed to get user: %w", err)
@@ -104,7 +104,7 @@ func (s *IdentityService) ensureUser(ctx context.Context, args repository.Create
 		if user.Username != exp.Username ||
 			user.Email != exp.Email ||
 			user.Name != exp.Name {
-			err = s.store.UpdateUser(ctx, repository.UpdateUserParams{
+			err = store.UpdateUser(ctx, repository.UpdateUserParams{
 				UUID:     user.UUID,
 				Username: args.Username,
 				Email:    args.Email,
@@ -125,7 +125,7 @@ func (s *IdentityService) ensureUser(ctx context.Context, args repository.Create
 	u := uuid.New()
 	args.UUID = u.String()
 
-	user, err = s.store.CreateUser(ctx, args)
+	user, err = store.CreateUser(ctx, args)
 
 	if err != nil {
 		return repository.User{}, fmt.Errorf("failed to create user: %w", err)
@@ -134,8 +134,8 @@ func (s *IdentityService) ensureUser(ctx context.Context, args repository.Create
 	return user, nil
 }
 
-func (s *IdentityService) ensureIdentity(ctx context.Context, args repository.CreateIdentityParams) (identity repository.Identity, err error) {
-	identity, err = s.store.GetIdentityByProviderIDs(ctx, repository.GetIdentityByProviderIDsParams{
+func (s *IdentityService) ensureIdentity(ctx context.Context, store repository.Store, args repository.CreateIdentityParams) (identity repository.Identity, err error) {
+	identity, err = store.GetIdentityByProviderIDs(ctx, repository.GetIdentityByProviderIDsParams{
 		ProviderType:   args.ProviderType,
 		ProviderUserID: args.ProviderUserID,
 		Provider:       args.Provider,
@@ -149,7 +149,7 @@ func (s *IdentityService) ensureIdentity(ctx context.Context, args repository.Cr
 		u := uuid.New()
 		args.UUID = u.String()
 
-		identity, err = s.store.CreateIdentity(ctx, args)
+		identity, err = store.CreateIdentity(ctx, args)
 
 		if err != nil {
 			return repository.Identity{}, fmt.Errorf("failed to create identity: %w", err)
@@ -158,7 +158,7 @@ func (s *IdentityService) ensureIdentity(ctx context.Context, args repository.Cr
 		return identity, nil
 	}
 
-	identity, err = s.store.UpdateIdentityByUUID(ctx, repository.UpdateIdentityByUUIDParams{
+	identity, err = store.UpdateIdentityByUUID(ctx, repository.UpdateIdentityByUUIDParams{
 		ContextJSON: identity.ContextJSON,
 		UUID:        identity.UUID,
 	})
@@ -186,6 +186,19 @@ type StoreIdentityParams struct {
 }
 
 func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams) (identity repository.Identity, err error) {
+	err = s.storeFactory.ProvideTransaction(ctx, func(store repository.Store) error {
+		identity, err = s.store(ctx, store, params)
+		return err
+	})
+	return
+}
+
+func (s *IdentityService) StoreWithOwnTransaction(ctx context.Context, store repository.Store, params StoreIdentityParams) (identity repository.Identity, err error) {
+	identity, err = s.store(ctx, store, params)
+	return
+}
+
+func (s *IdentityService) store(ctx context.Context, store repository.Store, params StoreIdentityParams) (identity repository.Identity, err error) {
 	if params.ProviderType == model.ProviderTailscale &&
 		!slices.Contains(s.runtime.ConfiguredProviders, model.Provider{
 			Name: "Tailscale",
@@ -200,7 +213,7 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 		return repository.Identity{}, fmt.Errorf("failed to marshal context: %w", err)
 	}
 
-	user, err := s.ensureUser(ctx, repository.CreateUserParams{
+	user, err := s.ensureUser(ctx, store, repository.CreateUserParams{
 		Username: params.Username,
 		Email:    params.Email,
 		Name:     params.Name,
@@ -210,7 +223,7 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 		return repository.Identity{}, err
 	}
 
-	identity, err = s.ensureIdentity(ctx, repository.CreateIdentityParams{
+	identity, err = s.ensureIdentity(ctx, store, repository.CreateIdentityParams{
 		UserUUID:       user.UUID,
 		Provider:       params.ProviderID,
 		ProviderType:   params.ProviderType.String(),
@@ -226,13 +239,19 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 }
 
 func (s *IdentityService) Load(ctx context.Context, uuid string) (result model.IdentityResult, err error) {
-	identity, err := s.store.GetIdentityByUUID(ctx, uuid)
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return model.IdentityResult{}, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	identity, err := store.GetIdentityByUUID(ctx, uuid)
 
 	if err != nil {
 		return model.IdentityResult{}, fmt.Errorf("failed to get identity: %w", err)
 	}
 
-	user, err := s.store.GetUserByUUID(ctx, identity.UserUUID)
+	user, err := store.GetUserByUUID(ctx, identity.UserUUID)
 
 	if err != nil {
 		return model.IdentityResult{}, fmt.Errorf("failed to get user: %w", err)

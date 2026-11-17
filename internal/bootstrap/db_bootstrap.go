@@ -3,12 +3,11 @@ package bootstrap
 import (
 	"fmt"
 
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/repository/postgres"
-	"github.com/tinyauthapp/tinyauth/internal/repository/sqlite"
 )
 
-func (app *BootstrapApp) setupStore() (repository.Store, error) {
+func (app *BootstrapApp) setupDatabase() error {
 	driver := app.config.Database.Driver
 
 	switch driver {
@@ -20,24 +19,24 @@ func (app *BootstrapApp) setupStore() (repository.Store, error) {
 
 		db, err := repository.SetupSQLite(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to setup SQLite: %w", err)
+			return fmt.Errorf("failed to setup sqlite: %w", err)
 		}
 
 		app.db = db
+		app.dbtyp = model.DatabaseTypeSQLite
 
-		return sqlite.NewStore(sqlite.New(db)), nil
-
+		return nil
 	case "postgres":
 		db, err := repository.SetupPostgres(app.config.Database.Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to setup PostgreSQL: %w", err)
+			return fmt.Errorf("failed to setup postgresql: %w", err)
 		}
 
 		app.db = db
+		app.dbtyp = model.DatabaseTypePostgres
 
-		return postgres.NewStore(postgres.New(db)), nil
-
+		return nil
 	default:
-		return nil, fmt.Errorf("unknown database driver %q", driver)
+		return fmt.Errorf("unknown database driver: %q", driver)
 	}
 }

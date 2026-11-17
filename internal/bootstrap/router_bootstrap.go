@@ -201,7 +201,7 @@ func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, ctx c
 		if err != nil {
 			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
 		}
-		listener.Close()
+		_ = listener.Close()
 	}
 
 	go func() {

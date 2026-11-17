@@ -20,26 +20,26 @@ var (
 type SessionsService struct {
 	identity *IdentityService
 
-	store   repository.Store
-	config  *model.Config
-	runtime *model.RuntimeConfig
+	storeFactory *StoreFactory
+	config       *model.Config
+	runtime      *model.RuntimeConfig
 }
 
 type SessionsServiceInput struct {
 	dig.In
 
-	Store    repository.Store
-	Identity *IdentityService
-	Config   *model.Config
-	Runtime  *model.RuntimeConfig
+	StoreFactory *StoreFactory
+	Identity     *IdentityService
+	Config       *model.Config
+	Runtime      *model.RuntimeConfig
 }
 
 func NewSessionsService(i SessionsServiceInput) *SessionsService {
 	return &SessionsService{
-		store:    i.Store,
-		identity: i.Identity,
-		config:   i.Config,
-		runtime:  i.Runtime,
+		storeFactory: i.StoreFactory,
+		identity:     i.Identity,
+		config:       i.Config,
+		runtime:      i.Runtime,
 	}
 }
 
@@ -66,7 +66,13 @@ func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessi
 		return repository.Session{}, fmt.Errorf("failed to marshal session context: %w", err)
 	}
 
-	session, err := s.store.CreateSession(ctx, repository.CreateSessionParams{
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	session, err := store.CreateSession(ctx, repository.CreateSessionParams{
 		UUID:         u.String(),
 		IdentityUUID: identityUUID,
 		ExpiresAt:    expiresAt.Unix(),
@@ -82,7 +88,13 @@ func (s *SessionsService) Create(ctx context.Context, identityUUID string, sessi
 }
 
 func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.Session, error) {
-	session, err := s.store.GetSessionByUUID(ctx, uuid)
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	session, err := store.GetSessionByUUID(ctx, uuid)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -113,7 +125,7 @@ func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.
 		}, nil
 	}
 
-	session, err = s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
+	session, err = store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
 		UUID:        session.UUID,
 		ExpiresAt:   expiresAt.Unix(),
 		ContextJSON: session.ContextJSON,
@@ -127,7 +139,13 @@ func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.
 }
 
 func (s *SessionsService) Delete(ctx context.Context, uuid string) error {
-	err := s.store.DeleteSessionByUUID(ctx, uuid)
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return fmt.Errorf("failed to get store: %w", err)
+	}
+
+	err = store.DeleteSessionByUUID(ctx, uuid)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -139,7 +157,13 @@ func (s *SessionsService) Delete(ctx context.Context, uuid string) error {
 	return nil
 }
 func (s *SessionsService) Get(ctx context.Context, uuid string) (model.SessionGetResult, error) {
-	session, err := s.store.GetSessionByUUID(ctx, uuid)
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return model.SessionGetResult{}, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	session, err := store.GetSessionByUUID(ctx, uuid)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -183,7 +207,13 @@ func (s *SessionsService) Update(ctx context.Context, uuid string, sessionContex
 		return repository.Session{}, fmt.Errorf("failed to marshal session context: %w", err)
 	}
 
-	session, err := s.store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
+	store, err := s.storeFactory.ProvideStore()
+
+	if err != nil {
+		return repository.Session{}, fmt.Errorf("failed to get store: %w", err)
+	}
+
+	session, err := store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
 		UUID:        current.Session.UUID,
 		ExpiresAt:   expiresAt,
 		ContextJSON: string(contextJSON),

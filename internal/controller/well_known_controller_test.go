@@ -12,6 +12,7 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -280,14 +281,18 @@ func TestWellKnownController(t *testing.T) {
 
 	tdb, err := test.NewTestDatabase()
 	require.NoError(t, err)
-	store := tdb.Store()
+
+	storeFactory := service.NewStoreFactory(service.StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	oidcService, err := service.NewOIDCService(service.OIDCServiceInput{
-		Log:     log,
-		Config:  &cfg,
-		Runtime: &runtime,
-		Queries: store,
-		Ding:    dg,
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		StoreFactory: storeFactory,
+		Ding:         dg,
 	})
 	require.NoError(t, err)
 
