@@ -20,7 +20,7 @@ export const DomainWarning = (props: Props) => {
   const { t } = useTranslation();
   const { search } = useLocation();
 
-  const searchParams = new URLSearchParams(search);
+  const searchParams = (new URLSearchParams(search)).toString();
 
   return (
     <Card role="alert" aria-live="assertive">
@@ -45,7 +45,7 @@ export const DomainWarning = (props: Props) => {
       <CardFooter className="flex flex-col items-stretch gap-3">
         <Button
           onClick={() =>
-            window.location.assign(`${appUrl}/login?${searchParams.toString()}`)
+            window.location.assign(`${appUrl}/login${searchParams ? `?${searchParams}` : ""}`)
           }
           variant="outline"
         >

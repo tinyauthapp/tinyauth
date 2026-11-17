@@ -37,6 +37,7 @@ type tailscaleAPIDevices struct {
 }
 
 type tailscaleUser struct {
+	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
 	LoginName   string `json:"loginName"`
 }
@@ -46,6 +47,7 @@ type tailscaleAPIUsers struct {
 }
 
 type TailscaleWhoisResponse struct {
+	UserID      string
 	DisplayName string
 	LoginName   string
 	NodeName    string
@@ -238,6 +240,7 @@ func (s *TailscaleService) Whois(addr string) (*TailscaleWhoisResponse, error) {
 	s.log.App.Debug().Str("user", user.LoginName).Bool("cache_hit", uCacheHit).Msg("Tailscale user found")
 
 	return &TailscaleWhoisResponse{
+		UserID:      user.ID,
 		LoginName:   user.LoginName,
 		DisplayName: user.DisplayName,
 		NodeName:    device.Name,

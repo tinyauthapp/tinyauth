@@ -116,8 +116,8 @@ func (rule *OAuthGroupRule) Evaluate(ctx *ACLContext) Effect {
 		return EffectAllow
 	}
 
-	if _, ok := model.OverrideProviders[ctx.UserContext.OAuth.ID]; ok {
-		rule.Log.App.Debug().Str("provider", ctx.UserContext.OAuth.ID).Msg("Provider override detected, skipping group check")
+	if _, ok := model.OverrideProviders[ctx.UserContext.OAuth.ProviderID]; ok {
+		rule.Log.App.Debug().Str("provider", ctx.UserContext.OAuth.ProviderID).Msg("Provider override detected, skipping group check")
 		return EffectAllow
 	}
 

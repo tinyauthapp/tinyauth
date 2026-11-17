@@ -7,9 +7,9 @@ import (
 	"github.com/steveiliop56/ding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinyauthapp/tinyauth/internal/test"
 
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
 )
 
@@ -67,14 +67,20 @@ func TestCompileUserinfo(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	store := memory.New()
+	tdb, err := test.NewTestDatabase()
+	require.NoError(t, err)
+
+	storeFactory := NewStoreFactory(StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	svc, err := NewOIDCService(OIDCServiceInput{
-		Log:     log,
-		Config:  &cfg,
-		Runtime: &runtime,
-		Queries: store,
-		Ding:    dg,
+		Log:          log,
+		Config:       &cfg,
+		Runtime:      &runtime,
+		StoreFactory: storeFactory,
+		Ding:         dg,
 	})
 	require.NoError(t, err)
 
@@ -201,4 +207,8 @@ func TestCompileUserinfo(t *testing.T) {
 			test.run(t, info)
 		})
 	}
+
+	t.Cleanup(func() {
+		tdb.Close()
+	})
 }

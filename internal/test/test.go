@@ -44,6 +44,7 @@ func CreateTestConfigs(t *testing.T) (model.Config, model.RuntimeConfig) {
 			PublicKeyPath:  filepath.Join(tempDir, "key.pub"),
 		},
 		Auth: model.AuthConfig{
+			LinkingMode:     "both",
 			SessionExpiry:   10,
 			LoginTimeout:    10,
 			LoginMaxRetries: 3,
