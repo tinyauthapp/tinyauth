@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/tinyauthapp/tinyauth/internal/controller"
@@ -165,7 +167,36 @@ func (app *BootstrapApp) serveHTTP(ctx context.Context) error {
 	return app.serve(listener, server, ctx, "http")
 }
 
+// parseSocketMode parses an octal permission string such as "0660" into an os.FileMode.
+func parseSocketMode(s string) (os.FileMode, error) {
+	v, err := strconv.ParseUint(s, 8, 32)
+
+	if err != nil || v > 0o777 {
+		return 0, fmt.Errorf("expected an octal mode such as 0660")
+	}
+
+	return os.FileMode(v), nil
+}
+
 func (app *BootstrapApp) serveUnix(ctx context.Context) error {
+	// Validate socketMode up front, before removing any existing socket, so a configuration error does
+	// not delete the current socket and then fail to start.
+	hasMode := app.config.Server.SocketMode != ""
+
+	var mode os.FileMode
+
+	if hasMode {
+		if runtime.GOOS == "windows" {
+			return errors.New("server.socketMode is not supported on Windows, where socket permissions cannot be enforced")
+		}
+
+		var perr error
+
+		if mode, perr = parseSocketMode(app.config.Server.SocketMode); perr != nil {
+			return fmt.Errorf("invalid server.socketMode %q: %w", app.config.Server.SocketMode, perr)
+		}
+	}
+
 	_, err := os.Stat(app.config.Server.SocketPath)
 
 	if err == nil {
@@ -183,6 +214,18 @@ func (app *BootstrapApp) serveUnix(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("failed to create unix socket listener: %w", err)
+	}
+
+	if hasMode {
+		// net.Listen creates the socket with the process umask's mode; chmod tightens it immediately.
+		// serve() has not started accepting connections yet, and connecting to the socket is not itself
+		// an auth bypass, so this is the standard Listen+Chmod pattern for Go unix sockets. It is
+		// preferred over changing the process-wide umask, which would race with any other file created
+		// during startup. Operators wanting a hard guarantee should also restrict the socket's directory.
+		if err := os.Chmod(app.config.Server.SocketPath, mode); err != nil {
+			listener.Close()
+			return fmt.Errorf("failed to set unix socket mode: %w", err)
+		}
 	}
 
 	server := &http.Server{
