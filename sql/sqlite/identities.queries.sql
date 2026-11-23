@@ -13,7 +13,8 @@ RETURNING *;
 
 -- name: UpdateIdentityByUUID :one
 UPDATE "identities" SET
-    "context_json" = ?
+    "context_json" = ?,
+    "user_uuid" = ?
 WHERE "uuid" = ?
 RETURNING *;
 

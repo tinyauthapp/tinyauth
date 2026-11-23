@@ -59,6 +59,7 @@ type GetIdentityByProviderIDsParams struct {
 
 type UpdateIdentityByUUIDParams struct {
 	ContextJSON string
+	UserUUID    string
 	UUID        string
 }
 

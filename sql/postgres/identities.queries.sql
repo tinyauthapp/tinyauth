@@ -13,8 +13,9 @@ RETURNING *;
 
 -- name: UpdateIdentityByUUID :one
 UPDATE "identities" SET
-    "context_json" = $1
-WHERE "uuid" = $2
+    "context_json" = $1,
+    "user_uuid" = $2
+WHERE "uuid" = $3
 RETURNING *;
 
 -- name: GetIdentityByProviderIDs :one

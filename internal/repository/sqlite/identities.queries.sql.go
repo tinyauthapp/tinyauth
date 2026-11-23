@@ -99,18 +99,20 @@ func (q *Queries) GetIdentityByUUID(ctx context.Context, uuid string) (Identity,
 
 const updateIdentityByUUID = `-- name: UpdateIdentityByUUID :one
 UPDATE "identities" SET
-    "context_json" = ?
+    "context_json" = ?,
+    "user_uuid" = ?
 WHERE "uuid" = ?
 RETURNING uuid, user_uuid, provider_type, provider, provider_user_id, context_json
 `
 
 type UpdateIdentityByUUIDParams struct {
 	ContextJSON string
+	UserUUID    string
 	UUID        string
 }
 
 func (q *Queries) UpdateIdentityByUUID(ctx context.Context, arg UpdateIdentityByUUIDParams) (Identity, error) {
-	row := q.db.QueryRowContext(ctx, updateIdentityByUUID, arg.ContextJSON, arg.UUID)
+	row := q.db.QueryRowContext(ctx, updateIdentityByUUID, arg.ContextJSON, arg.UserUUID, arg.UUID)
 	var i Identity
 	err := row.Scan(
 		&i.UUID,
