@@ -1,5 +1,5 @@
 # Site builder
-FROM node:26.10-alpine3.23 AS frontend-builder
+FROM node:26.10-alpine3.23@sha256:c3c6e314fd42e41962360b2482fc18d150beb47976c3aa7b8b9689d7ef42a5c2 AS frontend-builder
 
 WORKDIR /frontend
 
@@ -49,7 +49,7 @@ RUN CGO_ENABLED=0 go build -tags "${BUILD_TAGS}" -ldflags "${LDFLAGS} \
     -o tinyauth ./cmd/tinyauth
 
 # Runner
-FROM alpine:3.24 AS runner
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS runner
 
 WORKDIR /tinyauth
 
