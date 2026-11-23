@@ -210,21 +210,25 @@ func (app *BootstrapApp) Setup() error {
 	type utilityProvider struct {
 		dig.Out
 
-		Log     *logger.Logger
-		Config  *model.Config
-		Runtime *model.RuntimeConfig
-		Ding    *ding.Ding
-		Ctx     context.Context
-		Queries repository.Store
+		Log          *logger.Logger
+		Config       *model.Config
+		Runtime      *model.RuntimeConfig
+		Ding         *ding.Ding
+		Ctx          context.Context
+		Queries      repository.Store
+		DatabaseType model.DatabaseType
+		Database     *sql.DB
 	}
 
 	err = app.dig.Provide(func() utilityProvider {
 		return utilityProvider{
-			Log:     app.log,
-			Config:  &app.config,
-			Runtime: &app.runtime,
-			Ding:    app.ding,
-			Ctx:     app.ctx,
+			Log:          app.log,
+			Config:       &app.config,
+			Runtime:      &app.runtime,
+			Ding:         app.ding,
+			Ctx:          app.ctx,
+			DatabaseType: app.dbtyp,
+			Database:     app.db,
 		}
 	})
 
