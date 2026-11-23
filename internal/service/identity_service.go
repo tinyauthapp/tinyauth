@@ -159,7 +159,7 @@ func (s *IdentityService) ensureIdentity(ctx context.Context, store repository.S
 	}
 
 	identity, err = store.UpdateIdentityByUUID(ctx, repository.UpdateIdentityByUUIDParams{
-		ContextJSON: identity.ContextJSON,
+		ContextJSON: args.ContextJSON,
 		UUID:        identity.UUID,
 	})
 

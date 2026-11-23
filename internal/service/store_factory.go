@@ -54,7 +54,12 @@ func (f *StoreFactory) ProvideStore() (repository.Store, error) {
 }
 
 func (f *StoreFactory) ProvideTransaction(ctx context.Context, cb func(store repository.Store) error) error {
-	tx, err := f.db.BeginTx(ctx, nil)
+	// Isolation level serializable ensures that a transaction does
+	// not insert a user at the same time as another transaction,
+	// ensuring no duplicate users
+	tx, err := f.db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}

@@ -185,7 +185,15 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 	switch userContext.Provider {
 	case model.ProviderLocal:
-		user := m.auth.GetLocalUser(userContext.Local.Username)
+		// We extract the actual username from the provider user ID, which for local sessions
+		// is local:config-username
+		actualUsername, ok := strings.CutPrefix(userContext.GetDistinctUserID(), "local:")
+
+		if !ok {
+			return nil, nil, fmt.Errorf("local user from session cookie has invalid distinct user id: %s", userContext.GetDistinctUserID())
+		}
+
+		user := m.auth.GetLocalUser(actualUsername)
 
 		if user == nil {
 			return nil, nil, fmt.Errorf("local user not found")
