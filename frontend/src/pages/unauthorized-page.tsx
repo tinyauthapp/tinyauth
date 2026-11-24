@@ -6,6 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { searchParamsFromObject } from "@/lib/hooks/screen-params";
+import axios from "axios";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Navigate, useLocation, useNavigate } from "react-router";
@@ -22,9 +24,23 @@ export const UnauthorizedPage = () => {
   const resource = searchParams.get("resource");
   const groupErr = searchParams.get("groupErr");
   const ip = searchParams.get("ip");
+  const redirectUri = searchParams.get("redirect_uri");
 
-  const handleRedirect = () => {
+  const handleRedirect = async () => {
     setLoading(true);
+
+    // The user is signed in but not allowed to access the app. Sign out first
+    // so that another user can sign in, then return to the app after login.
+    if (username && redirectUri) {
+      await axios.post("/api/user/logout").catch(() => undefined);
+      const params = searchParamsFromObject({
+        redirect_uri: redirectUri,
+        login_for: "app",
+      });
+      window.location.replace(`/login?${params}`);
+      return;
+    }
+
     navigate("/login");
   };
 

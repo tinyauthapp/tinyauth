@@ -667,6 +667,25 @@ func TestProxyController(t *testing.T) {
 			},
 		},
 		{
+			description: "Ensure user allow ACL redirects incorrect user with browser to unauthorized page with redirect uri",
+			middlewares: []gin.HandlerFunc{
+				simpleCtxTotp,
+			},
+			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
+				req := httptest.NewRequest("GET", "/api/auth/traefik", nil)
+				req.Header.Set("x-forwarded-host", "user-allow.example.com")
+				req.Header.Set("x-forwarded-proto", "https")
+				req.Header.Set("x-forwarded-uri", "/some/path")
+				req.Header.Set("user-agent", browserUserAgent)
+				router.ServeHTTP(recorder, req)
+				assert.Equal(t, http.StatusFound, recorder.Code)
+				location := recorder.Header().Get("Location")
+				assert.Contains(t, location, runtime.AppURL+"/unauthorized?")
+				assert.Contains(t, location, "username=totpuser")
+				assert.Contains(t, location, "redirect_uri="+url.QueryEscape("https://user-allow.example.com/some/path"))
+			},
+		},
+		{
 			description: "Test IP block rule, with non browser user agent",
 			middlewares: []gin.HandlerFunc{},
 			run: func(t *testing.T, router *gin.Engine, recorder *httptest.ResponseRecorder) {
@@ -699,6 +718,7 @@ func TestProxyController(t *testing.T) {
 				assert.Contains(t, location, url.QueryEscape("10.10.10.10"))
 				assert.Contains(t, location, url.QueryEscape("ip-block"))
 				assert.Contains(t, location, runtime.AppURL)
+				assert.NotContains(t, location, "redirect_uri")
 			},
 		},
 		{
@@ -799,6 +819,7 @@ func TestProxyController(t *testing.T) {
 				assert.Contains(t, location, "groupErr=true")
 				assert.Contains(t, location, "oauth-group")
 				assert.Contains(t, location, runtime.AppURL)
+				assert.Contains(t, location, "redirect_uri="+url.QueryEscape("https://oauth-group.example.com/"))
 			},
 		},
 		{
@@ -899,6 +920,7 @@ func TestProxyController(t *testing.T) {
 				assert.Contains(t, location, "groupErr=true")
 				assert.Contains(t, location, "ldap-group")
 				assert.Contains(t, location, runtime.AppURL)
+				assert.Contains(t, location, "redirect_uri="+url.QueryEscape("https://ldap-group.example.com/"))
 			},
 		},
 		{
