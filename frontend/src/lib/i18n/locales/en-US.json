@@ -4,6 +4,7 @@
   "loginDivider": "Or",
   "loginUsername": "Username",
   "loginPassword": "Password",
+  "loginPasswordToggle": "Toggle password visibility",
   "loginSubmit": "Login",
   "loginFailTitle": "Failed to log in",
   "loginFailSubtitle": "Please check your username and password",

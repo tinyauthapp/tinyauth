@@ -12,6 +12,8 @@ import {
 } from "../ui/form";
 import { loginSchema, LoginSchema } from "@/schemas/login-schema";
 import z from "zod";
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface Props {
   onSubmit: (data: LoginSchema) => void;
@@ -23,6 +25,7 @@ interface Props {
 export const LoginForm = (props: Props) => {
   const { onSubmit, loading, formId } = props;
   const { t } = useTranslation();
+  const [showPassword, setShowPassword] = useState(false);
 
   z.config({
     customError: (iss) =>
@@ -61,15 +64,28 @@ export const LoginForm = (props: Props) => {
             <FormItem className="gap-0">
               <div className="relative mb-1">
                 <FormLabel className="mb-2">{t("loginPassword")}</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder={t("loginPassword").toLowerCase()}
-                    type="password"
+                <div className="relative">
+                  <FormControl>
+                    <Input
+                      placeholder={t("loginPassword").toLowerCase()}
+                      type={showPassword ? "text" : "password"}
+                      disabled={loading}
+                      autoComplete="current-password"
+                      className="pr-10"
+                      {...field}
+                    />
+                  </FormControl>
+                  <button
+                    type="button"
+                    aria-label={t("loginPasswordToggle")}
+                    aria-pressed={showPassword}
                     disabled={loading}
-                    autoComplete="current-password"
-                    {...field}
-                  />
-                </FormControl>
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted-foreground absolute right-0 top-0 h-9 px-3 rounded-r-md opacity-50 hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:cursor-pointer disabled:pointer-events-none outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] [&_svg]:size-4"
+                  >
+                    {showPassword ? <EyeOff /> : <Eye />}
+                  </button>
+                </div>
                 <a
                   href="/forgot-password"
                   onClick={(e) => {
