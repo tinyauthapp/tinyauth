@@ -2,23 +2,24 @@ package test
 
 import (
 	"database/sql"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/tinyauthapp/tinyauth/internal/repository"
 )
 
-var openDBs atomic.Uint64
+var databaseID atomic.Uint64
 
 type TestDatabase struct {
 	db *sql.DB
 }
 
 func NewTestDatabase() (*TestDatabase, error) {
-	db, err := repository.SetupSQLite(":memory:")
+	path := fmt.Sprintf("file:tinyauth-test-%d?mode=memory&cache=shared", databaseID.Add(1))
+	db, err := repository.SetupSQLite(path)
 	if err != nil {
 		return nil, err
 	}
-	openDBs.Add(1)
 	return &TestDatabase{
 		db: db,
 	}, nil

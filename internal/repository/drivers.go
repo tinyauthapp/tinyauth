@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
@@ -26,7 +27,11 @@ func SetupSQLite(databasePath string) (*sql.DB, error) {
 	dsn := databasePath
 
 	if databasePath != ":memory:" {
-		dsn += "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+		separator := "?"
+		if strings.Contains(dsn, "?") {
+			separator = "&"
+		}
+		dsn += separator + "_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
 	}
 
 	if databasePath == ":memory:" {
