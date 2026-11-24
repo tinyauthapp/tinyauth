@@ -30,6 +30,8 @@
   "logoutSuccessTitle": "Logged out",
   "logoutSuccessSubtitle": "You have been logged out",
   "logoutTitle": "Logout",
+  "logoutOidcTitle": "Confirm logout",
+  "logoutOidcSubtitle": "We couldn't verify where to redirect you after logout. Are you sure you want to log out?",
   "logoutUsernameSubtitle": "You are currently logged in as <code>{{username}}</code>. Click the button below to logout.",
   "logoutOauthSubtitle": "You are currently logged in as <code>{{username}}</code> using the {{provider}} OAuth provider. Click the button below to logout.",
   "notFoundTitle": "Page not found",

@@ -29,6 +29,7 @@ type OpenIDConnectConfiguration struct {
 	AuthorizationEndpoint                  string   `json:"authorization_endpoint"`
 	TokenEndpoint                          string   `json:"token_endpoint"`
 	UserinfoEndpoint                       string   `json:"userinfo_endpoint"`
+	EndSessionEndpoint                     string   `json:"end_session_endpoint"`
 	JwksUri                                string   `json:"jwks_uri"`
 	ScopesSupported                        []string `json:"scopes_supported"`
 	ResponseTypesSupported                 []string `json:"response_types_supported"`
@@ -81,6 +82,7 @@ func (controller *WellKnownController) OpenIDConnectConfiguration(c *gin.Context
 		TokenEndpoint:                          fmt.Sprintf("%s/api/oidc/token", issuer),
 		UserinfoEndpoint:                       fmt.Sprintf("%s/api/oidc/userinfo", issuer),
 		JwksUri:                                fmt.Sprintf("%s/.well-known/jwks.json", issuer),
+		EndSessionEndpoint:                     fmt.Sprintf("%s/api/oidc/end-session", issuer),
 		ScopesSupported:                        service.SupportedScopes,
 		ResponseTypesSupported:                 service.SupportedResponseTypes,
 		GrantTypesSupported:                    service.SupportedGrantTypes,

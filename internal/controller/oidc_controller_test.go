@@ -1100,11 +1100,14 @@ func TestOIDCController(t *testing.T) {
 				expiry := time.Now().Add(time.Hour).Unix()
 				token := "valid-userinfo-token"
 
-				userinfo, err := json.Marshal(service.UserinfoResponse{
-					Sub:               "userinfo-sub",
-					Name:              "Test User",
-					PreferredUsername: "testuser",
-					Email:             "testuser@example.com",
+				userinfo, err := json.Marshal(service.Userinfo{
+					Subject: "userinfo-sub",
+					UserinfoClaims: service.UserinfoClaims{
+						Name:              "Test User",
+						PreferredUsername: "testuser",
+						Email:             "testuser@example.com",
+						EmailVerified:     true,
+					},
 				})
 				require.NoError(t, err)
 
@@ -1126,9 +1129,9 @@ func TestOIDCController(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, recorder.Code)
 
-				var res service.UserinfoResponse
+				var res service.Userinfo
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
-				assert.Equal(t, "userinfo-sub", res.Sub)
+				assert.Equal(t, "userinfo-sub", res.Subject)
 				assert.Equal(t, "Test User", res.Name)
 				assert.Equal(t, "testuser@example.com", res.Email)
 				assert.True(t, res.EmailVerified)
@@ -1140,9 +1143,11 @@ func TestOIDCController(t *testing.T) {
 				expiry := time.Now().Add(time.Hour).Unix()
 				token := "valid-userinfo-post-token"
 
-				userinfo, err := json.Marshal(service.UserinfoResponse{
-					Sub:   "userinfo-post-sub",
-					Email: "testuser@example.com",
+				userinfo, err := json.Marshal(service.Userinfo{
+					Subject: "userinfo-post-sub",
+					UserinfoClaims: service.UserinfoClaims{
+						Email: "testuser@example.com",
+					},
 				})
 				require.NoError(t, err)
 
@@ -1167,27 +1172,27 @@ func TestOIDCController(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, recorder.Code)
 
-				var res service.UserinfoResponse
+				var res service.Userinfo
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
-				assert.Equal(t, "userinfo-post-sub", res.Sub)
+				assert.Equal(t, "userinfo-post-sub", res.Subject)
 				assert.Equal(t, "testuser@example.com", res.Email)
 			},
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
 			router := gin.Default()
 			gin.SetMode(gin.TestMode)
 
-			for _, middleware := range test.middlewares {
+			for _, middleware := range tt.middlewares {
 				router.Use(middleware)
 			}
 
 			group := router.Group("/api")
 
 			svc := oidcService
-			if test.oidcDisabled {
+			if tt.oidcDisabled {
 				svc = nil
 			}
 
@@ -1201,7 +1206,7 @@ func TestOIDCController(t *testing.T) {
 
 			recorder := httptest.NewRecorder()
 
-			test.run(t, router, recorder)
+			tt.run(t, router, recorder)
 		})
 	}
 }

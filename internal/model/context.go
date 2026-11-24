@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tinyauthapp/tinyauth/internal/repository"
@@ -25,7 +26,7 @@ const (
 type UserContext struct {
 	Authenticated bool
 	Provider      ProviderType
-	AuthTime      int64
+	AuthTime      time.Time
 	Local         *LocalContext
 	OAuth         *OAuthContext
 	LDAP          *LDAPContext
@@ -111,7 +112,7 @@ func (c *UserContext) NewFromGin(ginctx *gin.Context) (*UserContext, error) {
 func (c *UserContext) NewFromSession(session *repository.Session) (*UserContext, error) {
 	*c = UserContext{
 		Authenticated: !session.TotpPending,
-		AuthTime:      session.CreatedAt,
+		AuthTime:      time.Unix(session.CreatedAt, 0).UTC(),
 	}
 
 	switch session.Provider {

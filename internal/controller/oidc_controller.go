@@ -37,6 +37,7 @@ type OIDCController struct {
 	log     *logger.Logger
 	oidc    *service.OIDCService
 	runtime *model.RuntimeConfig
+	auth    *service.AuthService
 }
 
 type AuthorizeCallback struct {
@@ -52,6 +53,13 @@ type TokenRequest struct {
 	ClientSecret string `form:"client_secret" url:"client_secret"`
 	ClientID     string `form:"client_id" url:"client_id"`
 	CodeVerifier string `form:"code_verifier" url:"code_verifier"`
+}
+
+type EndSessionRequest struct {
+	IDTokenHint           string `form:"id_token_hint" url:"id_token_hint"`
+	ClientID              string `form:"client_id" url:"client_id"`
+	PostLogoutRedirectURI string `form:"post_logout_redirect_uri" url:"post_logout_redirect_uri"`
+	State                 string `form:"state" url:"state"`
 }
 
 type CallbackError struct {
@@ -95,6 +103,7 @@ type OIDCControllerInput struct {
 	Log           *logger.Logger
 	OIDCService   *service.OIDCService
 	RuntimeConfig *model.RuntimeConfig
+	AuthService   *service.AuthService
 	RouterGroup   *gin.RouterGroup `name:"apiRouterGroup"`
 	MainRouter    *gin.RouterGroup `name:"mainRouterGroup"`
 }
@@ -104,6 +113,7 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 		log:     i.Log,
 		oidc:    i.OIDCService,
 		runtime: i.RuntimeConfig,
+		auth:    i.AuthService,
 	}
 
 	i.MainRouter.POST("/authorize", controller.authorize)
@@ -112,9 +122,11 @@ func NewOIDCController(i OIDCControllerInput) *OIDCController {
 	oidcGroup := i.RouterGroup.Group("/oidc")
 	oidcGroup.POST("/authorize-complete", controller.authorizeComplete)
 	oidcGroup.GET("/skip-consent", controller.skipConsent)
-	oidcGroup.POST("/token", controller.Token)
-	oidcGroup.GET("/userinfo", controller.Userinfo)
-	oidcGroup.POST("/userinfo", controller.Userinfo)
+	oidcGroup.POST("/token", controller.token)
+	oidcGroup.GET("/userinfo", controller.userinfo)
+	oidcGroup.POST("/userinfo", controller.userinfo)
+	oidcGroup.GET("/end-session", controller.endSession)
+	oidcGroup.POST("/end-session", controller.endSession)
 
 	return controller
 }
@@ -242,8 +254,7 @@ func (controller *OIDCController) authorize(c *gin.Context) {
 		}
 
 		if userContext.Authenticated {
-			authTime := time.Unix(userContext.AuthTime, 0)
-			if authTime.Add(time.Duration(maxAge) * time.Second).Before(time.Now()) {
+			if userContext.AuthTime.Add(time.Duration(maxAge) * time.Second).Before(time.Now()) {
 				values.OIDCPrompt = service.OIDCPromptLogin
 			}
 		}
@@ -489,7 +500,7 @@ func (controller *OIDCController) authorizeComplete(c *gin.Context) {
 	})
 }
 
-func (controller *OIDCController) Token(c *gin.Context) {
+func (controller *OIDCController) token(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC request but OIDC server is not configured")
 		c.JSON(500, gin.H{
@@ -595,7 +606,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 		}
 
 		// mark code as used to prevent reuse
-		controller.oidc.MarkCodeAsUsed(controller.oidc.Hash(req.Code), entry.Userinfo.Sub)
+		controller.oidc.MarkCodeAsUsed(controller.oidc.Hash(req.Code), entry.Userinfo.Subject)
 
 		if entry.RedirectURI != req.RedirectURI {
 			controller.log.App.Warn().Msg("Redirect URI does not match")
@@ -615,7 +626,11 @@ func (controller *OIDCController) Token(c *gin.Context) {
 			return
 		}
 
-		tokenRes, err := controller.oidc.GenerateAccessToken(c, client, *entry, entry.AuthTime)
+		tokenRes, err := controller.oidc.GenerateAccessToken(service.GenerateAccessTokenParams{
+			Ctx:       c,
+			Client:    &client,
+			CodeEntry: entry,
+		})
 
 		if err != nil {
 			controller.log.App.Error().Err(err).Msg("Failed to generate access token")
@@ -662,7 +677,7 @@ func (controller *OIDCController) Token(c *gin.Context) {
 	c.JSON(200, tokenResponse)
 }
 
-func (controller *OIDCController) Userinfo(c *gin.Context) {
+func (controller *OIDCController) userinfo(c *gin.Context) {
 	if controller.oidc == nil {
 		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
 		c.JSON(500, gin.H{
@@ -744,7 +759,7 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		return
 	}
 
-	var userinfo service.UserinfoResponse
+	var userinfo service.Userinfo
 
 	err = json.Unmarshal([]byte(entry.UserinfoJson), &userinfo)
 
@@ -756,7 +771,140 @@ func (controller *OIDCController) Userinfo(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, controller.oidc.CompileUserinfo(userinfo, entry.Scope))
+	c.JSON(200, userinfo)
+}
+
+func (controller *OIDCController) endSession(c *gin.Context) {
+	if controller.oidc == nil {
+		controller.log.App.Warn().Msg("Received OIDC userinfo request but OIDC server is not configured")
+		controller.humanError(c, "OIDC server is not configured")
+		return
+	}
+
+	var req EndSessionRequest
+
+	err := c.Bind(&req)
+	if err != nil {
+		controller.log.App.Warn().Err(err).Msg("Failed to bind token request")
+		controller.humanError(c, "Invalid request")
+		return
+	}
+
+	var idToken *service.IDTokenClaims
+
+	if req.IDTokenHint != "" {
+		claims, err := controller.oidc.DecodeIDToken(req.IDTokenHint, false)
+
+		if err != nil {
+			controller.log.App.Warn().Err(err).Msg("Failed to decode ID token hint")
+			controller.humanError(c, "Invalid ID token")
+			return
+		}
+
+		idToken = claims
+	}
+
+	clientId := req.ClientID
+
+	if idToken != nil {
+		aud, err := idToken.GetAudience()
+
+		// will never be not nil but just in case
+		if err != nil {
+			controller.log.App.Warn().Err(err).Msg("Failed to get audience from ID token")
+			controller.humanError(c, "Invalid ID token")
+			return
+		}
+
+		if req.ClientID != "" && !slices.Contains(aud, req.ClientID) {
+			controller.log.App.Warn().Str("client_id", req.ClientID).Msg("Client ID does not match audience")
+			controller.humanError(c, "Client ID does not match audience")
+			return
+		}
+
+		if clientId == "" && len(aud) > 0 {
+			// We are only dealing with Tinyauth ID tokens which we know contain only one value
+			clientId = aud[0]
+		}
+	}
+
+	var client *model.OIDCClientConfig
+
+	if clientId != "" {
+		cli, ok := controller.oidc.GetClient(clientId)
+
+		if !ok {
+			controller.log.App.Warn().Str("clientId", clientId).Msg("Client not found")
+			controller.humanError(c, "Client not found")
+			return
+		}
+
+		client = &cli
+	}
+
+	if req.PostLogoutRedirectURI != "" {
+		if client == nil {
+			if req.ClientID == "" {
+				controller.log.App.Warn().Msg("Client ID not provided in logout request for post logout redirect URI")
+			} else {
+				controller.log.App.Warn().Str("clientId", req.ClientID).Msg("Client not found for post logout redirect URI")
+			}
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s/logout?logout_reason=oidc", controller.oidc.GetIssuer()))
+			return
+		}
+
+		if !slices.Contains(client.TrustedPostLogoutRedirectURIs, req.PostLogoutRedirectURI) {
+			controller.log.App.Warn().Str("client_id", client.ClientID).Str("post_logout_redirect_uri", req.PostLogoutRedirectURI).Msg("Post logout redirect URI not trusted")
+			c.Redirect(http.StatusFound, fmt.Sprintf("%s/logout?logout_reason=oidc", controller.oidc.GetIssuer()))
+			return
+		}
+
+		u, err := url.Parse(req.PostLogoutRedirectURI)
+
+		if err != nil {
+			controller.log.App.Error().Err(err).Msg("Failed to parse logout redirect URI")
+			controller.humanError(c, "Invalid post logout redirect URI")
+			return
+		}
+
+		uuid, err := c.Cookie(controller.runtime.SessionCookieName)
+
+		if err == nil {
+			cookie, err := controller.auth.DeleteSession(c, uuid)
+
+			if err != nil {
+				controller.log.App.Error().Err(err).Msg("Failed to delete session")
+				controller.humanError(c, "Failed to end session")
+				return
+			}
+
+			http.SetCookie(c.Writer, cookie)
+		}
+
+		ctx, err := new(model.UserContext).NewFromGin(c)
+
+		if err == nil {
+			controller.log.AuditLogout(ctx.GetUsername(), ctx.GetProviderID(), c.ClientIP())
+		} else {
+			controller.log.App.Warn().Err(err).Msg("Failed to get user context during logout, logging audit with unknown user")
+			controller.log.AuditLogout("unknown", "unknown", c.ClientIP())
+		}
+
+		if req.State != "" {
+			q := u.Query()
+			q.Set("state", req.State)
+			u.RawQuery = q.Encode()
+		}
+
+		c.Redirect(http.StatusFound, u.String())
+		return
+	}
+
+	c.Redirect(http.StatusFound, fmt.Sprintf("%s/logout?logout_reason=oidc", controller.oidc.GetIssuer()))
+}
+
+func (controller *OIDCController) humanError(c *gin.Context, reason string) {
+	c.Redirect(http.StatusFound, fmt.Sprintf("%s/error?error=%s", controller.oidc.GetIssuer(), url.QueryEscape(reason)))
 }
 
 func (controller *OIDCController) authorizeError(c *gin.Context, params authorizeErrorParams) {
