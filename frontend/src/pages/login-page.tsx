@@ -72,12 +72,18 @@ export const LoginPage = () => {
   })();
   const loginForUrl = useLoginFor({
     login_for: screenParams.login_for,
-    params: searchParamsFromObject({ ...screenParams, oidc_prompt: undefined}),
+    params: searchParamsFromObject({
+      ...screenParams,
+      oidc_prompt: undefined,
+      skip_auto_redirect: undefined,
+    }),
   });
 
   const [isOauthAutoRedirect, setIsOauthAutoRedirect] = useState(
     providers.find((provider) => provider.id === oauth.autoRedirect) !==
-      undefined && (screenParams.redirect_uri || screenParams.oidc_ticket),
+      undefined &&
+      screenParams.skip_auto_redirect !== "true" &&
+      (screenParams.redirect_uri || screenParams.oidc_ticket),
   );
 
   const oauthProviders = providers.filter(

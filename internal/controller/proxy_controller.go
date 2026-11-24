@@ -190,7 +190,8 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 			controller.log.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User is not allowed to access resource")
 
 			queries, err := query.Values(UnauthorizedQuery{
-				Resource: strings.Split(proxyCtx.Host, ".")[0],
+				Resource:    strings.Split(proxyCtx.Host, ".")[0],
+				RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.PathRaw),
 			})
 
 			if err != nil {
@@ -233,8 +234,9 @@ func (controller *ProxyController) proxyHandler(c *gin.Context) {
 				controller.log.App.Warn().Str("user", userContext.GetUsername()).Str("resource", strings.Split(proxyCtx.Host, ".")[0]).Msg("User is not in the required group to access resource")
 
 				queries, err := query.Values(UnauthorizedQuery{
-					Resource: strings.Split(proxyCtx.Host, ".")[0],
-					GroupErr: true,
+					Resource:    strings.Split(proxyCtx.Host, ".")[0],
+					GroupErr:    true,
+					RedirectURI: fmt.Sprintf("%s://%s%s", proxyCtx.Proto, proxyCtx.Host, proxyCtx.PathRaw),
 				})
 
 				if err != nil {

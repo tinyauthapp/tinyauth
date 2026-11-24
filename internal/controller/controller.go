@@ -8,10 +8,11 @@ const (
 )
 
 type UnauthorizedQuery struct {
-	Username string `url:"username"`
-	Resource string `url:"resource"`
-	GroupErr bool   `url:"groupErr"`
-	IP       string `url:"ip"`
+	Username    string `url:"username"`
+	Resource    string `url:"resource"`
+	GroupErr    bool   `url:"groupErr"`
+	IP          string `url:"ip"`
+	RedirectURI string `url:"redirect_uri,omitempty"`
 }
 
 type RedirectQuery struct {
