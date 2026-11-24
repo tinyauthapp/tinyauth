@@ -87,7 +87,10 @@ export const TotpPage = () => {
       <CardContent>
         <TotpForm
           formId={formId}
-          onSubmit={(values) => totpMutation.mutate(values)}
+          onSubmit={(values) => {
+            if (totpMutation.isPending || totpMutation.isSuccess) return;
+            totpMutation.mutate(values);
+          }}
         />
       </CardContent>
       <CardFooter>
