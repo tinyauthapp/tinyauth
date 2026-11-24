@@ -11,6 +11,7 @@ import axios from "axios";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Navigate, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 
 export const UnauthorizedPage = () => {
   const { search } = useLocation();
@@ -31,11 +32,22 @@ export const UnauthorizedPage = () => {
 
     // The user is signed in but not allowed to access the app. Sign out first
     // so that another user can sign in, then return to the app after login.
+    // Skip the automatic OAuth redirect, which could sign the same user in
+    // again, so that the user can choose how to sign in.
     if (username && redirectUri) {
-      await axios.post("/api/user/logout").catch(() => undefined);
+      try {
+        await axios.post("/api/user/logout");
+      } catch {
+        setLoading(false);
+        toast.error(t("logoutFailTitle"), {
+          description: t("logoutFailSubtitle"),
+        });
+        return;
+      }
       const params = searchParamsFromObject({
         redirect_uri: redirectUri,
         login_for: "app",
+        skip_auto_redirect: "true",
       });
       window.location.replace(`/login?${params}`);
       return;
