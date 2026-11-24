@@ -10,6 +10,20 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 )
 
+func TestGetUsersRejectsDuplicates(t *testing.T) {
+	hash := "$2a$10$Mz5xhkfSJUtPWkzCd/TdaePh9CaXc5QcGII5wIMPLSR46eTwma30G"
+	noAttrs := map[string]model.UserAttributes{}
+
+	// The same username twice is rejected instead of silently keeping the first
+	_, err := utils.GetUsers([]string{"alice:" + hash, "alice:" + hash}, "", noAttrs)
+	assert.ErrorContains(t, err, `duplicate user "alice"`)
+
+	// Distinct usernames still load
+	users, err := utils.GetUsers([]string{"alice:" + hash, "bob:" + hash}, "", noAttrs)
+	assert.NoError(t, err)
+	assert.Len(t, *users, 2)
+}
+
 func TestGetUsers(t *testing.T) {
 	tmpDir := t.TempDir()
 
