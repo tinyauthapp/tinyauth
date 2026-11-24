@@ -191,6 +191,9 @@ func (s *IdentityService) Store(ctx context.Context, params StoreIdentityParams)
 		identity, err = s.store(ctx, store, params)
 		return err
 	})
+	if err != nil {
+		return repository.Identity{}, err
+	}
 	return
 }
 
