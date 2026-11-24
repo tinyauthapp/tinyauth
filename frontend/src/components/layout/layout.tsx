@@ -12,6 +12,20 @@ const BaseLayout = ({ children }: { children: React.ReactNode }) => {
     document.title = ui.title;
   }, [ui.title]);
 
+  useEffect(() => {
+    if (!ui.favicon) return;
+    document
+      .querySelectorAll<HTMLLinkElement>(
+        'link[rel~="icon"], link[rel="apple-touch-icon"]',
+      )
+      .forEach((link) => {
+        link.href = ui.favicon;
+        // Drop hints to avoid the image being ignored
+        link.removeAttribute("type");
+        link.removeAttribute("sizes");
+      });
+  }, [ui.favicon]);
+
   return (
     <div
       className="flex flex-col justify-center items-center min-h-svh px-4"
