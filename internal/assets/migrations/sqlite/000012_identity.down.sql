@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS "sessions";
+DROP TABLE IF EXISTS "identities";
+DROP TABLE IF EXISTS "users";
+
 CREATE TABLE IF NOT EXISTS "sessions" (
     "uuid" TEXT NOT NULL PRIMARY KEY UNIQUE,
     "username" TEXT NOT NULL,

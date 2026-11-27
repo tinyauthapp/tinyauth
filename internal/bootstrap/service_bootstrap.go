@@ -25,12 +25,14 @@ func (app *BootstrapApp) setupServices() error {
 		func() service.LabelProvider {
 			return labelProvider
 		},
-		service.NewLdapService,
+		service.NewLDAPService,
 		service.NewTailscaleService,
 		service.NewAccessControlsService,
 		service.NewOAuthBrokerService,
 		service.NewAuthService,
 		service.NewOIDCService,
+		service.NewSessionsService,
+		service.NewIdentityService,
 	}
 
 	for _, provider := range serviceProvideFor {
@@ -41,15 +43,29 @@ func (app *BootstrapApp) setupServices() error {
 		}
 	}
 
+	factoryProvideFor := []any{
+		service.NewStoreFactory,
+	}
+
+	for _, provider := range factoryProvideFor {
+		err = app.dig.Provide(provider)
+
+		if err != nil {
+			return fmt.Errorf("failed to provide factory: %w", err)
+		}
+	}
+
 	type svcInput struct {
 		dig.In
 
 		AccessControlService *service.AccessControlsService
 		AuthService          *service.AuthService
-		LDAPService          *service.LdapService
+		LDAPService          *service.LDAPService
 		OAuthBrokerService   *service.OAuthBrokerService
 		OIDCService          *service.OIDCService
 		TailscaleService     *service.TailscaleService
+		SessionsService      *service.SessionsService
+		IdentityService      *service.IdentityService
 	}
 
 	err = app.dig.Invoke(func(i svcInput) error {
@@ -59,11 +75,28 @@ func (app *BootstrapApp) setupServices() error {
 		app.services.oauthBrokerService = i.OAuthBrokerService
 		app.services.oidcService = i.OIDCService
 		app.services.tailscaleService = i.TailscaleService
+		app.services.sessionsService = i.SessionsService
+		app.services.identityService = i.IdentityService
 		return nil
 	})
 
 	if err != nil {
 		return fmt.Errorf("failed to invoke services: %w", err)
+	}
+
+	type factoryInput struct {
+		dig.In
+
+		StoreFactory *service.StoreFactory
+	}
+
+	err = app.dig.Invoke(func(i factoryInput) error {
+		app.factories.storeFactory = i.StoreFactory
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to invoke factories: %w", err)
 	}
 
 	return nil

@@ -45,6 +45,8 @@ type ContextMiddleware struct {
 	auth      *service.AuthService
 	broker    *service.OAuthBrokerService
 	tailscale *service.TailscaleService
+	session   *service.SessionsService
+	identity  *service.IdentityService
 }
 
 type ContextMiddlewareInput struct {
@@ -56,6 +58,8 @@ type ContextMiddlewareInput struct {
 	AuthService      *service.AuthService
 	BrokerService    *service.OAuthBrokerService
 	TailscaleService *service.TailscaleService
+	Session          *service.SessionsService
+	Identity         *service.IdentityService
 }
 
 func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
@@ -66,6 +70,8 @@ func NewContextMiddleware(i ContextMiddlewareInput) *ContextMiddleware {
 		auth:      i.AuthService,
 		broker:    i.BrokerService,
 		tailscale: i.TailscaleService,
+		session:   i.Session,
+		identity:  i.Identity,
 	}
 }
 
@@ -81,7 +87,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 		if err == nil {
 			userContext, cookie, err := m.cookieAuth(c.Request.Context(), uuid, c.ClientIP())
 
-			if err == nil {
+			if err == nil && userContext != nil {
 				if cookie != nil {
 					http.SetCookie(c.Writer, cookie)
 				}
@@ -92,7 +98,9 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 				return
 			}
 
-			m.log.App.Debug().Msgf("Error authenticating session cookie: %v", err)
+			if err != nil {
+				m.log.App.Debug().Err(err).Msg("Error authenticating session cookie")
+			}
 		}
 
 		authHeader := c.GetHeader("x-tinyauth-authorization")
@@ -127,7 +135,7 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		// Lastly check if we have a tailscale session to add
+		// Lastly, check if we have a tailscale session to add
 		if m.tailscale != nil {
 			tailscaleContext, err := m.tailscaleWhois(c.ClientIP())
 
@@ -149,13 +157,22 @@ func (m *ContextMiddleware) Middleware() gin.HandlerFunc {
 }
 
 func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip string) (*model.UserContext, *http.Cookie, error) {
-	session, err := m.auth.GetSession(ctx, uuid)
+	session, err := m.session.Get(ctx, uuid)
 
 	if err != nil {
+		if errors.Is(err, service.ErrSessionNotFound) {
+			return nil, nil, nil
+		}
 		return nil, nil, fmt.Errorf("error retrieving session: %w", err)
 	}
 
-	userContext, err := new(model.UserContext).NewFromSession(session)
+	identity, err := m.identity.Load(ctx, session.Session.IdentityUUID)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("error retrieving identity: %w", err)
+	}
+
+	userContext, err := new(model.UserContext).NewFromSession(session, identity)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating user context from session: %w", err)
@@ -168,7 +185,15 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 	switch userContext.Provider {
 	case model.ProviderLocal:
-		user := m.auth.GetLocalUser(userContext.Local.Username)
+		// We extract the actual username from the provider user ID, which for local sessions
+		// is local:config-username
+		actualUsername, ok := strings.CutPrefix(userContext.GetDistinctUserID(), "local:")
+
+		if !ok {
+			return nil, nil, fmt.Errorf("local user from session cookie has invalid distinct user id: %s", userContext.GetDistinctUserID())
+		}
+
+		user := m.auth.GetLocalUser(actualUsername)
 
 		if user == nil {
 			return nil, nil, fmt.Errorf("local user not found")
@@ -176,12 +201,12 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 		userContext.Local.Attributes = user.Attributes
 
-		if userContext.Local.Attributes.Name == "" {
-			userContext.Local.Attributes.Name = utils.Capitalize(user.Username)
+		if userContext.Local.Attributes.Name != "" {
+			userContext.Local.Name = userContext.Local.Attributes.Name
 		}
 
-		if userContext.Local.Attributes.Email == "" {
-			userContext.Local.Attributes.Email = utils.CompileUserEmail(user.Username, m.runtime.CookieDomain)
+		if userContext.Local.Attributes.Email != "" {
+			userContext.Local.Email = userContext.Local.Attributes.Email
 		}
 	case model.ProviderTailscale:
 		tailscaleContext, err := m.tailscaleWhois(ip)
@@ -200,52 +225,52 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 		userContext.Tailscale = tailscaleContext
 	case model.ProviderLDAP:
-		search, err := m.auth.SearchUser(userContext.LDAP.Username)
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("error searching for ldap user: %w", err)
-		}
-
-		if search.Type != model.UserLDAP {
-			return nil, nil, fmt.Errorf("user from session cookie is not ldap")
-		}
-
-		user, err := m.auth.GetLDAPUser(search.Username)
+		user, err := m.auth.GetLDAPUser(userContext.GetDistinctUserID())
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
 		userContext.LDAP.Groups = user.Groups
-		if search.Name != "" {
-			userContext.LDAP.Name = search.Name
-		} else {
-			userContext.LDAP.Name = utils.Capitalize(userContext.LDAP.Username)
+		if user.Name != "" {
+			userContext.LDAP.Name = user.Name
 		}
 
 		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
-		if search.Email != "" {
-			userContext.LDAP.Email = search.Email
+		if user.Email != "" {
+			userContext.LDAP.Email = user.Email
 		}
 
 	case model.ProviderOAuth:
-		_, exists := m.broker.GetService(userContext.OAuth.ID)
+		_, exists := m.broker.GetService(userContext.OAuth.ProviderID)
 
 		if !exists {
-			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ID)
+			return nil, nil, fmt.Errorf("oauth provider from session cookie not found: %s", userContext.OAuth.ProviderID)
 		}
 
-		if !m.auth.IsEmailWhitelisted(userContext.OAuth.ID, userContext.OAuth.Email) {
-			m.auth.DeleteSession(ctx, uuid)
+		if !m.auth.IsEmailWhitelisted(userContext.OAuth.ProviderID, userContext.OAuth.Email) {
+			err := m.session.Delete(ctx, uuid)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error deleting session: %w", err)
+			}
 			return nil, nil, fmt.Errorf("email from session cookie not whitelisted: %s", userContext.OAuth.Email)
 		}
+
+	default:
+		return nil, nil, fmt.Errorf("unknown provider type: %s", userContext.Provider)
 	}
 
-	cookie, err := m.auth.RefreshSession(ctx, uuid)
+	refreshed, err := m.session.Refresh(ctx, uuid)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("error refreshing session: %w", err)
 	}
+
+	cookie := m.auth.CreateCookie(service.CreateCookieParams{
+		Name:      m.runtime.SessionCookieName,
+		Value:     refreshed.UUID,
+		ExpiresAt: time.Unix(refreshed.ExpiresAt, 0),
+	})
 
 	return userContext, cookie, nil
 }
@@ -314,15 +339,25 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			return nil, nil, fmt.Errorf("user not found locally: %s", username)
 		}
 
+		userContext.Provider = model.ProviderLocal
 		userContext.Local = &model.LocalContext{
 			BaseContext: model.BaseContext{
-				Username: user.Username,
-				Name:     utils.Capitalize(user.Username),
-				Email:    utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
+				DistinctUserID: "local:" + user.Username,
+				Username:       user.Username,
+				Name:           utils.Capitalize(user.Username),
+				Email:          utils.CompileUserEmail(user.Username, m.runtime.CookieDomain),
 			},
 			Attributes: user.Attributes,
 		}
-		userContext.Provider = model.ProviderLocal
+
+		if userContext.Local.Attributes.Name != "" {
+			userContext.Local.Name = userContext.Local.Attributes.Name
+		}
+
+		if userContext.Local.Attributes.Email != "" {
+			userContext.Local.Email = userContext.Local.Attributes.Email
+		}
+
 	case model.UserLDAP:
 		user, err := m.auth.GetLDAPUser(search.Username)
 
@@ -330,22 +365,24 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
-		name := search.Name
+		name := user.Name
 		if name == "" {
 			name = utils.Capitalize(username)
 		}
+
+		userContext.Provider = model.ProviderLDAP
 		userContext.LDAP = &model.LDAPContext{
 			BaseContext: model.BaseContext{
-				Username: username,
-				Name:     name,
+				DistinctUserID: search.Username,
+				Username:       username,
+				Name:           name,
 			},
 			Groups: user.Groups,
 		}
-		userContext.Provider = model.ProviderLDAP
 
 		userContext.LDAP.Email = utils.CompileUserEmail(username, m.runtime.CookieDomain)
-		if search.Email != "" {
-			userContext.LDAP.Email = search.Email
+		if user.Email != "" {
+			userContext.LDAP.Email = user.Email
 		}
 	}
 
@@ -380,13 +417,14 @@ func (m *ContextMiddleware) tailscaleWhois(ip string) (*model.TailscaleContext, 
 
 	uctx := model.TailscaleContext{
 		BaseContext: model.BaseContext{
-			Email: whois.LoginName,
-			Name:  whois.DisplayName,
+			DistinctUserID: whois.UserID,
+			Email:          whois.LoginName,
+			Name:           whois.DisplayName,
 		},
 		NodeName: whois.NodeName,
 	}
 
-	if m.config.Experimental.OAuthBridgeEnabled {
+	if m.config.Experimental.NoOAuthUserinfoGen {
 		uctx.BaseContext.Username = strings.SplitN(whois.LoginName, "@", 2)[0]
 	} else {
 		uctx.BaseContext.Username = strings.Replace(whois.LoginName, "@", "_", 1)

@@ -98,7 +98,7 @@ func (docker *DockerService) connectWithBackoff() (*client.Client, error) {
 
 	operation := func() (*client.Client, error) {
 		if docker.client != nil {
-			docker.client.Close()
+			_ = docker.client.Close()
 		}
 		return docker.connect()
 	}
@@ -116,7 +116,7 @@ func (docker *DockerService) connect() (*client.Client, error) {
 	_, err = cli.Ping(docker.ctx)
 
 	if err != nil {
-		cli.Close()
+		_ = cli.Close()
 		return nil, ErrPingFailed
 	}
 
@@ -257,7 +257,7 @@ func (docker *DockerService) monitor(ctx context.Context) {
 			cli, err := docker.connect()
 
 			if err == nil && cli != nil {
-				docker.client.Close()
+				_ = docker.client.Close()
 				docker.client = cli
 				docker.log.App.Info().Msg("Docker connection recovered")
 				break

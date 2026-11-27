@@ -3,8 +3,12 @@ package model
 import (
 	"os"
 	"reflect"
+	"slices"
+	"strings"
 	"time"
 )
+
+var supportedLinkingModes = []string{"username", "email", "both"}
 
 type RuntimeEnv int
 
@@ -42,6 +46,7 @@ func NewDefaultConfiguration(runtimeEnv RuntimeEnv) *Config {
 			Address: "0.0.0.0",
 		},
 		Auth: AuthConfig{
+			LinkingMode:        "both",
 			SubdomainsEnabled:  true,
 			SessionExpiry:      86400, // 1 day
 			SessionMaxLifetime: 0,     // disabled
@@ -144,6 +149,7 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
+	LinkingMode        string                    `description:"Linking mode for users (username, email, both)." yaml:"linkingMode,omitempty"`
 	IP                 IPConfig                  `description:"IP whitelisting config options." yaml:"ip,omitempty"`
 	Users              []string                  `description:"Comma-separated list of users (username:hashed_password)." yaml:"users,omitempty"`
 	SubdomainsEnabled  bool                      `description:"Enable subdomains support." yaml:"subdomainsEnabled,omitempty"`
@@ -245,8 +251,8 @@ type LogStreamConfig struct {
 }
 
 type ExperimentalConfig struct {
-	OAuthBridgeEnabled        bool `description:"Enable the OAuth bridge, uses a new way to format OAuth user information." yaml:"oauthBridgeEnabled,omitempty"`
 	DisableAuthModuleFallback bool `description:"Disable the fallback to forward_auth modules when auth_request or ext_authz fail." yaml:"disableAuthModuleFallback,omitempty"`
+	NoOAuthUserinfoGen        bool `description:"Disable the generation of additional OAuth user information, avoids things like myuser_myprovider." yaml:"noOAuthUserInfoGen,omitempty"`
 }
 
 type TailscaleConfig struct {
@@ -381,6 +387,11 @@ func (c *Config) Validate() ValidateResult {
 	// warn on legacy sub
 	if c.OIDC.LegacySubEnabled {
 		res.Warnings = append(res.Warnings, "Legacy username-based OIDC subject identifiers are enabled, this is insecure and will be removed in the next major release")
+	}
+
+	// fail on invalid auth linking mode
+	if !slices.Contains(supportedLinkingModes, c.Auth.LinkingMode) {
+		res.Errors = append(res.Errors, "Invalid linking mode, supported values are: "+strings.Join(supportedLinkingModes, ", "))
 	}
 
 	return res

@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
@@ -34,15 +32,33 @@ func TestContextMiddleware(t *testing.T) {
 		Password: string(colonPasswd),
 	})
 
-	seedSession := func(t *testing.T, queries repository.Store, params repository.CreateSessionParams) {
-		t.Helper()
-		_, err := queries.CreateSession(context.Background(), params)
-		require.NoError(t, err)
+	type runArgs struct {
+		do          func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder)
+		cfg         *model.Config
+		identitySvc *service.IdentityService
+		sessionsSvc *service.SessionsService
 	}
 
-	type runArgs struct {
-		do      func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder)
-		queries repository.Store
+	seedSession := func(t *testing.T, args runArgs, ctx model.UserContext) string {
+		t.Helper()
+		ident, err := args.identitySvc.Store(context.TODO(), service.StoreIdentityParams{
+			Username:       ctx.GetUsername(),
+			Email:          ctx.GetEmail(),
+			Name:           ctx.GetName(),
+			ProviderID:     "local",
+			ProviderType:   model.ProviderLocal,
+			ProviderUserID: "local:" + ctx.GetUsername(),
+		})
+		require.NoError(t, err)
+
+		sess, err := args.sessionsSvc.Create(context.TODO(), ident.UUID, model.SessionContext{
+			Local: model.SessionLocalContext{
+				TOTPPending: ctx.TOTPPending(),
+			},
+		})
+		require.NoError(t, err)
+
+		return sess.UUID
 	}
 
 	type testCase struct {
@@ -73,13 +89,15 @@ func TestContextMiddleware(t *testing.T) {
 		{
 			description: "Valid session cookie sets authenticated local context",
 			run: func(t *testing.T, args runArgs) {
-				uuid := "session-valid-local"
-				seedSession(t, args.queries, repository.CreateSessionParams{
-					UUID:      uuid,
-					Username:  "testuser",
-					Provider:  "local",
-					Expiry:    time.Now().Add(10 * time.Second).Unix(),
-					CreatedAt: time.Now().Unix(),
+				uuid := seedSession(t, args, model.UserContext{
+					Authenticated: true,
+					Provider:      model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{
+							Username: "testuser",
+							Email:    "testuser@example.com",
+						},
+					},
 				})
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
@@ -89,21 +107,23 @@ func TestContextMiddleware(t *testing.T) {
 				require.NotNil(t, userCtx)
 				assert.Equal(t, model.ProviderLocal, userCtx.Provider)
 				assert.Equal(t, "testuser", userCtx.GetUsername())
+				assert.Equal(t, "testuser@example.com", userCtx.GetEmail())
 				assert.True(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
 			},
 		},
 		{
-			description: "Session cookie with totp pending sets unauthenticated context with totp enabled",
+			description: "Session cookie with TOTP pending sets unauthenticated context with TOTP enabled",
 			run: func(t *testing.T, args runArgs) {
-				uuid := "session-totp-pending"
-				seedSession(t, args.queries, repository.CreateSessionParams{
-					UUID:        uuid,
-					Username:    "totpuser",
-					Provider:    "local",
-					TotpPending: true,
-					Expiry:      time.Now().Add(60 * time.Second).Unix(),
-					CreatedAt:   time.Now().Unix(),
+				uuid := seedSession(t, args, model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{
+							Username: "totpuser",
+							Email:    "totpuser@example.com",
+						},
+						TOTPPending: true,
+					},
 				})
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
@@ -112,6 +132,7 @@ func TestContextMiddleware(t *testing.T) {
 
 				require.NotNil(t, userCtx)
 				assert.Equal(t, "totpuser", userCtx.GetUsername())
+				assert.Equal(t, "totpuser@example.com", userCtx.GetEmail())
 				assert.False(t, userCtx.Authenticated)
 				require.NotNil(t, userCtx.Local)
 				assert.True(t, userCtx.Local.TOTPPending)
@@ -130,13 +151,14 @@ func TestContextMiddleware(t *testing.T) {
 		{
 			description: "Session for missing local user yields no context",
 			run: func(t *testing.T, args runArgs) {
-				uuid := "session-deleted-user"
-				seedSession(t, args.queries, repository.CreateSessionParams{
-					UUID:      uuid,
-					Username:  "ghostuser",
-					Provider:  "local",
-					Expiry:    time.Now().Add(10 * time.Second).Unix(),
-					CreatedAt: time.Now().Unix(),
+				uuid := seedSession(t, args, model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{
+							Username: "ghostuser",
+							Email:    "ghostuser@example.com",
+						},
+					},
 				})
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
@@ -149,14 +171,24 @@ func TestContextMiddleware(t *testing.T) {
 		{
 			description: "Expired session cookie yields no context",
 			run: func(t *testing.T, args runArgs) {
-				uuid := "session-expired"
-				seedSession(t, args.queries, repository.CreateSessionParams{
-					UUID:      uuid,
-					Username:  "testuser",
-					Provider:  "local",
-					Expiry:    time.Now().Add(-1 * time.Second).Unix(),
-					CreatedAt: time.Now().Add(-10 * time.Second).Unix(),
+				// modify the expiry to 1 second (it's a pointer, so the session service will use it)
+				args.cfg.Auth.SessionExpiry = 1
+				uuid := seedSession(t, args, model.UserContext{
+					Authenticated: true,
+					Provider:      model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{
+							Username: "testuser",
+							Email:    "testuser@example.com",
+						},
+					},
 				})
+
+				// reset it back to 10 seconds
+				args.cfg.Auth.SessionExpiry = 10
+
+				// wait 2 seconds just to be sure it expired
+				time.Sleep(2 * time.Second)
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
 				req.AddCookie(&http.Cookie{Name: "tinyauth-session", Value: uuid})
@@ -219,13 +251,14 @@ func TestContextMiddleware(t *testing.T) {
 		{
 			description: "Cookie auth takes precedence over basic auth",
 			run: func(t *testing.T, args runArgs) {
-				uuid := "session-precedence"
-				seedSession(t, args.queries, repository.CreateSessionParams{
-					UUID:      uuid,
-					Username:  "testuser",
-					Provider:  "local",
-					Expiry:    time.Now().Add(10 * time.Second).Unix(),
-					CreatedAt: time.Now().Unix(),
+				uuid := seedSession(t, args, model.UserContext{
+					Provider: model.ProviderLocal,
+					Local: &model.LocalContext{
+						BaseContext: model.BaseContext{
+							Username: "testuser",
+							Email:    "testuser@example.com",
+						},
+					},
 				})
 
 				req := httptest.NewRequest("GET", "/api/test", nil)
@@ -292,7 +325,13 @@ func TestContextMiddleware(t *testing.T) {
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	store := memory.New()
+	tdb, err := test.NewTestDatabase()
+	require.NoError(t, err)
+
+	storeFactory := service.NewStoreFactory(service.StoreFactoryInput{
+		DatabaseType: model.DatabaseTypeSQLite,
+		Database:     tdb.DB(),
+	})
 
 	policyEngine, err := service.NewPolicyEngine(service.PolicyEngineInput{
 		Log:    log,
@@ -304,22 +343,33 @@ func TestContextMiddleware(t *testing.T) {
 		Log:     log,
 		Runtime: &runtime,
 		Ctx:     ctx,
+		Ding:    dg,
 	})
 
 	authService, err := service.NewAuthService(service.AuthServiceInput{
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
-		Ctx:          ctx,
 		Ding:         dg,
 		LDAP:         nil,
-		Queries:      store,
-		OAuthBroker:  broker,
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
-
 	require.NoError(t, err)
+
+	identitySvc, err := service.NewIdentityService(service.IdentityServiceInput{
+		StoreFactory: storeFactory,
+		Config:       &cfg,
+		Runtime:      &runtime,
+	})
+	require.NoError(t, err)
+
+	sessionSvc := service.NewSessionsService(service.SessionsServiceInput{
+		StoreFactory: storeFactory,
+		Identity:     identitySvc,
+		Config:       &cfg,
+		Runtime:      &runtime,
+	})
 
 	contextMiddleware := NewContextMiddleware(ContextMiddlewareInput{
 		Log:              log,
@@ -327,11 +377,13 @@ func TestContextMiddleware(t *testing.T) {
 		AuthService:      authService,
 		BrokerService:    broker,
 		TailscaleService: nil,
+		Identity:         identitySvc,
+		Session:          sessionSvc,
 	})
 
-	for _, test := range tests {
+	for _, tc := range tests {
 		authService.ClearLoginAttempts()
-		t.Run(test.description, func(t *testing.T) {
+		t.Run(tc.description, func(tct *testing.T) {
 			gin.SetMode(gin.TestMode)
 
 			do := func(req *http.Request) (*model.UserContext, *httptest.ResponseRecorder) {
@@ -351,7 +403,7 @@ func TestContextMiddleware(t *testing.T) {
 				return captured, recorder
 			}
 
-			test.run(t, runArgs{do: do, queries: store})
+			tc.run(tct, runArgs{do: do, sessionsSvc: sessionSvc, identitySvc: identitySvc, cfg: &cfg})
 		})
 	}
 }

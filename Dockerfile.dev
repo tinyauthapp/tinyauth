@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine3.23
+FROM golang:1.27-alpine3.23
 
 WORKDIR /tinyauth
 
@@ -8,7 +8,7 @@ COPY go.sum ./
 RUN go mod download
 
 RUN go install github.com/air-verse/air@v1.61.7
-RUN go install github.com/go-delve/delve/cmd/dlv@v1.26.3
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.27.2
 
 COPY ./cmd ./cmd
 COPY ./internal ./internal

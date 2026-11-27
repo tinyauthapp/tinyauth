@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinyauthapp/tinyauth/internal/model"
-	"github.com/tinyauthapp/tinyauth/internal/repository/memory"
 	"github.com/tinyauthapp/tinyauth/internal/service"
 	"github.com/tinyauthapp/tinyauth/internal/test"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
@@ -1046,16 +1045,9 @@ func TestProxyController(t *testing.T) {
 		},
 	}
 
-	store := memory.New()
-
 	ctx := context.TODO()
 	dg := ding.New(ctx)
 
-	broker := service.NewOAuthBrokerService(service.OAuthBrokerServiceInput{
-		Log:     log,
-		Runtime: &runtime,
-		Ctx:     ctx,
-	})
 	aclsService := service.NewAccessControlsService(service.AccessControlServiceInput{
 		Log:           log,
 		Config:        &cfg,
@@ -1093,22 +1085,19 @@ func TestProxyController(t *testing.T) {
 		Log:          log,
 		Config:       &cfg,
 		Runtime:      &runtime,
-		Ctx:          ctx,
 		Ding:         dg,
 		LDAP:         nil,
-		Queries:      store,
-		OAuthBroker:  broker,
 		Tailscale:    nil,
 		PolicyEngine: policyEngine,
 	})
 
 	require.NoError(t, err)
 
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.description, func(tt *testing.T) {
 			router := gin.Default()
 
-			for _, m := range test.middlewares {
+			for _, m := range tc.middlewares {
 				router.Use(m)
 			}
 
@@ -1127,7 +1116,7 @@ func TestProxyController(t *testing.T) {
 				PolicyEngine:  policyEngine,
 			})
 
-			test.run(t, router, recorder)
+			tc.run(tt, router, recorder)
 		})
 	}
 }

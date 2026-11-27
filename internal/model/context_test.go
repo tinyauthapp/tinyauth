@@ -3,6 +3,7 @@ package model
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -59,9 +60,16 @@ func TestContext(t *testing.T) {
 			description: "NewFromSession local session is authenticated and ProviderLocal",
 			context:     &UserContext{},
 			run: func(t *testing.T, c *UserContext) any {
-				got, err := c.NewFromSession(&repository.Session{
-					Username: "alice", Email: "alice@example.com", Name: "Alice",
-					Provider: "local",
+				got, err := c.NewFromSession(SessionGetResult{
+					Session: repository.Session{
+						CreatedAt: time.Now().Unix(),
+					},
+				}, IdentityResult{
+					Username:     "alice",
+					Email:        "alice@example.com",
+					Name:         "Alice",
+					Provider:     "local",
+					ProviderType: ProviderLocal,
 				})
 				require.NoError(t, err)
 				return [2]any{got.Provider, got.Authenticated}
@@ -72,8 +80,19 @@ func TestContext(t *testing.T) {
 			description: "NewFromSession local session with TotpPending is not authenticated",
 			context:     &UserContext{},
 			run: func(t *testing.T, c *UserContext) any {
-				got, err := c.NewFromSession(&repository.Session{
-					Username: "bob", Provider: "local", TotpPending: true,
+				got, err := c.NewFromSession(SessionGetResult{
+					Session: repository.Session{
+						CreatedAt: time.Now().Unix(),
+					},
+					SessionContext: SessionContext{
+						Local: SessionLocalContext{
+							TOTPPending: true,
+						},
+					},
+				}, IdentityResult{
+					Username:     "bob",
+					Provider:     "local",
+					ProviderType: ProviderLocal,
 				})
 				require.NoError(t, err)
 				return got.Authenticated
@@ -84,8 +103,14 @@ func TestContext(t *testing.T) {
 			description: "NewFromSession ldap session is ProviderLDAP",
 			context:     &UserContext{},
 			run: func(t *testing.T, c *UserContext) any {
-				got, err := c.NewFromSession(&repository.Session{
-					Username: "carol", Provider: "ldap",
+				got, err := c.NewFromSession(SessionGetResult{
+					Session: repository.Session{
+						CreatedAt: time.Now().Unix(),
+					},
+				}, IdentityResult{
+					Username:     "carol",
+					Provider:     "ldap",
+					ProviderType: ProviderLDAP,
 				})
 				require.NoError(t, err)
 				return got.Provider
@@ -96,12 +121,24 @@ func TestContext(t *testing.T) {
 			description: "NewFromSession unknown provider defaults to OAuth and populates oauth fields",
 			context:     &UserContext{},
 			run: func(t *testing.T, c *UserContext) any {
-				got, err := c.NewFromSession(&repository.Session{
-					Username: "dave", Provider: "github",
-					OAuthGroups: "devs,admins", OAuthSub: "sub-123", OAuthName: "GitHub",
+				got, err := c.NewFromSession(SessionGetResult{
+					Session: repository.Session{
+						CreatedAt: time.Now().Unix(),
+					},
+				}, IdentityResult{
+					Username:       "dave",
+					Provider:       "github",
+					ProviderType:   ProviderOAuth,
+					ProviderUserID: "sub-123",
+					IdentityContext: IdentityContext{
+						OAuth: IdentityOAuthContext{
+							DisplayName: "GitHub",
+							Groups:      "devs,admins",
+						},
+					},
 				})
 				require.NoError(t, err)
-				return [5]any{got.Provider, got.OAuth.ID, got.OAuth.Sub, got.OAuth.DisplayName, got.OAuth.Groups}
+				return [5]any{got.Provider, got.OAuth.ProviderID, got.OAuth.DistinctUserID, got.OAuth.DisplayName, got.OAuth.Groups}
 			},
 			expected: [5]any{ProviderOAuth, "github", "sub-123", "GitHub", []string{"devs", "admins"}},
 		},
@@ -171,7 +208,7 @@ func TestContext(t *testing.T) {
 			description: "ProviderName returns OAuth provider ID for ProviderOAuth",
 			context: &UserContext{
 				Provider: ProviderOAuth,
-				OAuth:    &OAuthContext{ID: "github"},
+				OAuth:    &OAuthContext{ProviderID: "github"},
 			},
 			run:      func(t *testing.T, c *UserContext) any { return c.GetProviderID() },
 			expected: "github",
