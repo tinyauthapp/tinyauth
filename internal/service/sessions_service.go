@@ -119,10 +119,11 @@ func (s *SessionsService) Refresh(ctx context.Context, uuid string) (repository.
 
 	expiresAt := time.Unix(session.ExpiresAt, 0).Add(time.Duration(refreshThreshold) * time.Second)
 
-	if expiresAt.Sub(time.Unix(session.ExpiresAt, 0)) > time.Duration(s.config.Auth.SessionExpiry)*time.Second {
-		return repository.Session{
-			ExpiresAt: time.Now().Unix(),
-		}, nil
+	if s.config.Auth.SessionMaxLifetime > 0 {
+		maxExpiresAt := time.Unix(session.CreatedAt, 0).Add(time.Duration(s.config.Auth.SessionMaxLifetime) * time.Second)
+		if expiresAt.After(maxExpiresAt) {
+			expiresAt = maxExpiresAt
+		}
 	}
 
 	session, err = store.UpdateSessionByUUID(ctx, repository.UpdateSessionByUUIDParams{
