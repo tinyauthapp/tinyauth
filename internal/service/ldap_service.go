@@ -15,6 +15,7 @@ import (
 	"github.com/tinyauthapp/tinyauth/internal/model"
 	"github.com/tinyauthapp/tinyauth/internal/utils"
 	"github.com/tinyauthapp/tinyauth/internal/utils/logger"
+	"github.com/tinyauthapp/tinyauth/pkg/cache"
 	"go.uber.org/dig"
 )
 
@@ -23,13 +24,25 @@ var (
 	ErrLDAPMultipleUsers = errors.New("multiple users found")
 )
 
-type UserInfoResult struct {
-	DN    string
-	CN    string
-	Email string
+type LDAPLookupType string
+
+const (
+	LDAPLookupTypeDN  LDAPLookupType = "dn"
+	LDAPLookupTypeUID LDAPLookupType = "uid"
+)
+
+type LDAPCacheEntry struct {
+	CN     string
+	Email  string
+	Groups []string
 }
 
-type LdapService struct {
+type LDAPUserLookupResult struct {
+	LDAPCacheEntry
+	DN string
+}
+
+type LDAPService struct {
 	log    *logger.Logger
 	ctx    context.Context
 	config *model.Config
@@ -38,9 +51,13 @@ type LdapService struct {
 	mutex  sync.RWMutex
 	cert   *tls.Certificate
 	bindPw string
+
+	caches struct {
+		users *cache.CacheStore[LDAPCacheEntry]
+	}
 }
 
-type LdapServiceInput struct {
+type LDAPServiceInput struct {
 	dig.In
 
 	Log    *logger.Logger
@@ -49,12 +66,12 @@ type LdapServiceInput struct {
 	Ctx    context.Context
 }
 
-func NewLdapService(i LdapServiceInput) (*LdapService, error) {
+func NewLDAPService(i LDAPServiceInput) (*LDAPService, error) {
 	if i.Config.LDAP.Address == "" {
 		return nil, nil
 	}
 
-	ldap := &LdapService{
+	ldap := &LDAPService{
 		log:    i.Log,
 		config: i.Config,
 		ctx:    i.Ctx,
@@ -119,15 +136,175 @@ func NewLdapService(i LdapServiceInput) (*LdapService, error) {
 		}
 	}, ding.RingMajor)
 
+	// Tinyauth *probably* isn't used in setups with more than 256
+	// users, so this seems like a good default
+	ldap.caches.users = cache.NewCacheStore[LDAPCacheEntry](256)
+
+	i.Ding.Go(func(ctx context.Context) {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				ldap.caches.users.Sweep()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}, ding.RingMinor)
+
 	return ldap, nil
 }
 
-func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
+func (l *LDAPService) LookupUser(filter string, lookupType LDAPLookupType) (*LDAPUserLookupResult, error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 
-	if ldap.conn != nil {
-		ldap.conn.Close()
+	if lookupType == LDAPLookupTypeDN {
+		entry, ok := l.cacheLookupByDN(filter)
+		if ok {
+			return entry, nil
+		}
+	}
+
+	userSearch, err := l.conn.Search(l.getUserSR(filter, lookupType))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup user: %w", err)
+	}
+
+	if len(userSearch.Entries) != 1 {
+		if len(userSearch.Entries) == 0 {
+			return nil, ErrLDAPNoUsers
+		}
+		return nil, ErrLDAPMultipleUsers
+	}
+
+	name := userSearch.Entries[0].GetAttributeValue("cn")
+	email := userSearch.Entries[0].GetAttributeValue("mail")
+	dn := userSearch.Entries[0].DN
+
+	groupsSearch, err := l.conn.Search(ldapgo.NewSearchRequest(
+		l.config.LDAP.BaseDN,
+		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
+		strings.Replace(l.config.LDAP.GroupSearchFilter, "%s", ldapgo.EscapeFilter(dn), 1),
+		[]string{"dn"},
+		nil,
+	))
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup user groups: %w", err)
+	}
+
+	var groupDNs []string
+
+	for _, entry := range groupsSearch.Entries {
+		groupDNs = append(groupDNs, entry.DN)
+	}
+
+	var groups []string
+
+	for _, groupDN := range groupDNs {
+		parts, err := ldapgo.ParseDN(groupDN)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse group dn: %w", err)
+		}
+
+		if len(parts.RDNs) == 0 || len(parts.RDNs[0].Attributes) == 0 {
+			return nil, fmt.Errorf("invalid DN format: %s", dn)
+		}
+
+		groups = append(groups, parts.RDNs[0].Attributes[0].Value)
+	}
+
+	res := &LDAPUserLookupResult{
+		DN: dn,
+		LDAPCacheEntry: LDAPCacheEntry{
+			CN:     name,
+			Email:  email,
+			Groups: groups,
+		},
+	}
+
+	// The config option should just be UserTTL but since we have this old option
+	// everyone already uses, why break?
+	l.caches.users.Set(dn, res.LDAPCacheEntry, time.Duration(l.config.LDAP.GroupCacheTTL)*time.Second)
+
+	return res, nil
+}
+
+func (l *LDAPService) getUserSR(filter string, lookupType LDAPLookupType) *ldapgo.SearchRequest {
+	if lookupType == LDAPLookupTypeDN {
+		return ldapgo.NewSearchRequest(
+			ldapgo.EscapeFilter(filter),
+			ldapgo.ScopeBaseObject, ldapgo.NeverDerefAliases, 0, 0, false,
+			"(objectClass=*)",
+			[]string{"dn", "mail", "cn"},
+			nil,
+		)
+	}
+
+	return ldapgo.NewSearchRequest(
+		l.config.LDAP.BaseDN,
+		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
+		strings.Replace(l.config.LDAP.SearchFilter, "%s", ldapgo.EscapeFilter(filter), 1),
+		[]string{"dn", "mail", "cn"},
+		nil,
+	)
+}
+
+func (l *LDAPService) cacheLookupByDN(dn string) (*LDAPUserLookupResult, bool) {
+	entry, ok := l.caches.users.Get(dn)
+	if !ok {
+		return nil, false
+	}
+	return &LDAPUserLookupResult{
+		LDAPCacheEntry: entry,
+		DN:             dn,
+	}, true
+}
+
+func (l *LDAPService) GetUserCount() (int, error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	searchResult, err := l.conn.Search(ldapgo.NewSearchRequest(
+		l.config.LDAP.BaseDN,
+		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
+		"(objectClass=person)",
+		[]string{"dn"},
+		nil,
+	))
+	if err != nil {
+		return 0, fmt.Errorf("failed to get user count: %w", err)
+	}
+
+	return len(searchResult.Entries), nil
+}
+
+func (l *LDAPService) BindService() error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return l.bindServiceCallback()
+}
+
+func (l *LDAPService) Bind(userDN string, password string) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	err := l.conn.Bind(userDN, password)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (l *LDAPService) connect() (*ldapgo.Conn, error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	if l.conn != nil {
+		_ = l.conn.Close()
 	}
 
 	var conn *ldapgo.Conn
@@ -139,14 +316,14 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 	// 1. conn = ldap.DialURL("ldap://ldap.example.com:389")
 	// 2. conn.StartTLS(tlsConfig)
 	// 3. conn.externalBind()
-	if ldap.cert != nil {
-		conn, err = ldapgo.DialURL(ldap.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
+	if l.cert != nil {
+		conn, err = ldapgo.DialURL(l.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
 			MinVersion:   tls.VersionTLS12,
-			Certificates: []tls.Certificate{*ldap.cert},
+			Certificates: []tls.Certificate{*l.cert},
 		}))
 	} else {
-		conn, err = ldapgo.DialURL(ldap.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
-			InsecureSkipVerify: ldap.config.LDAP.Insecure,
+		conn, err = ldapgo.DialURL(l.config.LDAP.Address, ldapgo.DialWithTLSConfig(&tls.Config{
+			InsecureSkipVerify: l.config.LDAP.Insecure,
 			MinVersion:         tls.VersionTLS12,
 		}))
 	}
@@ -154,142 +331,30 @@ func (ldap *LdapService) connect() (*ldapgo.Conn, error) {
 		return nil, err
 	}
 
-	ldap.conn = conn
+	l.conn = conn
 
-	err = ldap.bindServiceCallback()
+	err = l.bindServiceCallback()
 	if err != nil {
 		return nil, err
 	}
-	return ldap.conn, nil
+	return l.conn, nil
 }
 
-func (ldap *LdapService) GetUserInfo(username string) (*UserInfoResult, error) {
-	escapedUsername := ldapgo.EscapeFilter(username)
-
-	searchRequest := ldapgo.NewSearchRequest(
-		ldap.config.LDAP.BaseDN,
-		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
-		strings.Replace(ldap.config.LDAP.SearchFilter, "%s", escapedUsername, 1),
-		[]string{"dn", "mail", "cn"},
-		nil,
-	)
-
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-
-	searchResult, err := ldap.conn.Search(searchRequest)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(searchResult.Entries) != 1 {
-		if len(searchResult.Entries) == 0 {
-			return nil, ErrLDAPNoUsers
-		}
-		return nil, ErrLDAPMultipleUsers
-	}
-
-	entry := searchResult.Entries[0]
-	return &UserInfoResult{
-		DN:    entry.DN,
-		CN:    entry.GetAttributeValue("cn"),
-		Email: entry.GetAttributeValue("mail"),
-	}, nil
-}
-
-func (ldap *LdapService) GetUserCount() (int, error) {
-	searchRequest := ldapgo.NewSearchRequest(
-		ldap.config.LDAP.BaseDN,
-		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
-		"(objectClass=person)",
-		[]string{"dn"},
-		nil,
-	)
-
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-
-	searchResult, err := ldap.conn.Search(searchRequest)
-	if err != nil {
-		return 0, err
-	}
-
-	return len(searchResult.Entries), nil
-}
-
-func (ldap *LdapService) GetUserGroups(userDN string) ([]string, error) {
-	escapedUserDN := ldapgo.EscapeFilter(userDN)
-
-	searchRequest := ldapgo.NewSearchRequest(
-		ldap.config.LDAP.BaseDN,
-		ldapgo.ScopeWholeSubtree, ldapgo.NeverDerefAliases, 0, 0, false,
-		strings.Replace(ldap.config.LDAP.GroupSearchFilter, "%s", escapedUserDN, 1),
-		[]string{"dn"},
-		nil,
-	)
-
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-
-	searchResult, err := ldap.conn.Search(searchRequest)
-	if err != nil {
-		return []string{}, err
-	}
-
-	groupDNs := []string{}
-
-	for _, entry := range searchResult.Entries {
-		groupDNs = append(groupDNs, entry.DN)
-	}
-
-	groups := []string{}
-
-	// I guess it should work for most ldap providers
-	for _, dn := range groupDNs {
-		rdnParts, err := ldapgo.ParseDN(dn)
-		if err != nil {
-			return []string{}, err
-		}
-		if len(rdnParts.RDNs) == 0 || len(rdnParts.RDNs[0].Attributes) == 0 {
-			return []string{}, fmt.Errorf("invalid DN format: %s", dn)
-		}
-		groups = append(groups, rdnParts.RDNs[0].Attributes[0].Value)
-	}
-
-	return groups, nil
-}
-
-func (ldap *LdapService) bindServiceCallback() error {
-	if ldap.cert != nil {
-		return ldap.conn.ExternalBind()
+func (l *LDAPService) bindServiceCallback() error {
+	if l.cert != nil {
+		return l.conn.ExternalBind()
 	}
 
 	// attempt unauthenticated/anonymous bind if both bind dn and password are unset
-	if ldap.config.LDAP.BindDN == "" && ldap.bindPw == "" {
-		return ldap.conn.UnauthenticatedBind("")
+	if l.config.LDAP.BindDN == "" && l.bindPw == "" {
+		return l.conn.UnauthenticatedBind("")
 	}
 
-	return ldap.conn.Bind(ldap.config.LDAP.BindDN, ldap.bindPw)
+	return l.conn.Bind(l.config.LDAP.BindDN, l.bindPw)
 }
 
-func (ldap *LdapService) BindService() error {
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-	return ldap.bindServiceCallback()
-}
-
-func (ldap *LdapService) Bind(userDN string, password string) error {
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-	err := ldap.conn.Bind(userDN, password)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ldap *LdapService) heartbeat() error {
-	ldap.log.App.Debug().Msg("Performing LDAP connection heartbeat")
+func (l *LDAPService) heartbeat() error {
+	l.log.App.Debug().Msg("Performing LDAP connection heartbeat")
 
 	searchRequest := ldapgo.NewSearchRequest(
 		"",
@@ -299,9 +364,9 @@ func (ldap *LdapService) heartbeat() error {
 		nil,
 	)
 
-	ldap.mutex.Lock()
-	defer ldap.mutex.Unlock()
-	_, err := ldap.conn.Search(searchRequest)
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	_, err := l.conn.Search(searchRequest)
 	if err != nil {
 		return err
 	}
@@ -310,8 +375,8 @@ func (ldap *LdapService) heartbeat() error {
 	return nil
 }
 
-func (ldap *LdapService) reconnect(interval time.Duration) error {
-	ldap.log.App.Info().Msg("Attempting to reconnect to LDAP server")
+func (l *LDAPService) reconnect(interval time.Duration) error {
+	l.log.App.Info().Msg("Attempting to reconnect to LDAP server")
 
 	exp := backoff.NewExponentialBackOff()
 	exp.InitialInterval = interval
@@ -319,7 +384,7 @@ func (ldap *LdapService) reconnect(interval time.Duration) error {
 	exp.Multiplier = 1.5
 	exp.Reset()
 
-	_, err := backoff.Retry(ldap.ctx, ldap.connect, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
+	_, err := backoff.Retry(l.ctx, l.connect, backoff.WithBackOff(exp), backoff.WithMaxTries(3))
 
 	if err != nil {
 		return err

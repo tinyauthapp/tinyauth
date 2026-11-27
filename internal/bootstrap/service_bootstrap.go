@@ -25,7 +25,7 @@ func (app *BootstrapApp) setupServices() error {
 		func() service.LabelProvider {
 			return labelProvider
 		},
-		service.NewLdapService,
+		service.NewLDAPService,
 		service.NewTailscaleService,
 		service.NewAccessControlsService,
 		service.NewOAuthBrokerService,
@@ -60,7 +60,7 @@ func (app *BootstrapApp) setupServices() error {
 
 		AccessControlService *service.AccessControlsService
 		AuthService          *service.AuthService
-		LDAPService          *service.LdapService
+		LDAPService          *service.LDAPService
 		OAuthBrokerService   *service.OAuthBrokerService
 		OIDCService          *service.OIDCService
 		TailscaleService     *service.TailscaleService

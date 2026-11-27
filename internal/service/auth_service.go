@@ -35,7 +35,7 @@ type AuthService struct {
 	config  *model.Config
 	runtime *model.RuntimeConfig
 
-	ldap         *LdapService
+	ldap         *LDAPService
 	tailscale    *TailscaleService
 	policyEngine *PolicyEngine
 
@@ -43,7 +43,6 @@ type AuthService struct {
 
 	caches struct {
 		login *cache.CacheStore[LoginAttempt]
-		ldap  *cache.CacheStore[[]string]
 	}
 }
 
@@ -54,7 +53,7 @@ type AuthServiceInput struct {
 	Config       *model.Config
 	Runtime      *model.RuntimeConfig
 	Ding         *ding.Ding
-	LDAP         *LdapService      `optional:"true"`
+	LDAP         *LDAPService      `optional:"true"`
 	Tailscale    *TailscaleService `optional:"true"`
 	PolicyEngine *PolicyEngine
 }
@@ -79,11 +78,7 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 	service.dummyHash = string(dummyHash)
 
 	// caches setup
-	loginCache := cache.NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
-	ldapCache := cache.NewCacheStore[[]string](1024)
-
-	service.caches.login = loginCache
-	service.caches.ldap = ldapCache
+	service.caches.login = cache.NewCacheStore[LoginAttempt](service.calculateLockdownLimit())
 
 	i.Ding.Go(func(ctx context.Context) {
 		ticker := time.NewTicker(1 * time.Minute)
@@ -93,7 +88,6 @@ func NewAuthService(i AuthServiceInput) (*AuthService, error) {
 			select {
 			case <-ticker.C:
 				service.caches.login.Sweep()
-				service.caches.ldap.Sweep()
 			case <-ctx.Done():
 				return
 			}
@@ -131,7 +125,7 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 	}
 
 	if auth.ldap != nil {
-		res, err := auth.ldap.GetUserInfo(username)
+		res, err := auth.ldap.LookupUser(username, LDAPLookupTypeUID)
 
 		if err != nil {
 			if errors.Is(err, ErrLDAPMultipleUsers) || errors.Is(err, ErrLDAPNoUsers) {
@@ -142,8 +136,6 @@ func (auth *AuthService) SearchUser(username string) (*model.UserSearch, error) 
 
 		return &model.UserSearch{
 			Username: res.DN,
-			Email:    res.Email,
-			Name:     res.CN,
 			Type:     model.UserLDAP,
 		}, nil
 	}
@@ -167,27 +159,15 @@ func (auth *AuthService) GetLDAPUser(userDN string) (*model.LDAPUser, error) {
 	if auth.ldap == nil {
 		return nil, errors.New("ldap service not configured")
 	}
-
-	entry, exists := auth.caches.ldap.Get(userDN)
-
-	if exists {
-		return &model.LDAPUser{
-			DN:     userDN,
-			Groups: entry,
-		}, nil
-	}
-
-	groups, err := auth.ldap.GetUserGroups(userDN)
-
+	res, err := auth.ldap.LookupUser(userDN, LDAPLookupTypeDN)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ldap groups: %w", err)
+		return nil, fmt.Errorf("failed to get ldap user: %w", err)
 	}
-
-	auth.caches.ldap.Set(userDN, groups, time.Duration(auth.config.LDAP.GroupCacheTTL)*time.Second)
-
 	return &model.LDAPUser{
-		DN:     userDN,
-		Groups: groups,
+		DN:     res.DN,
+		Name:   res.CN,
+		Email:  res.Email,
+		Groups: res.Groups,
 	}, nil
 }
 

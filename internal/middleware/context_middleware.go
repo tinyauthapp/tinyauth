@@ -225,30 +225,20 @@ func (m *ContextMiddleware) cookieAuth(ctx context.Context, uuid string, ip stri
 
 		userContext.Tailscale = tailscaleContext
 	case model.ProviderLDAP:
-		search, err := m.auth.SearchUser(userContext.LDAP.Username)
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("error searching for ldap user: %w", err)
-		}
-
-		if search.Type != model.UserLDAP {
-			return nil, nil, fmt.Errorf("user from session cookie is not ldap")
-		}
-
-		user, err := m.auth.GetLDAPUser(search.Username)
+		user, err := m.auth.GetLDAPUser(userContext.GetDistinctUserID())
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
 		userContext.LDAP.Groups = user.Groups
-		if search.Name != "" {
-			userContext.LDAP.Name = search.Name
+		if user.Name != "" {
+			userContext.LDAP.Name = user.Name
 		}
 
 		userContext.LDAP.Email = utils.CompileUserEmail(userContext.LDAP.Username, m.runtime.CookieDomain)
-		if search.Email != "" {
-			userContext.LDAP.Email = search.Email
+		if user.Email != "" {
+			userContext.LDAP.Email = user.Email
 		}
 
 	case model.ProviderOAuth:
@@ -375,7 +365,7 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 			return nil, nil, fmt.Errorf("error retrieving ldap user details: %w", err)
 		}
 
-		name := search.Name
+		name := user.Name
 		if name == "" {
 			name = utils.Capitalize(username)
 		}
@@ -391,8 +381,8 @@ func (m *ContextMiddleware) basicAuth(username string, password string) (*model.
 		}
 
 		userContext.LDAP.Email = utils.CompileUserEmail(username, m.runtime.CookieDomain)
-		if search.Email != "" {
-			userContext.LDAP.Email = search.Email
+		if user.Email != "" {
+			userContext.LDAP.Email = user.Email
 		}
 	}
 

@@ -200,8 +200,8 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 		identityParams = service.StoreIdentityParams{
 			Username:       req.Username,
-			Email:          search.Email,
-			Name:           search.Name,
+			Email:          user.Email,
+			Name:           user.Name,
 			ProviderID:     "ldap",
 			ProviderType:   model.ProviderLDAP,
 			ProviderUserID: user.DN,
@@ -257,7 +257,7 @@ func (controller *UserController) loginHandler(c *gin.Context) {
 
 	controller.log.AuditLoginSuccess(req.Username, search.Type.String(), c.ClientIP())
 
-	controller.auth.WithLoginAttempt(req.Username, func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
+	_ = controller.auth.WithLoginAttempt(req.Username, func(actions cache.CacheStoreActions[service.LoginAttempt]) error {
 		controller.auth.RecordLoginAttempt(req.Username, true, actions)
 		return nil
 	})

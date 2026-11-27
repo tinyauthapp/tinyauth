@@ -40,7 +40,7 @@ type Services struct {
 	dockerService        *service.DockerService
 	identityService      *service.IdentityService
 	kubernetesService    *service.KubernetesService
-	ldapService          *service.LdapService
+	ldapService          *service.LDAPService
 	oauthBrokerService   *service.OAuthBrokerService
 	oidcService          *service.OIDCService
 	tailscaleService     *service.TailscaleService
