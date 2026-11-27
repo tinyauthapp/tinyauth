@@ -193,28 +193,26 @@ func (app *BootstrapApp) serveUnix(ctx context.Context) error {
 }
 
 func (app *BootstrapApp) serve(listener net.Listener, server *http.Server, ctx context.Context, name string) error {
-	shutdown := func() {
-		// we use a new context for the shutdown since the main one is cancelled
-		sctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
-		defer cancel()
-		err := server.Shutdown(sctx)
-		if err != nil {
-			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
-		}
-		listener.Close()
-	}
+	defer listener.Close()
 
+	serveErr := make(chan error, 1)
 	go func() {
-		<-ctx.Done()
-		app.log.App.Debug().Msgf("Shutting down %s listener", name)
-		shutdown()
+		serveErr <- server.Serve(listener)
 	}()
 
-	err := server.Serve(listener)
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start %s listener: %w", name, err)
+	select {
+	case err := <-serveErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("failed to start %s listener: %w", name, err)
+		}
+		return nil
+	case <-ctx.Done():
+		app.log.App.Debug().Msgf("Shutting down %s listener", name)
+		sctx, cancel := context.WithTimeout(context.Background(), model.GracefulShutdownTimeout*time.Second)
+		defer cancel()
+		if err := server.Shutdown(sctx); err != nil {
+			app.log.App.Error().Err(err).Msgf("Failed to shutdown %s listener gracefully", name)
+		}
+		return nil
 	}
-
-	return nil
 }
